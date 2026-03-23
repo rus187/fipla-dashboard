@@ -1,0 +1,236 @@
+.app-shell {
+  min-height: 100vh;
+  padding: 32px 18px 56px;
+  background:
+    radial-gradient(circle at top left, rgba(190, 214, 255, 0.55), transparent 34%),
+    radial-gradient(circle at top right, rgba(255, 226, 196, 0.5), transparent 28%),
+    linear-gradient(180deg, #f5f7fb 0%, #edf2f7 100%);
+}
+
+.app-shell__inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.cockpit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.cockpit-card {
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(8px);
+}
+
+.cockpit-card__label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cockpit-card__value {
+  margin-top: 10px;
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.cockpit-card__helper {
+  margin-top: 8px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.journey-nav {
+  position: sticky;
+  top: 14px;
+  z-index: 30;
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.journey-nav__title {
+  margin-bottom: 12px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.journey-nav__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.journey-nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid #dbe3ee;
+  background: #fff;
+  color: #1e293b;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.journey-nav__link:hover {
+  transform: translateY(-1px);
+  border-color: #93c5fd;
+  box-shadow: 0 12px 22px rgba(59, 130, 246, 0.12);
+}
+
+.journey-nav__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1d4ed8;
+  font-size: 12px;
+}
+
+.journey-section {
+  margin-bottom: 26px;
+  scroll-margin-top: 110px;
+}
+
+.journey-section__intro {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.journey-section__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 10px;
+  border-radius: 18px;
+  border: 1px solid #bfdbfe;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.journey-section__heading {
+  padding: 10px 4px 0 0;
+}
+
+.journey-section__title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 32px;
+  line-height: 1.08;
+}
+
+.journey-section__description {
+  margin: 10px 0 0;
+  max-width: 760px;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.journey-section__content {
+  display: grid;
+  gap: 18px;
+}
+
+.technical-annex {
+  margin-bottom: 26px;
+}
+
+.technical-annex__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.technical-annex__text {
+  margin-bottom: 12px;
+  color: #6b7280;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+  .journey-section__intro {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .journey-section__step {
+    width: fit-content;
+  }
+
+  .journey-section__title {
+    font-size: 27px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding-inline: 12px;
+    padding-top: 20px;
+  }
+
+  .cockpit-card__value {
+    font-size: 19px;
+  }
+
+  .journey-nav {
+    top: 8px;
+    border-radius: 16px;
+  }
+
+  .journey-nav__items {
+    gap: 8px;
+  }
+
+  .journey-nav__link {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

@@ -1,0 +1,10552 @@
+[
+  {
+    "ofs": 4551,
+    "name": "Aadorf",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4001,
+    "name": "Aarau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 301,
+    "name": "Aarberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4271,
+    "name": "Aarburg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 321,
+    "name": "Aarwangen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4221,
+    "name": "Abtwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5621,
+    "name": "Aclens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5048,
+    "name": "Acquarossa",
+    "canton": "TI"
+  },
+  {
+    "ofs": 561,
+    "name": "Adelboden",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1051,
+    "name": "Adligenswil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 131,
+    "name": "Adliswil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2421,
+    "name": "Aedermannsdorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 401,
+    "name": "Aefligen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 731,
+    "name": "Aegerten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2761,
+    "name": "Aesch (BL)",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1021,
+    "name": "Aesch (LU)",
+    "canton": "LU"
+  },
+  {
+    "ofs": 241,
+    "name": "Aesch (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2511,
+    "name": "Aeschi (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 562,
+    "name": "Aeschi bei Spiez",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1,
+    "name": "Aeugst am Albis",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4711,
+    "name": "Affeltrangen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2,
+    "name": "Affoltern am Albis",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 951,
+    "name": "Affoltern im Emmental",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6101,
+    "name": "Agarn",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5742,
+    "name": "Agiez",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5141,
+    "name": "Agno",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5401,
+    "name": "Aigle",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6601,
+    "name": "Aire-la-Ville",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5061,
+    "name": "Airolo",
+    "canton": "TI"
+  },
+  {
+    "ofs": 1121,
+    "name": "Alberswil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 6102,
+    "name": "Albinen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 3542,
+    "name": "Albula/Alvra",
+    "canton": "GR"
+  },
+  {
+    "ofs": 402,
+    "name": "Alchenstorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5851,
+    "name": "Allaman",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6771,
+    "name": "Alle",
+    "canton": "JU"
+  },
+  {
+    "ofs": 630,
+    "name": "Allmendingen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2762,
+    "name": "Allschwil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1401,
+    "name": "Alpnach",
+    "canton": "OW"
+  },
+  {
+    "ofs": 1361,
+    "name": "Alpthal",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 1122,
+    "name": "Altbüron",
+    "canton": "LU"
+  },
+  {
+    "ofs": 1201,
+    "name": "Altdorf (UR)",
+    "canton": "UR"
+  },
+  {
+    "ofs": 1341,
+    "name": "Altendorf",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 211,
+    "name": "Altikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1123,
+    "name": "Altishofen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4641,
+    "name": "Altnau",
+    "canton": "TG"
+  },
+  {
+    "ofs": 5237,
+    "name": "Alto Malcantone",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3251,
+    "name": "Altstätten",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3311,
+    "name": "Amden",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4881,
+    "name": "Amlikon-Bissegg",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4191,
+    "name": "Ammerswil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4461,
+    "name": "Amriswil",
+    "canton": "TG"
+  },
+  {
+    "ofs": 921,
+    "name": "Amsoldingen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3701,
+    "name": "Andeer",
+    "canton": "GR"
+  },
+  {
+    "ofs": 291,
+    "name": "Andelfingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1202,
+    "name": "Andermatt",
+    "canton": "UR"
+  },
+  {
+    "ofs": 3441,
+    "name": "Andwil (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 6602,
+    "name": "Anières",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6252,
+    "name": "Anniviers",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2841,
+    "name": "Anwil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 3101,
+    "name": "Appenzell",
+    "canton": "AI"
+  },
+  {
+    "ofs": 5143,
+    "name": "Aranno",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6261,
+    "name": "Arbaz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5001,
+    "name": "Arbedo-Castione",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2881,
+    "name": "Arboldswil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4401,
+    "name": "Arbon",
+    "canton": "TG"
+  },
+  {
+    "ofs": 381,
+    "name": "Arch",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6021,
+    "name": "Ardon",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2821,
+    "name": "Arisdorf",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4222,
+    "name": "Aristau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2763,
+    "name": "Arlesheim",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5701,
+    "name": "Arnex-sur-Nyon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5743,
+    "name": "Arnex-sur-Orbe",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4061,
+    "name": "Arni (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 602,
+    "name": "Arni (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5144,
+    "name": "Arogno",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3921,
+    "name": "Arosa",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1362,
+    "name": "Arth",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 5702,
+    "name": "Arzier-Le Muids",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5091,
+    "name": "Ascona",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5511,
+    "name": "Assens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2321,
+    "name": "Attalens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 1203,
+    "name": "Attinghausen",
+    "canton": "UR"
+  },
+  {
+    "ofs": 971,
+    "name": "Attiswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3231,
+    "name": "Au (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5422,
+    "name": "Aubonne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4091,
+    "name": "Auenstein",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2822,
+    "name": "Augst",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6191,
+    "name": "Ausserberg",
+    "canton": "VS"
+  },
+  {
+    "ofs": 322,
+    "name": "Auswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2173,
+    "name": "Autigny",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4223,
+    "name": "Auw",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5324,
+    "name": "Avegno Gordevio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5451,
+    "name": "Avenches",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3681,
+    "name": "Avers",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2174,
+    "name": "Avry",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6603,
+    "name": "Avully",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6604,
+    "name": "Avusy",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6082,
+    "name": "Ayent",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1701,
+    "name": "Baar",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 51,
+    "name": "Bachenbülach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 81,
+    "name": "Bachs",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3291,
+    "name": "Bad Ragaz",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4021,
+    "name": "Baden",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5242,
+    "name": "Balerna",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3232,
+    "name": "Balgach",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5744,
+    "name": "Ballaigues",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5423,
+    "name": "Ballens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1023,
+    "name": "Ballwil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2541,
+    "name": "Balm bei Günsberg",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2422,
+    "name": "Balsthal",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6281,
+    "name": "Baltschieder",
+    "canton": "VS"
+  },
+  {
+    "ofs": 323,
+    "name": "Bannwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6605,
+    "name": "Bardonnex",
+    "canton": "GE"
+  },
+  {
+    "ofs": 111,
+    "name": "Bäretswil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 302,
+    "name": "Bargen (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2931,
+    "name": "Bargen (SH)",
+    "canton": "SH"
+  },
+  {
+    "ofs": 403,
+    "name": "Bäriswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2611,
+    "name": "Bärschwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2162,
+    "name": "Bas-Intyamon",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4536,
+    "name": "Basadingen-Schlattingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2701,
+    "name": "Basel",
+    "canton": "BS"
+  },
+  {
+    "ofs": 6807,
+    "name": "Basse-Allaine",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6812,
+    "name": "Basse-Vendline",
+    "canton": "JU"
+  },
+  {
+    "ofs": 52,
+    "name": "Bassersdorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5703,
+    "name": "Bassins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 533,
+    "name": "Bätterkinden",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2471,
+    "name": "Bättwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5745,
+    "name": "Baulmes",
+    "canton": "VD"
+  },
+  {
+    "ofs": 297,
+    "name": "Bauma",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5746,
+    "name": "Bavois",
+    "canton": "VD"
+  },
+  {
+    "ofs": 571,
+    "name": "Beatenberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1501,
+    "name": "Beckenried",
+    "canton": "NW"
+  },
+  {
+    "ofs": 5148,
+    "name": "Bedano",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5063,
+    "name": "Bedretto",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2951,
+    "name": "Beggingen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 5704,
+    "name": "Begnins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4224,
+    "name": "Beinwil (Freiamt)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2612,
+    "name": "Beinwil (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4131,
+    "name": "Beinwil am See",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2175,
+    "name": "Belfaux",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2542,
+    "name": "Bellach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6606,
+    "name": "Bellevue",
+    "canton": "GE"
+  },
+  {
+    "ofs": 4022,
+    "name": "Bellikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5002,
+    "name": "Bellinzona",
+    "canton": "TI"
+  },
+  {
+    "ofs": 732,
+    "name": "Bellmund",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6052,
+    "name": "Bellwald",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2053,
+    "name": "Belmont-Broye",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5581,
+    "name": "Belmont-sur-Lausanne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5902,
+    "name": "Belmont-sur-Yverdon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 861,
+    "name": "Belp",
+    "canton": "BE"
+  },
+  {
+    "ofs": 681,
+    "name": "Belprahon",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3312,
+    "name": "Benken (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 22,
+    "name": "Benken (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2882,
+    "name": "Bennwil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5512,
+    "name": "Bercher",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3211,
+    "name": "Berg (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4891,
+    "name": "Berg (TG)",
+    "canton": "TG"
+  },
+  {
+    "ofs": 23,
+    "name": "Berg am Irchel",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4023,
+    "name": "Bergdietikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3544,
+    "name": "Bergün Filisur",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4062,
+    "name": "Berikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2932,
+    "name": "Beringen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 972,
+    "name": "Berken",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4801,
+    "name": "Berlingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 351,
+    "name": "Bern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3233,
+    "name": "Berneck",
+    "canton": "SG"
+  },
+  {
+    "ofs": 6607,
+    "name": "Bernex",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5424,
+    "name": "Berolle",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1081,
+    "name": "Beromünster",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4226,
+    "name": "Besenbüren",
+    "canton": "AG"
+  },
+  {
+    "ofs": 973,
+    "name": "Bettenhausen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5471,
+    "name": "Bettens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2702,
+    "name": "Bettingen",
+    "canton": "BS"
+  },
+  {
+    "ofs": 2543,
+    "name": "Bettlach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6205,
+    "name": "Bettmeralp",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4716,
+    "name": "Bettwiesen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4227,
+    "name": "Bettwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3781,
+    "name": "Bever",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5402,
+    "name": "Bex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5281,
+    "name": "Biasca",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2513,
+    "name": "Biberist",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4002,
+    "name": "Biberstein",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4721,
+    "name": "Bichelsee-Balterswil",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2764,
+    "name": "Biel-Benken",
+    "canton": "BL"
+  },
+  {
+    "ofs": 371,
+    "name": "Biel/Bienne",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5425,
+    "name": "Bière",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2445,
+    "name": "Biezwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 603,
+    "name": "Biglen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2063,
+    "name": "Billens-Hennens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6054,
+    "name": "Binn",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2765,
+    "name": "Binningen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5151,
+    "name": "Bioggio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5903,
+    "name": "Bioley-Magnoux",
+    "canton": "VD"
+  },
+  {
+    "ofs": 242,
+    "name": "Birmensdorf (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4024,
+    "name": "Birmenstorf (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4092,
+    "name": "Birr",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4093,
+    "name": "Birrhard",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4132,
+    "name": "Birrwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2766,
+    "name": "Birsfelden",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4901,
+    "name": "Birwinken",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4471,
+    "name": "Bischofszell",
+    "canton": "TG"
+  },
+  {
+    "ofs": 5154,
+    "name": "Bissone",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6172,
+    "name": "Bister",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6173,
+    "name": "Bitsch",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6192,
+    "name": "Blatten",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2781,
+    "name": "Blauen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 324,
+    "name": "Bleienbach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5049,
+    "name": "Blenio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5892,
+    "name": "Blonay - Saint-Légier",
+    "canton": "VD"
+  },
+  {
+    "ofs": 922,
+    "name": "Blumenstein",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2842,
+    "name": "Böckten",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6702,
+    "name": "Boécourt",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5747,
+    "name": "Bofflens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5705,
+    "name": "Bogis-Bossey",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2238,
+    "name": "Bois-d'Amont",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2514,
+    "name": "Bolken",
+    "canton": "SO"
+  },
+  {
+    "ofs": 352,
+    "name": "Bolligen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 791,
+    "name": "Boltigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3721,
+    "name": "Bonaduz",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6774,
+    "name": "Boncourt",
+    "canton": "JU"
+  },
+  {
+    "ofs": 572,
+    "name": "Bönigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2571,
+    "name": "Boningen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4192,
+    "name": "Boniswil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3,
+    "name": "Bonstetten",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5551,
+    "name": "Bonvillars",
+    "canton": "VD"
+  },
+  {
+    "ofs": 82,
+    "name": "Boppelsen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5706,
+    "name": "Borex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5304,
+    "name": "Bosco/Gurin",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2295,
+    "name": "Bösingen",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2323,
+    "name": "Bossonnens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4228,
+    "name": "Boswil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5514,
+    "name": "Bottens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4273,
+    "name": "Bottenwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2123,
+    "name": "Botterens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4643,
+    "name": "Bottighofen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2767,
+    "name": "Bottmingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4303,
+    "name": "Böttstein",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6404,
+    "name": "Boudry",
+    "canton": "NE"
+  },
+  {
+    "ofs": 5426,
+    "name": "Bougy-Villars",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5661,
+    "name": "Boulens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5613,
+    "name": "Bourg-en-Lavaux",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6032,
+    "name": "Bourg-Saint-Pierre",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5472,
+    "name": "Bournens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6703,
+    "name": "Bourrignon",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5473,
+    "name": "Boussens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6131,
+    "name": "Bovernier",
+    "canton": "VS"
+  },
+  {
+    "ofs": 605,
+    "name": "Bowil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4124,
+    "name": "Bözberg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4185,
+    "name": "Böztal",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4723,
+    "name": "Braunau",
+    "canton": "TG"
+  },
+  {
+    "ofs": 3792,
+    "name": "Bregaglia",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5269,
+    "name": "Breggia",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3981,
+    "name": "Breil/Brigels",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2613,
+    "name": "Breitenbach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5622,
+    "name": "Bremblens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4063,
+    "name": "Bremgarten (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 353,
+    "name": "Bremgarten bei Bern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 606,
+    "name": "Brenzikofen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5515,
+    "name": "Bretigny-sur-Morrens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5748,
+    "name": "Bretonnières",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2883,
+    "name": "Bretzwil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 573,
+    "name": "Brienz (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 574,
+    "name": "Brienzwiler",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6002,
+    "name": "Brig-Glis",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5096,
+    "name": "Brione sopra Minusio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2782,
+    "name": "Brislach",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5097,
+    "name": "Brissago",
+    "canton": "TI"
+  },
+  {
+    "ofs": 4274,
+    "name": "Brittnau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2124,
+    "name": "Broc",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6433,
+    "name": "Brot-Plamboz",
+    "canton": "NE"
+  },
+  {
+    "ofs": 4095,
+    "name": "Brugg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 733,
+    "name": "Brügg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4193,
+    "name": "Brunegg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2292,
+    "name": "Brünisried",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5160,
+    "name": "Brusino Arsizio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3551,
+    "name": "Brusio",
+    "canton": "GR"
+  },
+  {
+    "ofs": 491,
+    "name": "Brüttelen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 213,
+    "name": "Brütten",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2823,
+    "name": "Bubendorf",
+    "canton": "BL"
+  },
+  {
+    "ofs": 112,
+    "name": "Bubikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2961,
+    "name": "Buch (SH)",
+    "canton": "SH"
+  },
+  {
+    "ofs": 24,
+    "name": "Buch am Irchel",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2933,
+    "name": "Buchberg",
+    "canton": "SH"
+  },
+  {
+    "ofs": 2465,
+    "name": "Buchegg",
+    "canton": "SO"
+  },
+  {
+    "ofs": 923,
+    "name": "Buchholterberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5623,
+    "name": "Buchillon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1052,
+    "name": "Buchrain",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4003,
+    "name": "Buchs (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3271,
+    "name": "Buchs (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 83,
+    "name": "Buchs (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2843,
+    "name": "Buckten",
+    "canton": "BL"
+  },
+  {
+    "ofs": 382,
+    "name": "Büetigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 734,
+    "name": "Bühl",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3021,
+    "name": "Bühler",
+    "canton": "AR"
+  },
+  {
+    "ofs": 53,
+    "name": "Bülach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2125,
+    "name": "Bulle",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5552,
+    "name": "Bullet",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4229,
+    "name": "Bünzen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1502,
+    "name": "Buochs",
+    "canton": "NW"
+  },
+  {
+    "ofs": 6193,
+    "name": "Bürchen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6778,
+    "name": "Bure",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2472,
+    "name": "Büren (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 383,
+    "name": "Büren an der Aare",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2783,
+    "name": "Burg im Leimental",
+    "canton": "BL"
+  },
+  {
+    "ofs": 404,
+    "name": "Burgdorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 863,
+    "name": "Burgistein",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4911,
+    "name": "Bürglen (TG)",
+    "canton": "TG"
+  },
+  {
+    "ofs": 1205,
+    "name": "Bürglen (UR)",
+    "canton": "UR"
+  },
+  {
+    "ofs": 1082,
+    "name": "Büron",
+    "canton": "LU"
+  },
+  {
+    "ofs": 5852,
+    "name": "Bursinel",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5853,
+    "name": "Bursins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5854,
+    "name": "Burtigny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3804,
+    "name": "Buseno",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2614,
+    "name": "Büsserach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5624,
+    "name": "Bussigny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4921,
+    "name": "Bussnang",
+    "canton": "TG"
+  },
+  {
+    "ofs": 325,
+    "name": "Busswil bei Melchnau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5663,
+    "name": "Bussy-sur-Moudon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3395,
+    "name": "Bütschwil-Ganterschwil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 2914,
+    "name": "Büttenhardt",
+    "canton": "SH"
+  },
+  {
+    "ofs": 4064,
+    "name": "Büttikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1083,
+    "name": "Buttisholz",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4230,
+    "name": "Buttwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2844,
+    "name": "Buus",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5161,
+    "name": "Cademario",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5162,
+    "name": "Cadempino",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5003,
+    "name": "Cadenazzo",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3837,
+    "name": "Calanca",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3831,
+    "name": "Cama",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5307,
+    "name": "Campo (Vallemaggia)",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5167,
+    "name": "Canobbio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5226,
+    "name": "Capriasca",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6608,
+    "name": "Carouge (GE)",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6609,
+    "name": "Cartigny",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5171,
+    "name": "Caslano",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3805,
+    "name": "Castaneda",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5249,
+    "name": "Castel San Pietro",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3661,
+    "name": "Cazis",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3782,
+    "name": "Celerina/Schlarigna",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6610,
+    "name": "Céligny",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5397,
+    "name": "Centovalli",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5309,
+    "name": "Cerentino",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5310,
+    "name": "Cevio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6232,
+    "name": "Chalais",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1702,
+    "name": "Cham",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 5904,
+    "name": "Chamblon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6022,
+    "name": "Chamoson",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5553,
+    "name": "Champagne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6151,
+    "name": "Champéry",
+    "canton": "VS"
+  },
+  {
+    "ofs": 683,
+    "name": "Champoz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5812,
+    "name": "Champtauroz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5905,
+    "name": "Champvent",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6611,
+    "name": "Chancy",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5882,
+    "name": "Chardonne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5841,
+    "name": "Château-d'Oex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2325,
+    "name": "Châtel-Saint-Denis",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2128,
+    "name": "Châtel-sur-Montsalvens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2008,
+    "name": "Châtillon (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6704,
+    "name": "Châtillon (JU)",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2068,
+    "name": "Châtonnaye",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5707,
+    "name": "Chavannes-de-Bogis",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5708,
+    "name": "Chavannes-des-Bois",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5907,
+    "name": "Chavannes-le-Chêne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5475,
+    "name": "Chavannes-le-Veyron",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5627,
+    "name": "Chavannes-près-Renens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5665,
+    "name": "Chavannes-sur-Moudon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5749,
+    "name": "Chavornay",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6612,
+    "name": "Chêne-Bougeries",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6613,
+    "name": "Chêne-Bourg",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5908,
+    "name": "Chêne-Pâquier",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2177,
+    "name": "Chénens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5909,
+    "name": "Cheseaux-Noréaz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5582,
+    "name": "Cheseaux-sur-Lausanne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5709,
+    "name": "Chéserex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5403,
+    "name": "Chessel",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5476,
+    "name": "Chevilly",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5813,
+    "name": "Chevroux",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5601,
+    "name": "Chexbres",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2055,
+    "name": "Cheyres-Châbles",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5250,
+    "name": "Chiasso",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5628,
+    "name": "Chigny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6235,
+    "name": "Chippis",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6614,
+    "name": "Choulex",
+    "canton": "GE"
+  },
+  {
+    "ofs": 3901,
+    "name": "Chur",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3911,
+    "name": "Churwalden",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5629,
+    "name": "Clarmont",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6808,
+    "name": "Clos du Doubs",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6781,
+    "name": "Coeuve",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5710,
+    "name": "Coinsins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5251,
+    "name": "Coldrerio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6615,
+    "name": "Collex-Bossy",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5236,
+    "name": "Collina d'Oro",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6152,
+    "name": "Collombey-Muraz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6616,
+    "name": "Collonge-Bellerive",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6211,
+    "name": "Collonges",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6617,
+    "name": "Cologny",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5176,
+    "name": "Comano",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5711,
+    "name": "Commugny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5554,
+    "name": "Concise",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6618,
+    "name": "Confignon",
+    "canton": "GE"
+  },
+  {
+    "ofs": 3881,
+    "name": "Conters im Prättigau",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6023,
+    "name": "Conthey",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5712,
+    "name": "Coppet",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5404,
+    "name": "Corbeyrier",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2129,
+    "name": "Corbières",
+    "canton": "FR"
+  },
+  {
+    "ofs": 687,
+    "name": "Corcelles (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5785,
+    "name": "Corcelles-le-Jorat",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5555,
+    "name": "Corcelles-près-Concise",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5816,
+    "name": "Corcelles-près-Payerne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 431,
+    "name": "Corgémont",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2183,
+    "name": "Corminboeuf",
+    "canton": "FR"
+  },
+  {
+    "ofs": 432,
+    "name": "Cormoret",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6451,
+    "name": "Cornaux",
+    "canton": "NE"
+  },
+  {
+    "ofs": 6782,
+    "name": "Cornol",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5883,
+    "name": "Corseaux",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6619,
+    "name": "Corsier (GE)",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5884,
+    "name": "Corsier-sur-Vevey",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6408,
+    "name": "Cortaillod",
+    "canton": "NE"
+  },
+  {
+    "ofs": 433,
+    "name": "Cortébert",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5477,
+    "name": "Cossonay",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2186,
+    "name": "Cottens (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6706,
+    "name": "Courchapoix",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6783,
+    "name": "Courchavon",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6784,
+    "name": "Courgenay",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2250,
+    "name": "Courgevaux",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6708,
+    "name": "Courrendlin",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6709,
+    "name": "Courroux",
+    "canton": "JU"
+  },
+  {
+    "ofs": 690,
+    "name": "Court",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6785,
+    "name": "Courtedoux",
+    "canton": "JU"
+  },
+  {
+    "ofs": 434,
+    "name": "Courtelary",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2254,
+    "name": "Courtepin",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6710,
+    "name": "Courtételle",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5713,
+    "name": "Crans (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6253,
+    "name": "Crans-Montana",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5714,
+    "name": "Crassier",
+    "canton": "VD"
+  },
+  {
+    "ofs": 691,
+    "name": "Crémines",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2257,
+    "name": "Cressier (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6452,
+    "name": "Cressier (NE)",
+    "canton": "NE"
+  },
+  {
+    "ofs": 2130,
+    "name": "Crésuz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5583,
+    "name": "Crissier",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5910,
+    "name": "Cronay",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5752,
+    "name": "Croy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5479,
+    "name": "Cuarnens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5911,
+    "name": "Cuarny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5456,
+    "name": "Cudrefin",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5138,
+    "name": "Cugnasco-Gerra",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2011,
+    "name": "Cugy (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5516,
+    "name": "Cugy (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5180,
+    "name": "Cureglia",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5669,
+    "name": "Curtilles",
+    "canton": "VD"
+  },
+  {
+    "ofs": 25,
+    "name": "Dachsen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 214,
+    "name": "Dägerlen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1125,
+    "name": "Dagmersellen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 5480,
+    "name": "Daillens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1503,
+    "name": "Dallenwil",
+    "canton": "NW"
+  },
+  {
+    "ofs": 84,
+    "name": "Dällikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5071,
+    "name": "Dalpe",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6811,
+    "name": "Damphreux-Lugnez",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2572,
+    "name": "Däniken",
+    "canton": "SO"
+  },
+  {
+    "ofs": 85,
+    "name": "Dänikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6620,
+    "name": "Dardagny",
+    "canton": "GE"
+  },
+  {
+    "ofs": 575,
+    "name": "Därligen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 761,
+    "name": "Därstetten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 215,
+    "name": "Dättlikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3851,
+    "name": "Davos",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3401,
+    "name": "Degersheim",
+    "canton": "SG"
+  },
+  {
+    "ofs": 535,
+    "name": "Deisswil bei Münchenbuchsee",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2516,
+    "name": "Deitingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6711,
+    "name": "Delémont",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2051,
+    "name": "Delley-Portalban",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5912,
+    "name": "Démoret",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5631,
+    "name": "Denens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5632,
+    "name": "Denges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4004,
+    "name": "Densbüren",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2517,
+    "name": "Derendingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6712,
+    "name": "Develier",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2884,
+    "name": "Diegten",
+    "canton": "BL"
+  },
+  {
+    "ofs": 86,
+    "name": "Dielsdorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 762,
+    "name": "Diemtigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2845,
+    "name": "Diepflingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 3234,
+    "name": "Diepoldsau",
+    "canton": "SG"
+  },
+  {
+    "ofs": 1053,
+    "name": "Dierikon",
+    "canton": "LU"
+  },
+  {
+    "ofs": 385,
+    "name": "Diessbach bei Büren",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4545,
+    "name": "Diessenhofen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 243,
+    "name": "Dietikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 54,
+    "name": "Dietlikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4231,
+    "name": "Dietwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 216,
+    "name": "Dinhard",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4194,
+    "name": "Dintikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3982,
+    "name": "Disentis/Mustér",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2784,
+    "name": "Dittingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5481,
+    "name": "Dizy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3722,
+    "name": "Domat/Ems",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3673,
+    "name": "Domleschg",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5671,
+    "name": "Dompierre (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5913,
+    "name": "Donneloye",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1001,
+    "name": "Doppleschwand",
+    "canton": "LU"
+  },
+  {
+    "ofs": 6212,
+    "name": "Dorénaz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 26,
+    "name": "Dorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2915,
+    "name": "Dörflingen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 2473,
+    "name": "Dornach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4065,
+    "name": "Dottikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4304,
+    "name": "Döttingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 386,
+    "name": "Dotzigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4406,
+    "name": "Dozwil",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2535,
+    "name": "Drei Höfe",
+    "canton": "SO"
+  },
+  {
+    "ofs": 191,
+    "name": "Dübendorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2293,
+    "name": "Düdingen",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2785,
+    "name": "Duggingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5715,
+    "name": "Duillier",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2573,
+    "name": "Dulliken",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5855,
+    "name": "Dully",
+    "canton": "VD"
+  },
+  {
+    "ofs": 113,
+    "name": "Dürnten",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4134,
+    "name": "Dürrenäsch",
+    "canton": "AG"
+  },
+  {
+    "ofs": 952,
+    "name": "Dürrenroth",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1054,
+    "name": "Ebikon",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3352,
+    "name": "Ebnat-Kappel",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5518,
+    "name": "Echallens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5633,
+    "name": "Echandens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2131,
+    "name": "Echarlens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5634,
+    "name": "Echichens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5482,
+    "name": "Eclépens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5635,
+    "name": "Ecublens (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6713,
+    "name": "Ederswiler",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2401,
+    "name": "Egerkingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 192,
+    "name": "Egg",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4066,
+    "name": "Eggenwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6004,
+    "name": "Eggerberg",
+    "canton": "VS"
+  },
+  {
+    "ofs": 3212,
+    "name": "Eggersriet",
+    "canton": "SG"
+  },
+  {
+    "ofs": 901,
+    "name": "Eggiwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 55,
+    "name": "Eglisau",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4195,
+    "name": "Egliswil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4411,
+    "name": "Egnach",
+    "canton": "TG"
+  },
+  {
+    "ofs": 1127,
+    "name": "Egolzwil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4049,
+    "name": "Ehrendingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1084,
+    "name": "Eich",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3252,
+    "name": "Eichberg",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4161,
+    "name": "Eiken",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1301,
+    "name": "Einsiedeln",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 6194,
+    "name": "Eischoll",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6282,
+    "name": "Eisten",
+    "canton": "VS"
+  },
+  {
+    "ofs": 294,
+    "name": "Elgg",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 218,
+    "name": "Ellikon an der Thur",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 219,
+    "name": "Elsau",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6283,
+    "name": "Embd",
+    "canton": "VS"
+  },
+  {
+    "ofs": 56,
+    "name": "Embrach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1024,
+    "name": "Emmen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 1504,
+    "name": "Emmetten",
+    "canton": "NW"
+  },
+  {
+    "ofs": 4305,
+    "name": "Endingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1402,
+    "name": "Engelberg",
+    "canton": "OW"
+  },
+  {
+    "ofs": 4026,
+    "name": "Ennetbaden",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1505,
+    "name": "Ennetbürgen",
+    "canton": "NW"
+  },
+  {
+    "ofs": 1506,
+    "name": "Ennetmoos",
+    "canton": "NW"
+  },
+  {
+    "ofs": 1002,
+    "name": "Entlebuch",
+    "canton": "LU"
+  },
+  {
+    "ofs": 5584,
+    "name": "Epalinges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5914,
+    "name": "Ependes (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2574,
+    "name": "Eppenberg-Wöschnau",
+    "canton": "SO"
+  },
+  {
+    "ofs": 735,
+    "name": "Epsach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2885,
+    "name": "Eptingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6104,
+    "name": "Ergisch",
+    "canton": "VS"
+  },
+  {
+    "ofs": 953,
+    "name": "Eriswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 924,
+    "name": "Eriz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 492,
+    "name": "Erlach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4476,
+    "name": "Erlen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 151,
+    "name": "Erlenbach (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 763,
+    "name": "Erlenbach im Simmental",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4005,
+    "name": "Erlinsbach (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2503,
+    "name": "Erlinsbach (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4646,
+    "name": "Ermatingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 1025,
+    "name": "Ermensee",
+    "canton": "LU"
+  },
+  {
+    "ofs": 6056,
+    "name": "Ernen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2615,
+    "name": "Erschwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 405,
+    "name": "Ersigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1206,
+    "name": "Erstfeld",
+    "canton": "UR"
+  },
+  {
+    "ofs": 1026,
+    "name": "Eschenbach (LU)",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3342,
+    "name": "Eschenbach (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4806,
+    "name": "Eschenz",
+    "canton": "TG"
+  },
+  {
+    "ofs": 692,
+    "name": "Eschert",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4724,
+    "name": "Eschlikon",
+    "canton": "TG"
+  },
+  {
+    "ofs": 1010,
+    "name": "Escholzmatt-Marbach",
+    "canton": "LU"
+  },
+  {
+    "ofs": 5856,
+    "name": "Essertines-sur-Rolle",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5520,
+    "name": "Essertines-sur-Yverdon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2054,
+    "name": "Estavayer",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5521,
+    "name": "Etagnières",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5636,
+    "name": "Etoy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2768,
+    "name": "Ettingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1128,
+    "name": "Ettiswil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2518,
+    "name": "Etziken",
+    "canton": "SO"
+  },
+  {
+    "ofs": 372,
+    "name": "Evilard",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6213,
+    "name": "Evionnaz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6083,
+    "name": "Evolène",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5716,
+    "name": "Eysins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 925,
+    "name": "Fahrni",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4196,
+    "name": "Fahrwangen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6789,
+    "name": "Fahy",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5072,
+    "name": "Faido",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3572,
+    "name": "Falera",
+    "canton": "GR"
+  },
+  {
+    "ofs": 193,
+    "name": "Fällanden",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5458,
+    "name": "Faoug",
+    "canton": "VD"
+  },
+  {
+    "ofs": 975,
+    "name": "Farnern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5427,
+    "name": "Féchy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 172,
+    "name": "Fehraltorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2616,
+    "name": "Fehren",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4561,
+    "name": "Felben-Wellhausen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2544,
+    "name": "Feldbrunnen-St. Niklaus",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3731,
+    "name": "Felsberg",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6195,
+    "name": "Ferden",
+    "canton": "VS"
+  },
+  {
+    "ofs": 662,
+    "name": "Ferenbalm",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2194,
+    "name": "Ferpicloz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 3713,
+    "name": "Ferrera",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5483,
+    "name": "Ferreyres",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2056,
+    "name": "Fétigny-Ménières",
+    "canton": "FR"
+  },
+  {
+    "ofs": 27,
+    "name": "Feuerthalen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1321,
+    "name": "Feusisberg",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 5522,
+    "name": "Fey",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3861,
+    "name": "Fideris",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6057,
+    "name": "Fiesch",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6058,
+    "name": "Fieschertal",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5556,
+    "name": "Fiez",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6214,
+    "name": "Finhaut",
+    "canton": "VS"
+  },
+  {
+    "ofs": 493,
+    "name": "Finsterhennen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1129,
+    "name": "Fischbach",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4067,
+    "name": "Fischbach-Göslikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 114,
+    "name": "Fischenthal",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4726,
+    "name": "Fischingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4306,
+    "name": "Fisibach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4027,
+    "name": "Fislisbach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 28,
+    "name": "Flaach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3951,
+    "name": "Fläsch",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3402,
+    "name": "Flawil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3662,
+    "name": "Flerden",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3732,
+    "name": "Flims",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1207,
+    "name": "Flüelen",
+    "canton": "UR"
+  },
+  {
+    "ofs": 1004,
+    "name": "Flühli",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2545,
+    "name": "Flumenthal",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3292,
+    "name": "Flums",
+    "canton": "SG"
+  },
+  {
+    "ofs": 29,
+    "name": "Flurlingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5557,
+    "name": "Fontaines-sur-Grandson",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6790,
+    "name": "Fontenais",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5604,
+    "name": "Forel (Lavaux)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 948,
+    "name": "Forst-Längenbühl",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5717,
+    "name": "Founex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2258,
+    "name": "Fräschels",
+    "canton": "FR"
+  },
+  {
+    "ofs": 538,
+    "name": "Fraubrunnen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4566,
+    "name": "Frauenfeld",
+    "canton": "TG"
+  },
+  {
+    "ofs": 663,
+    "name": "Frauenkappelen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1322,
+    "name": "Freienbach",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 57,
+    "name": "Freienstein-Teufen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4028,
+    "name": "Freienwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 607,
+    "name": "Freimettigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2824,
+    "name": "Frenkendorf",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2196,
+    "name": "Fribourg",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4163,
+    "name": "Frick",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5523,
+    "name": "Froideville",
+    "canton": "VD"
+  },
+  {
+    "ofs": 563,
+    "name": "Frutigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2575,
+    "name": "Fulenbach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4307,
+    "name": "Full-Reuenthal",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2825,
+    "name": "Füllinsdorf",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6133,
+    "name": "Fully",
+    "canton": "VS"
+  },
+  {
+    "ofs": 3862,
+    "name": "Furna",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3633,
+    "name": "Fürstenau",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2901,
+    "name": "Gächlingen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 4571,
+    "name": "Gachnang",
+    "canton": "TG"
+  },
+  {
+    "ofs": 3022,
+    "name": "Gais",
+    "canton": "AR"
+  },
+  {
+    "ofs": 3442,
+    "name": "Gaiserwald",
+    "canton": "SG"
+  },
+  {
+    "ofs": 1342,
+    "name": "Galgenen",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 494,
+    "name": "Gals",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5398,
+    "name": "Gambarogno",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6118,
+    "name": "Gampel-Bratsch",
+    "canton": "VS"
+  },
+  {
+    "ofs": 495,
+    "name": "Gampelen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3272,
+    "name": "Gams",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4164,
+    "name": "Gansingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4029,
+    "name": "Gebenstorf",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2846,
+    "name": "Gelterkinden",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4232,
+    "name": "Geltwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2474,
+    "name": "Gempen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6621,
+    "name": "Genève",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5718,
+    "name": "Genolier",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6622,
+    "name": "Genthod",
+    "canton": "GE"
+  },
+  {
+    "ofs": 2519,
+    "name": "Gerlafingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 244,
+    "name": "Geroldswil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1311,
+    "name": "Gersau",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 866,
+    "name": "Gerzensee",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1085,
+    "name": "Geuensee",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2236,
+    "name": "Gibloux",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2826,
+    "name": "Giebenach",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5559,
+    "name": "Giez",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2294,
+    "name": "Giffers",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5857,
+    "name": "Gilly",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5428,
+    "name": "Gimel",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5719,
+    "name": "Gingins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5073,
+    "name": "Giornico",
+    "canton": "TI"
+  },
+  {
+    "ofs": 4165,
+    "name": "Gipf-Oberfrick",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1055,
+    "name": "Gisikon",
+    "canton": "LU"
+  },
+  {
+    "ofs": 1403,
+    "name": "Giswil",
+    "canton": "OW"
+  },
+  {
+    "ofs": 2197,
+    "name": "Givisiez",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5720,
+    "name": "Givrins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5721,
+    "name": "Gland",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1632,
+    "name": "Glarus",
+    "canton": "GL"
+  },
+  {
+    "ofs": 1630,
+    "name": "Glarus Nord",
+    "canton": "GL"
+  },
+  {
+    "ofs": 1631,
+    "name": "Glarus Süd",
+    "canton": "GL"
+  },
+  {
+    "ofs": 58,
+    "name": "Glattfelden",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2022,
+    "name": "Gletterens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 3213,
+    "name": "Goldach",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5484,
+    "name": "Gollion",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3341,
+    "name": "Gommiswald",
+    "canton": "SG"
+  },
+  {
+    "ofs": 6077,
+    "name": "Goms",
+    "canton": "VS"
+  },
+  {
+    "ofs": 326,
+    "name": "Gondiswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3102,
+    "name": "Gonten",
+    "canton": "AI"
+  },
+  {
+    "ofs": 4135,
+    "name": "Gontenschwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5108,
+    "name": "Gordola",
+    "canton": "TI"
+  },
+  {
+    "ofs": 1208,
+    "name": "Göschenen",
+    "canton": "UR"
+  },
+  {
+    "ofs": 3443,
+    "name": "Gossau (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 115,
+    "name": "Gossau (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4651,
+    "name": "Gottlieben",
+    "canton": "TG"
+  },
+  {
+    "ofs": 5541,
+    "name": "Goumoëns",
+    "canton": "VD"
+  },
+  {
+    "ofs": 976,
+    "name": "Graben",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3273,
+    "name": "Grabs",
+    "canton": "SG"
+  },
+  {
+    "ofs": 6285,
+    "name": "Grächen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5186,
+    "name": "Grancia",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5485,
+    "name": "Grancy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5817,
+    "name": "Grandcour",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5560,
+    "name": "Grandevent",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6792,
+    "name": "Grandfontaine",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5561,
+    "name": "Grandson",
+    "canton": "VD"
+  },
+  {
+    "ofs": 694,
+    "name": "Grandval",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2134,
+    "name": "Grandvillard",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2328,
+    "name": "Granges (Veveyse)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2198,
+    "name": "Granges-Paccot",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2079,
+    "name": "Grangettes",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4006,
+    "name": "Gränichen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5187,
+    "name": "Gravesano",
+    "canton": "TI"
+  },
+  {
+    "ofs": 194,
+    "name": "Greifensee",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2786,
+    "name": "Grellingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2546,
+    "name": "Grenchen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2261,
+    "name": "Greng",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6177,
+    "name": "Grengiols",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5722,
+    "name": "Grens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1056,
+    "name": "Greppen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2576,
+    "name": "Gretzenbach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6263,
+    "name": "Grimisuat",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2617,
+    "name": "Grindel",
+    "canton": "SO"
+  },
+  {
+    "ofs": 576,
+    "name": "Grindelwald",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2239,
+    "name": "Grolley-Ponthaux",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6238,
+    "name": "Grône",
+    "canton": "VS"
+  },
+  {
+    "ofs": 3832,
+    "name": "Grono",
+    "canton": "GR"
+  },
+  {
+    "ofs": 303,
+    "name": "Grossaffoltern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1131,
+    "name": "Grossdietwil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 608,
+    "name": "Grosshöchstetten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1086,
+    "name": "Grosswangen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3031,
+    "name": "Grub (AR)",
+    "canton": "AR"
+  },
+  {
+    "ofs": 116,
+    "name": "Grüningen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3961,
+    "name": "Grüsch",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2135,
+    "name": "Gruyères",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5405,
+    "name": "Gryon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 841,
+    "name": "Gsteig",
+    "canton": "BE"
+  },
+  {
+    "ofs": 577,
+    "name": "Gsteigwiler",
+    "canton": "BE"
+  },
+  {
+    "ofs": 852,
+    "name": "Guggisberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 578,
+    "name": "Gündlischwand",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2547,
+    "name": "Günsberg",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2578,
+    "name": "Gunzgen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 665,
+    "name": "Gurbrü",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2262,
+    "name": "Gurmels",
+    "canton": "FR"
+  },
+  {
+    "ofs": 1209,
+    "name": "Gurtnellen",
+    "canton": "UR"
+  },
+  {
+    "ofs": 867,
+    "name": "Gurzelen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 782,
+    "name": "Guttannen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6117,
+    "name": "Guttet-Feschel",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4656,
+    "name": "Güttingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 6624,
+    "name": "Gy",
+    "canton": "GE"
+  },
+  {
+    "ofs": 579,
+    "name": "Habkern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4099,
+    "name": "Habsburg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2847,
+    "name": "Häfelfingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 220,
+    "name": "Hagenbuch",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2579,
+    "name": "Hägendorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3201,
+    "name": "Häggenschwil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4068,
+    "name": "Hägglingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 736,
+    "name": "Hagneck",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2971,
+    "name": "Hallau",
+    "canton": "SH"
+  },
+  {
+    "ofs": 4197,
+    "name": "Hallwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2402,
+    "name": "Härkingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 1005,
+    "name": "Hasle (LU)",
+    "canton": "LU"
+  },
+  {
+    "ofs": 406,
+    "name": "Hasle bei Burgdorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 783,
+    "name": "Hasliberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2491,
+    "name": "Hauenstein-Ifenthal",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4486,
+    "name": "Hauptwil-Gottshaus",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4100,
+    "name": "Hausen (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4,
+    "name": "Hausen am Albis",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2121,
+    "name": "Haut-Intyamon",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6809,
+    "name": "Haute-Ajoie",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6729,
+    "name": "Haute-Sorne",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5656,
+    "name": "Hautemorges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2233,
+    "name": "Hauterive (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2137,
+    "name": "Hauteville",
+    "canton": "FR"
+  },
+  {
+    "ofs": 609,
+    "name": "Häutligen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5,
+    "name": "Hedingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4416,
+    "name": "Hefenhofen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 3032,
+    "name": "Heiden",
+    "canton": "AR"
+  },
+  {
+    "ofs": 927,
+    "name": "Heiligenschwendi",
+    "canton": "BE"
+  },
+  {
+    "ofs": 928,
+    "name": "Heimberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 977,
+    "name": "Heimenhausen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 407,
+    "name": "Heimiswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2296,
+    "name": "Heitenried",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4251,
+    "name": "Hellikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 408,
+    "name": "Hellsau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2962,
+    "name": "Hemishofen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 2848,
+    "name": "Hemmiken",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4198,
+    "name": "Hendschiken",
+    "canton": "AG"
+  },
+  {
+    "ofs": 31,
+    "name": "Henggart",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5819,
+    "name": "Henniez",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2424,
+    "name": "Herbetswil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 610,
+    "name": "Herbligen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4811,
+    "name": "Herdern",
+    "canton": "TG"
+  },
+  {
+    "ofs": 6084,
+    "name": "Hérémence",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1507,
+    "name": "Hergiswil (NW)",
+    "canton": "NW"
+  },
+  {
+    "ofs": 1132,
+    "name": "Hergiswil bei Willisau",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3001,
+    "name": "Herisau",
+    "canton": "AR"
+  },
+  {
+    "ofs": 6625,
+    "name": "Hermance",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5673,
+    "name": "Hermenches",
+    "canton": "VD"
+  },
+  {
+    "ofs": 737,
+    "name": "Hermrigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 152,
+    "name": "Herrliberg",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2827,
+    "name": "Hersberg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4186,
+    "name": "Herznach-Ueken",
+    "canton": "AG"
+  },
+  {
+    "ofs": 979,
+    "name": "Herzogenbuchsee",
+    "canton": "BE"
+  },
+  {
+    "ofs": 221,
+    "name": "Hettlingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1088,
+    "name": "Hildisrieden",
+    "canton": "LU"
+  },
+  {
+    "ofs": 929,
+    "name": "Hilterfingen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2618,
+    "name": "Himmelried",
+    "canton": "SO"
+  },
+  {
+    "ofs": 409,
+    "name": "Hindelbank",
+    "canton": "BE"
+  },
+  {
+    "ofs": 117,
+    "name": "Hinwil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4007,
+    "name": "Hirschthal",
+    "canton": "AG"
+  },
+  {
+    "ofs": 173,
+    "name": "Hittnau",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1030,
+    "name": "Hitzkirch",
+    "canton": "LU"
+  },
+  {
+    "ofs": 1031,
+    "name": "Hochdorf",
+    "canton": "LU"
+  },
+  {
+    "ofs": 59,
+    "name": "Hochfelden",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 410,
+    "name": "Höchstetten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2475,
+    "name": "Hochwald",
+    "canton": "SO"
+  },
+  {
+    "ofs": 580,
+    "name": "Hofstetten bei Brienz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2476,
+    "name": "Hofstetten-Flüh",
+    "canton": "SO"
+  },
+  {
+    "ofs": 1032,
+    "name": "Hohenrain",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4495,
+    "name": "Hohentannen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4199,
+    "name": "Holderbank (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2425,
+    "name": "Holderbank (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2886,
+    "name": "Hölstein",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4136,
+    "name": "Holziken",
+    "canton": "AG"
+  },
+  {
+    "ofs": 931,
+    "name": "Homberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 153,
+    "name": "Hombrechtikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4816,
+    "name": "Homburg",
+    "canton": "TG"
+  },
+  {
+    "ofs": 295,
+    "name": "Horgen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 60,
+    "name": "Höri",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4421,
+    "name": "Horn",
+    "canton": "TG"
+  },
+  {
+    "ofs": 932,
+    "name": "Horrenbach-Buchen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2523,
+    "name": "Horriwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 1058,
+    "name": "Horw",
+    "canton": "LU"
+  },
+  {
+    "ofs": 1210,
+    "name": "Hospental",
+    "canton": "UR"
+  },
+  {
+    "ofs": 2548,
+    "name": "Hubersdorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3002,
+    "name": "Hundwil",
+    "canton": "AR"
+  },
+  {
+    "ofs": 1703,
+    "name": "Hünenberg",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 2524,
+    "name": "Hüniken",
+    "canton": "SO"
+  },
+  {
+    "ofs": 61,
+    "name": "Hüntwangen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4200,
+    "name": "Hunzenschwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 87,
+    "name": "Hüttikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4590,
+    "name": "Hüttlingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 954,
+    "name": "Huttwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4821,
+    "name": "Hüttwilen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 6239,
+    "name": "Icogne",
+    "canton": "VS"
+  },
+  {
+    "ofs": 541,
+    "name": "Iffwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3619,
+    "name": "Ilanz/Glion",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1363,
+    "name": "Illgau",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 296,
+    "name": "Illnau-Effretikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6109,
+    "name": "Inden",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1364,
+    "name": "Ingenbohl",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 980,
+    "name": "Inkwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1343,
+    "name": "Innerthal",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 784,
+    "name": "Innertkirchen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 496,
+    "name": "Ins",
+    "canton": "BE"
+  },
+  {
+    "ofs": 581,
+    "name": "Interlaken",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1033,
+    "name": "Inwil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 739,
+    "name": "Ipsach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 582,
+    "name": "Iseltwald",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1211,
+    "name": "Isenthal",
+    "canton": "UR"
+  },
+  {
+    "ofs": 6134,
+    "name": "Isérables",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4084,
+    "name": "Islisberg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5009,
+    "name": "Isone",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2849,
+    "name": "Itingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 362,
+    "name": "Ittigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 868,
+    "name": "Jaberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2138,
+    "name": "Jaun",
+    "canton": "FR"
+  },
+  {
+    "ofs": 540,
+    "name": "Jegenstorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3863,
+    "name": "Jenaz",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3952,
+    "name": "Jenins",
+    "canton": "GR"
+  },
+  {
+    "ofs": 738,
+    "name": "Jens",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4071,
+    "name": "Jonen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5885,
+    "name": "Jongny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3405,
+    "name": "Jonschwil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5804,
+    "name": "Jorat-Menthue",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5806,
+    "name": "Jorat-Mézières",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5585,
+    "name": "Jouxtens-Mézery",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5754,
+    "name": "Juriens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6626,
+    "name": "Jussy",
+    "canton": "GE"
+  },
+  {
+    "ofs": 4252,
+    "name": "Kaiseraugst",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4169,
+    "name": "Kaisten",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4233,
+    "name": "Kallern",
+    "canton": "AG"
+  },
+  {
+    "ofs": 304,
+    "name": "Kallnach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3313,
+    "name": "Kaltbrunn",
+    "canton": "SG"
+  },
+  {
+    "ofs": 2549,
+    "name": "Kammersrohr",
+    "canton": "SO"
+  },
+  {
+    "ofs": 564,
+    "name": "Kandergrund",
+    "canton": "BE"
+  },
+  {
+    "ofs": 565,
+    "name": "Kandersteg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2850,
+    "name": "Känerkinden",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2580,
+    "name": "Kappel (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6,
+    "name": "Kappel am Albis",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 305,
+    "name": "Kappelen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 869,
+    "name": "Kaufdorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 870,
+    "name": "Kehrsatz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4666,
+    "name": "Kemmental",
+    "canton": "TG"
+  },
+  {
+    "ofs": 411,
+    "name": "Kernenried",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1404,
+    "name": "Kerns",
+    "canton": "OW"
+  },
+  {
+    "ofs": 2265,
+    "name": "Kerzers",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4426,
+    "name": "Kesswil",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2403,
+    "name": "Kestenholz",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2492,
+    "name": "Kienberg",
+    "canton": "SO"
+  },
+  {
+    "ofs": 611,
+    "name": "Kiesen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2851,
+    "name": "Kilchberg (BL)",
+    "canton": "BL"
+  },
+  {
+    "ofs": 135,
+    "name": "Kilchberg (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4030,
+    "name": "Killwangen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6197,
+    "name": "Kippel",
+    "canton": "VS"
+  },
+  {
+    "ofs": 412,
+    "name": "Kirchberg (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3392,
+    "name": "Kirchberg (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 872,
+    "name": "Kirchdorf (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4275,
+    "name": "Kirchleerau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 354,
+    "name": "Kirchlindach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 33,
+    "name": "Kleinandelfingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2266,
+    "name": "Kleinbösingen",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2619,
+    "name": "Kleinlützel",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4309,
+    "name": "Klingnau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3871,
+    "name": "Klosters",
+    "canton": "GR"
+  },
+  {
+    "ofs": 62,
+    "name": "Kloten",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 7,
+    "name": "Knonau",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1089,
+    "name": "Knutwil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4310,
+    "name": "Koblenz",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4276,
+    "name": "Kölliken",
+    "canton": "AG"
+  },
+  {
+    "ofs": 355,
+    "name": "Köniz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 612,
+    "name": "Konolfingen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 413,
+    "name": "Koppigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4501,
+    "name": "Kradolf-Schönenberg",
+    "canton": "TG"
+  },
+  {
+    "ofs": 566,
+    "name": "Krattigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 414,
+    "name": "Krauchthal",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4671,
+    "name": "Kreuzlingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 666,
+    "name": "Kriechenwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2525,
+    "name": "Kriegstetten",
+    "canton": "SO"
+  },
+  {
+    "ofs": 1059,
+    "name": "Kriens",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3882,
+    "name": "Küblis",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4031,
+    "name": "Künten",
+    "canton": "AG"
+  },
+  {
+    "ofs": 154,
+    "name": "Küsnacht (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1331,
+    "name": "Küssnacht (SZ)",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 4008,
+    "name": "Küttigen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5871,
+    "name": "L'Abbaye",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5741,
+    "name": "L'Abergement",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5486,
+    "name": "L'Isle",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6810,
+    "name": "La Baroche",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6432,
+    "name": "La Brévine",
+    "canton": "NE"
+  },
+  {
+    "ofs": 2234,
+    "name": "La Brillaz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5474,
+    "name": "La Chaux (Cossonay)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6421,
+    "name": "La Chaux-de-Fonds",
+    "canton": "NE"
+  },
+  {
+    "ofs": 6435,
+    "name": "La Chaux-du-Milieu",
+    "canton": "NE"
+  },
+  {
+    "ofs": 6504,
+    "name": "La Côte-aux-Fées",
+    "canton": "NE"
+  },
+  {
+    "ofs": 435,
+    "name": "La Ferrière",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6417,
+    "name": "La Grande Béroche",
+    "canton": "NE"
+  },
+  {
+    "ofs": 723,
+    "name": "La Neuveville",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5758,
+    "name": "La Praz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3785,
+    "name": "La Punt Chamues-ch",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5726,
+    "name": "La Rippe",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2149,
+    "name": "La Roche",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6423,
+    "name": "La Sagne",
+    "canton": "NE"
+  },
+  {
+    "ofs": 5498,
+    "name": "La Sarraz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2235,
+    "name": "La Sonnaz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5889,
+    "name": "La Tour-de-Peilz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2338,
+    "name": "La Verrerie",
+    "canton": "FR"
+  },
+  {
+    "ofs": 3575,
+    "name": "Laax",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1344,
+    "name": "Lachen",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 6627,
+    "name": "Laconnex",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6750,
+    "name": "Lajoux (JU)",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6286,
+    "name": "Lalden",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5189,
+    "name": "Lamone",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2887,
+    "name": "Lampenberg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6628,
+    "name": "Lancy",
+    "canton": "GE"
+  },
+  {
+    "ofs": 613,
+    "name": "Landiswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3955,
+    "name": "Landquart",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2888,
+    "name": "Langenbruck",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2550,
+    "name": "Langendorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 329,
+    "name": "Langenthal",
+    "canton": "BE"
+  },
+  {
+    "ofs": 136,
+    "name": "Langnau am Albis",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 902,
+    "name": "Langnau im Emmental",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4681,
+    "name": "Langrickenbach",
+    "canton": "TG"
+  },
+  {
+    "ofs": 3513,
+    "name": "Lantsch/Lenz",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6513,
+    "name": "Laténa",
+    "canton": "NE"
+  },
+  {
+    "ofs": 842,
+    "name": "Lauenen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1365,
+    "name": "Lauerz",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 2852,
+    "name": "Läufelfingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2787,
+    "name": "Laufen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 34,
+    "name": "Laufen-Uhwiesen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4170,
+    "name": "Laufenburg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 667,
+    "name": "Laupen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2426,
+    "name": "Laupersdorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 903,
+    "name": "Lauperswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5586,
+    "name": "Lausanne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2828,
+    "name": "Lausen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 584,
+    "name": "Lauterbrunnen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2889,
+    "name": "Lauwil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5112,
+    "name": "Lavertezzo",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5406,
+    "name": "Lavey-Morcles",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5637,
+    "name": "Lavigny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5323,
+    "name": "Lavizzara",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6061,
+    "name": "Lax",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6741,
+    "name": "Le Bémont (JU)",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6434,
+    "name": "Le Cerneux-Péquignot",
+    "canton": "NE"
+  },
+  {
+    "ofs": 2067,
+    "name": "Le Châtelard",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5872,
+    "name": "Le Chenit",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2337,
+    "name": "Le Flon",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6623,
+    "name": "Le Grand-Saconnex",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6455,
+    "name": "Le Landeron",
+    "canton": "NE"
+  },
+  {
+    "ofs": 5873,
+    "name": "Le Lieu",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6436,
+    "name": "Le Locle",
+    "canton": "NE"
+  },
+  {
+    "ofs": 5587,
+    "name": "Le Mont-sur-Lausanne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2220,
+    "name": "Le Mouret",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6754,
+    "name": "Le Noirmont",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2145,
+    "name": "Le Pâquier (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5731,
+    "name": "Le Vaud",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4311,
+    "name": "Leibstadt",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4137,
+    "name": "Leimbach (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 585,
+    "name": "Leissigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5395,
+    "name": "Lema",
+    "canton": "TI"
+  },
+  {
+    "ofs": 4312,
+    "name": "Lengnau (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 387,
+    "name": "Lengnau (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4683,
+    "name": "Lengwil",
+    "canton": "TG"
+  },
+  {
+    "ofs": 792,
+    "name": "Lenk",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6240,
+    "name": "Lens",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4201,
+    "name": "Lenzburg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6742,
+    "name": "Les Bois",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6743,
+    "name": "Les Breuleux",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5750,
+    "name": "Les Clées",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6745,
+    "name": "Les Enfers",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6748,
+    "name": "Les Genevez (JU)",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2050,
+    "name": "Les Montets",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6422,
+    "name": "Les Planchettes",
+    "canton": "NE"
+  },
+  {
+    "ofs": 6437,
+    "name": "Les Ponts-de-Martel",
+    "canton": "NE"
+  },
+  {
+    "ofs": 6511,
+    "name": "Les Verrières",
+    "canton": "NE"
+  },
+  {
+    "ofs": 4313,
+    "name": "Leuggern",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6110,
+    "name": "Leuk",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6111,
+    "name": "Leukerbad",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4138,
+    "name": "Leutwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 388,
+    "name": "Leuzigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5407,
+    "name": "Leysin",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6135,
+    "name": "Leytron",
+    "canton": "VS"
+  },
+  {
+    "ofs": 3374,
+    "name": "Lichtensteig",
+    "canton": "SG"
+  },
+  {
+    "ofs": 6033,
+    "name": "Liddes",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2890,
+    "name": "Liedertswil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2788,
+    "name": "Liesberg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2829,
+    "name": "Liestal",
+    "canton": "BL"
+  },
+  {
+    "ofs": 740,
+    "name": "Ligerz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5755,
+    "name": "Lignerolle",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6456,
+    "name": "Lignières",
+    "canton": "NE"
+  },
+  {
+    "ofs": 176,
+    "name": "Lindau",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 614,
+    "name": "Linden",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5315,
+    "name": "Linescio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5113,
+    "name": "Locarno",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2917,
+    "name": "Lohn (SH)",
+    "canton": "SH"
+  },
+  {
+    "ofs": 2526,
+    "name": "Lohn-Ammannsegg",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2903,
+    "name": "Löhningen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 4741,
+    "name": "Lommis",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2551,
+    "name": "Lommiswil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5638,
+    "name": "Lonay",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5429,
+    "name": "Longirod",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5115,
+    "name": "Losone",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3821,
+    "name": "Lostallo",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2493,
+    "name": "Lostorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 331,
+    "name": "Lotzwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5674,
+    "name": "Lovatens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 696,
+    "name": "Loveresse",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5675,
+    "name": "Lucens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 63,
+    "name": "Lufingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5192,
+    "name": "Lugano",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5858,
+    "name": "Luins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2025,
+    "name": "Lully (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5639,
+    "name": "Lully (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5010,
+    "name": "Lumino",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3618,
+    "name": "Lumnezia",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1405,
+    "name": "Lungern",
+    "canton": "OW"
+  },
+  {
+    "ofs": 4104,
+    "name": "Lupfig",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2830,
+    "name": "Lupsingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 497,
+    "name": "Lüscherz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5487,
+    "name": "Lussery-Villars",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2464,
+    "name": "Lüsslingen-Nennigkofen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5640,
+    "name": "Lussy-sur-Morges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2527,
+    "name": "Luterbach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2455,
+    "name": "Lüterkofen-Ichertswil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 1135,
+    "name": "Luthern",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3393,
+    "name": "Lütisburg",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5606,
+    "name": "Lutry",
+    "canton": "VD"
+  },
+  {
+    "ofs": 586,
+    "name": "Lütschental",
+    "canton": "BE"
+  },
+  {
+    "ofs": 955,
+    "name": "Lützelflüh",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3033,
+    "name": "Lutzenberg",
+    "canton": "AR"
+  },
+  {
+    "ofs": 3891,
+    "name": "Luzein",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1061,
+    "name": "Luzern",
+    "canton": "LU"
+  },
+  {
+    "ofs": 306,
+    "name": "Lyss",
+    "canton": "BE"
+  },
+  {
+    "ofs": 415,
+    "name": "Lyssach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 332,
+    "name": "Madiswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3783,
+    "name": "Madulain",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4253,
+    "name": "Magden",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4032,
+    "name": "Mägenwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5317,
+    "name": "Maggia",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5193,
+    "name": "Magliaso",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3953,
+    "name": "Maienfeld",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2853,
+    "name": "Maisprach",
+    "canton": "BL"
+  },
+  {
+    "ofs": 3954,
+    "name": "Malans",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1062,
+    "name": "Malters",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4826,
+    "name": "Mammern",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4105,
+    "name": "Mandach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 155,
+    "name": "Männedorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5194,
+    "name": "Manno",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5790,
+    "name": "Maracon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3253,
+    "name": "Marbach (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5430,
+    "name": "Marchissy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2206,
+    "name": "Marly",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2140,
+    "name": "Marsens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4941,
+    "name": "Märstetten",
+    "canton": "TG"
+  },
+  {
+    "ofs": 35,
+    "name": "Marthalen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6136,
+    "name": "Martigny",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6137,
+    "name": "Martigny-Combe",
+    "canton": "VS"
+  },
+  {
+    "ofs": 8,
+    "name": "Maschwanden",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3663,
+    "name": "Masein",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5196,
+    "name": "Massagno",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6215,
+    "name": "Massongex",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2086,
+    "name": "Massonnens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5919,
+    "name": "Mathod",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2208,
+    "name": "Matran",
+    "canton": "FR"
+  },
+  {
+    "ofs": 587,
+    "name": "Matten bei Interlaken",
+    "canton": "BE"
+  },
+  {
+    "ofs": 543,
+    "name": "Mattstetten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2427,
+    "name": "Matzendorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4591,
+    "name": "Matzingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 5562,
+    "name": "Mauborget",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1091,
+    "name": "Mauensee",
+    "canton": "LU"
+  },
+  {
+    "ofs": 195,
+    "name": "Maur",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5488,
+    "name": "Mauraz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3983,
+    "name": "Medel (Lucmagn)",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1063,
+    "name": "Meggen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 389,
+    "name": "Meienried",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1064,
+    "name": "Meierskappel",
+    "canton": "LU"
+  },
+  {
+    "ofs": 307,
+    "name": "Meikirch",
+    "canton": "BE"
+  },
+  {
+    "ofs": 156,
+    "name": "Meilen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6629,
+    "name": "Meinier",
+    "canton": "GE"
+  },
+  {
+    "ofs": 390,
+    "name": "Meinisberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 785,
+    "name": "Meiringen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4202,
+    "name": "Meisterschwanden",
+    "canton": "AG"
+  },
+  {
+    "ofs": 333,
+    "name": "Melchnau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5198,
+    "name": "Melide",
+    "canton": "TI"
+  },
+  {
+    "ofs": 4314,
+    "name": "Mellikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4033,
+    "name": "Mellingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3293,
+    "name": "Mels",
+    "canton": "SG"
+  },
+  {
+    "ofs": 2620,
+    "name": "Meltingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5254,
+    "name": "Mendrisio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 4139,
+    "name": "Menziken",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1704,
+    "name": "Menzingen",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 1136,
+    "name": "Menznau",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4234,
+    "name": "Merenschwand",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5117,
+    "name": "Mergoscia",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2936,
+    "name": "Merishausen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 6715,
+    "name": "Mervelier",
+    "canton": "JU"
+  },
+  {
+    "ofs": 741,
+    "name": "Merzligen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3822,
+    "name": "Mesocco",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2457,
+    "name": "Messen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4184,
+    "name": "Mettauertal",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6716,
+    "name": "Mettembert",
+    "canton": "JU"
+  },
+  {
+    "ofs": 9,
+    "name": "Mettmenstetten",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2477,
+    "name": "Metzerlen-Mariastein",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5489,
+    "name": "Mex (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2271,
+    "name": "Meyriez",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6630,
+    "name": "Meyrin",
+    "canton": "GE"
+  },
+  {
+    "ofs": 2087,
+    "name": "Mézières (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5199,
+    "name": "Mezzovico-Vira",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5723,
+    "name": "Mies",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6416,
+    "name": "Milvignes",
+    "canton": "NE"
+  },
+  {
+    "ofs": 5118,
+    "name": "Minusio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 615,
+    "name": "Mirchel",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2272,
+    "name": "Misery-Courtion",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5821,
+    "name": "Missy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4254,
+    "name": "Möhlin",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5490,
+    "name": "Moiry",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5431,
+    "name": "Mollens (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5921,
+    "name": "Molondin",
+    "canton": "VD"
+  },
+  {
+    "ofs": 196,
+    "name": "Mönchaltorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5491,
+    "name": "Mont-la-Ville",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6090,
+    "name": "Mont-Noble",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5859,
+    "name": "Mont-sur-Rolle",
+    "canton": "VD"
+  },
+  {
+    "ofs": 437,
+    "name": "Mont-Tramelan",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2284,
+    "name": "Mont-Vully",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2029,
+    "name": "Montagny (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5922,
+    "name": "Montagny-près-Yverdon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5693,
+    "name": "Montanaire",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5756,
+    "name": "Montcherand",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5238,
+    "name": "Monteceneri",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6751,
+    "name": "Montfaucon",
+    "canton": "JU"
+  },
+  {
+    "ofs": 4106,
+    "name": "Mönthal",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6153,
+    "name": "Monthey",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5540,
+    "name": "Montilliez",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5792,
+    "name": "Montpreveyres",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5886,
+    "name": "Montreux",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5492,
+    "name": "Montricher",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4277,
+    "name": "Moosleerau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 544,
+    "name": "Moosseedorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5257,
+    "name": "Morbio Inferiore",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5203,
+    "name": "Morcote",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6203,
+    "name": "Mörel-Filet",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5642,
+    "name": "Morges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 742,
+    "name": "Mörigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4203,
+    "name": "Möriken-Wildegg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2143,
+    "name": "Morlon",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5527,
+    "name": "Morrens (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1366,
+    "name": "Morschach",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 3214,
+    "name": "Mörschwil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3394,
+    "name": "Mosnang",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5678,
+    "name": "Moudon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6831,
+    "name": "Moutier",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6718,
+    "name": "Movelier",
+    "canton": "JU"
+  },
+  {
+    "ofs": 4009,
+    "name": "Muhen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4235,
+    "name": "Mühlau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 668,
+    "name": "Mühleberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4831,
+    "name": "Müllheim",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4107,
+    "name": "Mülligen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2428,
+    "name": "Mümliswil-Ramiswil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4255,
+    "name": "Mumpf",
+    "canton": "AG"
+  },
+  {
+    "ofs": 546,
+    "name": "Münchenbuchsee",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2769,
+    "name": "Münchenstein",
+    "canton": "BL"
+  },
+  {
+    "ofs": 669,
+    "name": "Münchenwiler",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4172,
+    "name": "Münchwilen (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4746,
+    "name": "Münchwilen (TG)",
+    "canton": "TG"
+  },
+  {
+    "ofs": 616,
+    "name": "Münsingen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4691,
+    "name": "Münsterlingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2274,
+    "name": "Muntelier",
+    "canton": "FR"
+  },
+  {
+    "ofs": 3715,
+    "name": "Muntogna da Schons",
+    "canton": "GR"
+  },
+  {
+    "ofs": 498,
+    "name": "Müntschemier",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3202,
+    "name": "Muolen",
+    "canton": "SG"
+  },
+  {
+    "ofs": 1367,
+    "name": "Muotathal",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 5120,
+    "name": "Muralto",
+    "canton": "TI"
+  },
+  {
+    "ofs": 4279,
+    "name": "Murgenthal",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4236,
+    "name": "Muri (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 356,
+    "name": "Muri bei Bern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6753,
+    "name": "Muriaux",
+    "canton": "JU"
+  },
+  {
+    "ofs": 2275,
+    "name": "Murten",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5563,
+    "name": "Mutrux",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2770,
+    "name": "Muttenz",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5205,
+    "name": "Muzzano",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6007,
+    "name": "Naters",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1137,
+    "name": "Nebikon",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3396,
+    "name": "Neckertal",
+    "canton": "SG"
+  },
+  {
+    "ofs": 88,
+    "name": "Neerach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 223,
+    "name": "Neftenbach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5206,
+    "name": "Neggio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6024,
+    "name": "Nendaz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2789,
+    "name": "Nenzlingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 3360,
+    "name": "Nesslau",
+    "canton": "SG"
+  },
+  {
+    "ofs": 6458,
+    "name": "Neuchâtel",
+    "canton": "NE"
+  },
+  {
+    "ofs": 2404,
+    "name": "Neuendorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 670,
+    "name": "Neuenegg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4034,
+    "name": "Neuenhof",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1093,
+    "name": "Neuenkirch",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2937,
+    "name": "Neuhausen am Rheinfall",
+    "canton": "SH"
+  },
+  {
+    "ofs": 1705,
+    "name": "Neuheim",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 4601,
+    "name": "Neunforn",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2904,
+    "name": "Neunkirch",
+    "canton": "SH"
+  },
+  {
+    "ofs": 2211,
+    "name": "Neyruz (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 743,
+    "name": "Nidau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 981,
+    "name": "Niederbipp",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2405,
+    "name": "Niederbuchsiten",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3422,
+    "name": "Niederbüren",
+    "canton": "SG"
+  },
+  {
+    "ofs": 2891,
+    "name": "Niederdorf",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6198,
+    "name": "Niedergesteln",
+    "canton": "VS"
+  },
+  {
+    "ofs": 89,
+    "name": "Niederglatt",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2495,
+    "name": "Niedergösgen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 90,
+    "name": "Niederhasli",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3423,
+    "name": "Niederhelfenschwil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 617,
+    "name": "Niederhünigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4204,
+    "name": "Niederlenz",
+    "canton": "AG"
+  },
+  {
+    "ofs": 877,
+    "name": "Niedermuhlern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 982,
+    "name": "Niederönz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 588,
+    "name": "Niederried bei Interlaken",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4035,
+    "name": "Niederrohrdorf",
+    "canton": "AG"
+  },
+  {
+    "ofs": 91,
+    "name": "Niederweningen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4072,
+    "name": "Niederwil (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6254,
+    "name": "Noble-Contrée",
+    "canton": "VS"
+  },
+  {
+    "ofs": 724,
+    "name": "Nods",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1094,
+    "name": "Nottwil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 5564,
+    "name": "Novalles",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5260,
+    "name": "Novazzano",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5408,
+    "name": "Noville",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2478,
+    "name": "Nuglar-St. Pantaleon",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2621,
+    "name": "Nunningen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 64,
+    "name": "Nürensdorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2854,
+    "name": "Nusshof",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2035,
+    "name": "Nuvilly",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5724,
+    "name": "Nyon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 1706,
+    "name": "Oberägeri",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 357,
+    "name": "Oberbalm",
+    "canton": "BE"
+  },
+  {
+    "ofs": 983,
+    "name": "Oberbipp",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2406,
+    "name": "Oberbuchsiten",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3424,
+    "name": "Oberbüren",
+    "canton": "SG"
+  },
+  {
+    "ofs": 418,
+    "name": "Oberburg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 619,
+    "name": "Oberdiessbach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2892,
+    "name": "Oberdorf (BL)",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1508,
+    "name": "Oberdorf (NW)",
+    "canton": "NW"
+  },
+  {
+    "ofs": 2553,
+    "name": "Oberdorf (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3111,
+    "name": "Oberegg",
+    "canton": "AI"
+  },
+  {
+    "ofs": 65,
+    "name": "Oberembrach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6112,
+    "name": "Oberems",
+    "canton": "VS"
+  },
+  {
+    "ofs": 245,
+    "name": "Oberengstringen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4010,
+    "name": "Oberentfelden",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2528,
+    "name": "Obergerlafingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 92,
+    "name": "Oberglatt",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6076,
+    "name": "Obergoms",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2497,
+    "name": "Obergösgen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2972,
+    "name": "Oberhallau",
+    "canton": "SH"
+  },
+  {
+    "ofs": 4173,
+    "name": "Oberhof",
+    "canton": "AG"
+  },
+  {
+    "ofs": 934,
+    "name": "Oberhofen am Thunersee",
+    "canton": "BE"
+  },
+  {
+    "ofs": 629,
+    "name": "Oberhünigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1368,
+    "name": "Oberiberg",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 1095,
+    "name": "Oberkirch",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4140,
+    "name": "Oberkulm",
+    "canton": "AG"
+  },
+  {
+    "ofs": 935,
+    "name": "Oberlangenegg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4073,
+    "name": "Oberlunkhofen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4256,
+    "name": "Obermumpf",
+    "canton": "AG"
+  },
+  {
+    "ofs": 589,
+    "name": "Oberried am Brienzersee",
+    "canton": "BE"
+  },
+  {
+    "ofs": 137,
+    "name": "Oberrieden",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3254,
+    "name": "Oberriet (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4037,
+    "name": "Oberrohrdorf",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4237,
+    "name": "Oberrüti",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3988,
+    "name": "Obersaxen Mundaun",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4038,
+    "name": "Obersiggenthal",
+    "canton": "AG"
+  },
+  {
+    "ofs": 620,
+    "name": "Oberthal",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3407,
+    "name": "Oberuzwil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 93,
+    "name": "Oberweningen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2771,
+    "name": "Oberwil (BL)",
+    "canton": "BL"
+  },
+  {
+    "ofs": 391,
+    "name": "Oberwil bei Büren",
+    "canton": "BE"
+  },
+  {
+    "ofs": 766,
+    "name": "Oberwil im Simmental",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4074,
+    "name": "Oberwil-Lieli",
+    "canton": "AG"
+  },
+  {
+    "ofs": 10,
+    "name": "Obfelden",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 985,
+    "name": "Ochlenberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2407,
+    "name": "Oensingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 335,
+    "name": "Oeschenbach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4175,
+    "name": "Oeschgen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 157,
+    "name": "Oetwil am See",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 246,
+    "name": "Oetwil an der Limmat",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4280,
+    "name": "Oftringen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5680,
+    "name": "Ogens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5409,
+    "name": "Ollon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4257,
+    "name": "Olsberg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2581,
+    "name": "Olten",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2855,
+    "name": "Oltingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6631,
+    "name": "Onex",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5565,
+    "name": "Onnens (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5136,
+    "name": "Onsernone",
+    "canton": "TI"
+  },
+  {
+    "ofs": 66,
+    "name": "Opfikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5923,
+    "name": "Oppens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 622,
+    "name": "Oppligen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5757,
+    "name": "Orbe",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5924,
+    "name": "Orges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5208,
+    "name": "Origlio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2856,
+    "name": "Ormalingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 5410,
+    "name": "Ormont-Dessous",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5411,
+    "name": "Ormont-Dessus",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5493,
+    "name": "Orny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5805,
+    "name": "Oron",
+    "canton": "VD"
+  },
+  {
+    "ofs": 744,
+    "name": "Orpund",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5121,
+    "name": "Orselina",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6034,
+    "name": "Orsières",
+    "canton": "VS"
+  },
+  {
+    "ofs": 438,
+    "name": "Orvin",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5925,
+    "name": "Orzens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 37,
+    "name": "Ossingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 363,
+    "name": "Ostermundigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 94,
+    "name": "Otelfingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4205,
+    "name": "Othmarsingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 11,
+    "name": "Ottenbach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 5529,
+    "name": "Oulens-sous-Echallens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5530,
+    "name": "Pailly",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5210,
+    "name": "Paradiso",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5588,
+    "name": "Paudex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5822,
+    "name": "Payerne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5495,
+    "name": "Penthalaz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5496,
+    "name": "Penthaz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5531,
+    "name": "Penthéréaz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6632,
+    "name": "Perly-Certoux",
+    "canton": "GE"
+  },
+  {
+    "ofs": 701,
+    "name": "Perrefitte",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5860,
+    "name": "Perroy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5076,
+    "name": "Personico",
+    "canton": "TI"
+  },
+  {
+    "ofs": 450,
+    "name": "Péry-La Heutte",
+    "canton": "BE"
+  },
+  {
+    "ofs": 716,
+    "name": "Petit-Val",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3294,
+    "name": "Pfäfers",
+    "canton": "SG"
+  },
+  {
+    "ofs": 177,
+    "name": "Pfäffikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1139,
+    "name": "Pfaffnau",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2772,
+    "name": "Pfeffingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 224,
+    "name": "Pfungen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4841,
+    "name": "Pfyn",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2216,
+    "name": "Pierrafortscha",
+    "canton": "FR"
+  },
+  {
+    "ofs": 392,
+    "name": "Pieterlen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2299,
+    "name": "Plaffeien",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6633,
+    "name": "Plan-les-Ouates",
+    "canton": "GE"
+  },
+  {
+    "ofs": 2300,
+    "name": "Plasselb",
+    "canton": "FR"
+  },
+  {
+    "ofs": 726,
+    "name": "Plateau de Diesse",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6719,
+    "name": "Pleigne",
+    "canton": "JU"
+  },
+  {
+    "ofs": 936,
+    "name": "Pohlern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5533,
+    "name": "Poliez-Pittet",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5077,
+    "name": "Pollegio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5497,
+    "name": "Pompaples",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5926,
+    "name": "Pomy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2122,
+    "name": "Pont-en-Ogoz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2147,
+    "name": "Pont-la-Ville",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5212,
+    "name": "Ponte Capriasca",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3784,
+    "name": "Pontresina",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6800,
+    "name": "Porrentruy",
+    "canton": "JU"
+  },
+  {
+    "ofs": 745,
+    "name": "Port",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6154,
+    "name": "Port-Valais",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5214,
+    "name": "Porza",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3561,
+    "name": "Poschiavo",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5725,
+    "name": "Prangins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2831,
+    "name": "Pratteln",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6634,
+    "name": "Pregny-Chambésy",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5759,
+    "name": "Premier",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6635,
+    "name": "Presinge",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5643,
+    "name": "Préverenges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2038,
+    "name": "Prévondavaux",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5683,
+    "name": "Prévonloup",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2237,
+    "name": "Prez",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5589,
+    "name": "Prilly",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5566,
+    "name": "Provence",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5607,
+    "name": "Puidoux",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5590,
+    "name": "Pully",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6636,
+    "name": "Puplinge",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5216,
+    "name": "Pura",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3295,
+    "name": "Quarten",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5079,
+    "name": "Quinto",
+    "canton": "TI"
+  },
+  {
+    "ofs": 309,
+    "name": "Radelfingen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 67,
+    "name": "Rafz",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1037,
+    "name": "Rain",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2832,
+    "name": "Ramlinsburg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2963,
+    "name": "Ramsen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 5760,
+    "name": "Rances",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6287,
+    "name": "Randa",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4846,
+    "name": "Raperswilen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 310,
+    "name": "Rapperswil (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3340,
+    "name": "Rapperswil-Jona",
+    "canton": "SG"
+  },
+  {
+    "ofs": 6199,
+    "name": "Raron",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1212,
+    "name": "Realp",
+    "canton": "UR"
+  },
+  {
+    "ofs": 715,
+    "name": "Rebévelier",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3255,
+    "name": "Rebstein",
+    "canton": "SG"
+  },
+  {
+    "ofs": 2530,
+    "name": "Recherswil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2301,
+    "name": "Rechthalten",
+    "canton": "FR"
+  },
+  {
+    "ofs": 703,
+    "name": "Reconvilier",
+    "canton": "BE"
+  },
+  {
+    "ofs": 95,
+    "name": "Regensberg",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 96,
+    "name": "Regensdorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3034,
+    "name": "Rehetobel",
+    "canton": "AR"
+  },
+  {
+    "ofs": 567,
+    "name": "Reichenbach im Kandertal",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1345,
+    "name": "Reichenburg",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 1140,
+    "name": "Reiden",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2893,
+    "name": "Reigoldswil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4141,
+    "name": "Reinach (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2773,
+    "name": "Reinach (BL)",
+    "canton": "BL"
+  },
+  {
+    "ofs": 336,
+    "name": "Reisiswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4281,
+    "name": "Reitnau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2333,
+    "name": "Remaufens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4039,
+    "name": "Remetschwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4110,
+    "name": "Remigen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 441,
+    "name": "Renan (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5591,
+    "name": "Renens (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5412,
+    "name": "Rennaz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3035,
+    "name": "Reute (AR)",
+    "canton": "AR"
+  },
+  {
+    "ofs": 767,
+    "name": "Reutigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3723,
+    "name": "Rhäzüns",
+    "canton": "GR"
+  },
+  {
+    "ofs": 38,
+    "name": "Rheinau",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3235,
+    "name": "Rheineck",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4258,
+    "name": "Rheinfelden",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3714,
+    "name": "Rheinwald",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2148,
+    "name": "Riaz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 138,
+    "name": "Richterswil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2857,
+    "name": "Rickenbach (BL)",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1097,
+    "name": "Rickenbach (LU)",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2582,
+    "name": "Rickenbach (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4751,
+    "name": "Rickenbach (TG)",
+    "canton": "TG"
+  },
+  {
+    "ofs": 225,
+    "name": "Rickenbach (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6139,
+    "name": "Riddes",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2276,
+    "name": "Ried bei Kerzers",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6008,
+    "name": "Ried-Brig",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6181,
+    "name": "Riederalp",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2554,
+    "name": "Riedholz",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2703,
+    "name": "Riehen",
+    "canton": "BS"
+  },
+  {
+    "ofs": 1369,
+    "name": "Riemenstalden",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 12,
+    "name": "Rifferswil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 879,
+    "name": "Riggisberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 590,
+    "name": "Ringgenberg (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4111,
+    "name": "Riniken",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1707,
+    "name": "Risch",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 5263,
+    "name": "Riva San Vitale",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5609,
+    "name": "Rivaz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5287,
+    "name": "Riviera",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5413,
+    "name": "Roche (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6413,
+    "name": "Rochefort",
+    "canton": "NE"
+  },
+  {
+    "ofs": 704,
+    "name": "Roches (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2479,
+    "name": "Rodersdorf",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2790,
+    "name": "Roggenburg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1142,
+    "name": "Roggliswil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 337,
+    "name": "Roggwil (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4431,
+    "name": "Roggwil (TG)",
+    "canton": "TG"
+  },
+  {
+    "ofs": 338,
+    "name": "Rohrbach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 339,
+    "name": "Rohrbachgraben",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5861,
+    "name": "Rolle",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5761,
+    "name": "Romainmôtier-Envy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5592,
+    "name": "Romanel-sur-Lausanne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5645,
+    "name": "Romanel-sur-Morges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4436,
+    "name": "Romanshorn",
+    "canton": "TG"
+  },
+  {
+    "ofs": 1039,
+    "name": "Römerswil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 442,
+    "name": "Romont (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2096,
+    "name": "Romont (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 1007,
+    "name": "Romoos",
+    "canton": "LU"
+  },
+  {
+    "ofs": 5125,
+    "name": "Ronco sopra Ascona",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3711,
+    "name": "Rongellen",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1065,
+    "name": "Root",
+    "canton": "LU"
+  },
+  {
+    "ofs": 5798,
+    "name": "Ropraz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 68,
+    "name": "Rorbas",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3215,
+    "name": "Rorschach",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3216,
+    "name": "Rorschacherberg",
+    "canton": "SG"
+  },
+  {
+    "ofs": 2791,
+    "name": "Röschenz",
+    "canton": "BL"
+  },
+  {
+    "ofs": 3808,
+    "name": "Rossa",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6721,
+    "name": "Rossemaison",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5684,
+    "name": "Rossenges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5842,
+    "name": "Rossinière",
+    "canton": "VD"
+  },
+  {
+    "ofs": 904,
+    "name": "Röthenbach im Emmental",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3637,
+    "name": "Rothenbrunnen",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1040,
+    "name": "Rothenburg",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2858,
+    "name": "Rothenfluh",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1370,
+    "name": "Rothenthurm",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 4282,
+    "name": "Rothrist",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4238,
+    "name": "Rottenschwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5843,
+    "name": "Rougemont",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3834,
+    "name": "Roveredo (GR)",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5928,
+    "name": "Rovray",
+    "canton": "VD"
+  },
+  {
+    "ofs": 623,
+    "name": "Rubigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 905,
+    "name": "Rüderswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2938,
+    "name": "Rüdlingen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 4075,
+    "name": "Rudolfstetten-Friedlisberg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 420,
+    "name": "Rüdtligen-Alchenflüh",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2097,
+    "name": "Rue",
+    "canton": "FR"
+  },
+  {
+    "ofs": 880,
+    "name": "Rüeggisberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 956,
+    "name": "Rüegsau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5534,
+    "name": "Rueyres",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4112,
+    "name": "Rüfenach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 421,
+    "name": "Rumendingen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 987,
+    "name": "Rumisberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 97,
+    "name": "Rümlang",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2859,
+    "name": "Rümlingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2860,
+    "name": "Rünenberg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4206,
+    "name": "Rupperswil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 853,
+    "name": "Rüschegg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 139,
+    "name": "Rüschlikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 178,
+    "name": "Russikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6637,
+    "name": "Russin",
+    "canton": "GE"
+  },
+  {
+    "ofs": 1098,
+    "name": "Ruswil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3256,
+    "name": "Rüthi (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 118,
+    "name": "Rüti (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 393,
+    "name": "Rüti bei Büren",
+    "canton": "BE"
+  },
+  {
+    "ofs": 422,
+    "name": "Rüti bei Lyssach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 340,
+    "name": "Rütschelen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2555,
+    "name": "Rüttenen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3788,
+    "name": "S-chanf",
+    "canton": "GR"
+  },
+  {
+    "ofs": 843,
+    "name": "Saanen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6288,
+    "name": "Saas-Almagell",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6289,
+    "name": "Saas-Balen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6290,
+    "name": "Saas-Fee",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6291,
+    "name": "Saas-Grund",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1406,
+    "name": "Sachseln",
+    "canton": "OW"
+  },
+  {
+    "ofs": 4283,
+    "name": "Safenwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3672,
+    "name": "Safiental",
+    "canton": "GR"
+  },
+  {
+    "ofs": 746,
+    "name": "Safnern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3581,
+    "name": "Sagogn",
+    "canton": "GR"
+  },
+  {
+    "ofs": 706,
+    "name": "Saicourt",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6757,
+    "name": "Saignelégier",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6140,
+    "name": "Saillon",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2041,
+    "name": "Saint-Aubin (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5535,
+    "name": "Saint-Barthélemy (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6758,
+    "name": "Saint-Brais",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5727,
+    "name": "Saint-Cergue",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5434,
+    "name": "Saint-George",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6155,
+    "name": "Saint-Gingolph",
+    "canton": "VS"
+  },
+  {
+    "ofs": 443,
+    "name": "Saint-Imier",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6246,
+    "name": "Saint-Léonard",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5435,
+    "name": "Saint-Livres",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2335,
+    "name": "Saint-Martin (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6087,
+    "name": "Saint-Martin (VS)",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6217,
+    "name": "Saint-Maurice",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5436,
+    "name": "Saint-Oyens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5646,
+    "name": "Saint-Prex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5610,
+    "name": "Saint-Saphorin (Lavaux)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5648,
+    "name": "Saint-Sulpice (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5568,
+    "name": "Sainte-Croix",
+    "canton": "VD"
+  },
+  {
+    "ofs": 4851,
+    "name": "Salenstein",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2152,
+    "name": "Sâles",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6113,
+    "name": "Salgesch",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4441,
+    "name": "Salmsach",
+    "canton": "TG"
+  },
+  {
+    "ofs": 6218,
+    "name": "Salvan",
+    "canton": "VS"
+  },
+  {
+    "ofs": 3786,
+    "name": "Samedan",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3752,
+    "name": "Samnaun",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3835,
+    "name": "San Vittore",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5017,
+    "name": "Sant'Antonino",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3810,
+    "name": "Santa Maria in Calanca",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3296,
+    "name": "Sargans",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4076,
+    "name": "Sarmenstorf",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1407,
+    "name": "Sarnen",
+    "canton": "OW"
+  },
+  {
+    "ofs": 6638,
+    "name": "Satigny",
+    "canton": "GE"
+  },
+  {
+    "ofs": 1371,
+    "name": "Sattel",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 5437,
+    "name": "Saubraz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 449,
+    "name": "Sauge",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6722,
+    "name": "Saulcy",
+    "canton": "JU"
+  },
+  {
+    "ofs": 707,
+    "name": "Saules (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6265,
+    "name": "Savièse",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5611,
+    "name": "Savigny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5221,
+    "name": "Savosa",
+    "canton": "TI"
+  },
+  {
+    "ofs": 591,
+    "name": "Saxeten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6141,
+    "name": "Saxon",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2939,
+    "name": "Schaffhausen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 4207,
+    "name": "Schafisheim",
+    "canton": "AG"
+  },
+  {
+    "ofs": 906,
+    "name": "Schangnau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3315,
+    "name": "Schänis",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3638,
+    "name": "Scharans",
+    "canton": "GR"
+  },
+  {
+    "ofs": 1213,
+    "name": "Schattdorf",
+    "canton": "UR"
+  },
+  {
+    "ofs": 786,
+    "name": "Schattenhalb",
+    "canton": "BE"
+  },
+  {
+    "ofs": 708,
+    "name": "Schelten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1099,
+    "name": "Schenkon",
+    "canton": "LU"
+  },
+  {
+    "ofs": 747,
+    "name": "Scheuren",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3962,
+    "name": "Schiers",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4125,
+    "name": "Schinznach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4546,
+    "name": "Schlatt (TG)",
+    "canton": "TG"
+  },
+  {
+    "ofs": 226,
+    "name": "Schlatt (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3104,
+    "name": "Schlatt-Haslen",
+    "canton": "AI"
+  },
+  {
+    "ofs": 98,
+    "name": "Schleinikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2952,
+    "name": "Schleitheim",
+    "canton": "SH"
+  },
+  {
+    "ofs": 1100,
+    "name": "Schlierbach",
+    "canton": "LU"
+  },
+  {
+    "ofs": 247,
+    "name": "Schlieren",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4142,
+    "name": "Schlossrued",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3582,
+    "name": "Schluein",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3338,
+    "name": "Schmerikon",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4143,
+    "name": "Schmiedrued",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2305,
+    "name": "Schmitten (FR)",
+    "canton": "FR"
+  },
+  {
+    "ofs": 3514,
+    "name": "Schmitten (GR)",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4318,
+    "name": "Schneisingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2461,
+    "name": "Schnottwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 99,
+    "name": "Schöfflisdorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4144,
+    "name": "Schöftland",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2774,
+    "name": "Schönenbuch",
+    "canton": "BL"
+  },
+  {
+    "ofs": 3003,
+    "name": "Schönengrund",
+    "canton": "AR"
+  },
+  {
+    "ofs": 2583,
+    "name": "Schönenwerd",
+    "canton": "SO"
+  },
+  {
+    "ofs": 1041,
+    "name": "Schongau",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4756,
+    "name": "Schönholzerswilen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 1143,
+    "name": "Schötz",
+    "canton": "LU"
+  },
+  {
+    "ofs": 1346,
+    "name": "Schübelbach",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 4259,
+    "name": "Schupfart",
+    "canton": "AG"
+  },
+  {
+    "ofs": 311,
+    "name": "Schüpfen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1008,
+    "name": "Schüpfheim",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4176,
+    "name": "Schwaderloch",
+    "canton": "AG"
+  },
+  {
+    "ofs": 748,
+    "name": "Schwadernau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 592,
+    "name": "Schwanden bei Brienz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1066,
+    "name": "Schwarzenberg",
+    "canton": "LU"
+  },
+  {
+    "ofs": 855,
+    "name": "Schwarzenburg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 341,
+    "name": "Schwarzhäusern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3004,
+    "name": "Schwellbrunn",
+    "canton": "AR"
+  },
+  {
+    "ofs": 3112,
+    "name": "Schwende-Rüte",
+    "canton": "AI"
+  },
+  {
+    "ofs": 197,
+    "name": "Schwerzenbach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1372,
+    "name": "Schwyz",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 3762,
+    "name": "Scuol",
+    "canton": "GR"
+  },
+  {
+    "ofs": 988,
+    "name": "Seeberg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 312,
+    "name": "Seedorf (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1214,
+    "name": "Seedorf (UR)",
+    "canton": "UR"
+  },
+  {
+    "ofs": 119,
+    "name": "Seegräben",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 709,
+    "name": "Seehof",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1215,
+    "name": "Seelisberg",
+    "canton": "UR"
+  },
+  {
+    "ofs": 4208,
+    "name": "Seengen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2480,
+    "name": "Seewen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3972,
+    "name": "Seewis im Prättigau",
+    "canton": "GR"
+  },
+  {
+    "ofs": 883,
+    "name": "Seftigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2833,
+    "name": "Seltisberg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2556,
+    "name": "Selzach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 6035,
+    "name": "Sembrancher",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1102,
+    "name": "Sempach",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2336,
+    "name": "Semsales",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5499,
+    "name": "Senarclens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3274,
+    "name": "Sennwald",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4209,
+    "name": "Seon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5762,
+    "name": "Sergey",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5050,
+    "name": "Serravalle",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5799,
+    "name": "Servion",
+    "canton": "VD"
+  },
+  {
+    "ofs": 227,
+    "name": "Seuzach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2043,
+    "name": "Sévaz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 3275,
+    "name": "Sevelen",
+    "canton": "SG"
+  },
+  {
+    "ofs": 2953,
+    "name": "Siblingen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 6248,
+    "name": "Sierre",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4319,
+    "name": "Siglistorf",
+    "canton": "AG"
+  },
+  {
+    "ofs": 907,
+    "name": "Signau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5728,
+    "name": "Signy-Avenex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 938,
+    "name": "Sigriswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1216,
+    "name": "Silenen",
+    "canton": "UR"
+  },
+  {
+    "ofs": 3640,
+    "name": "Sils im Domleschg",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3789,
+    "name": "Sils im Engadin/Segl",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3790,
+    "name": "Silvaplana",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6009,
+    "name": "Simplon",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4239,
+    "name": "Sins",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6266,
+    "name": "Sion",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4761,
+    "name": "Sirnach",
+    "canton": "TG"
+  },
+  {
+    "ofs": 499,
+    "name": "Siselen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1217,
+    "name": "Sisikon",
+    "canton": "UR"
+  },
+  {
+    "ofs": 2861,
+    "name": "Sissach",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4177,
+    "name": "Sisseln",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2099,
+    "name": "Siviriez",
+    "canton": "FR"
+  },
+  {
+    "ofs": 3823,
+    "name": "Soazza",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2601,
+    "name": "Solothurn",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4446,
+    "name": "Sommeri",
+    "canton": "TG"
+  },
+  {
+    "ofs": 444,
+    "name": "Sonceboz-Sombeval",
+    "canton": "BE"
+  },
+  {
+    "ofs": 445,
+    "name": "Sonvilier",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6639,
+    "name": "Soral",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5225,
+    "name": "Sorengo",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2153,
+    "name": "Sorens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 711,
+    "name": "Sorvilier",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6759,
+    "name": "Soubey",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6724,
+    "name": "Soyhières",
+    "canton": "JU"
+  },
+  {
+    "ofs": 3023,
+    "name": "Speicher",
+    "canton": "AR"
+  },
+  {
+    "ofs": 768,
+    "name": "Spiez",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1218,
+    "name": "Spiringen",
+    "canton": "UR"
+  },
+  {
+    "ofs": 4040,
+    "name": "Spreitenbach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3203,
+    "name": "St. Gallen",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3236,
+    "name": "St. Margrethen",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3787,
+    "name": "St. Moritz",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6292,
+    "name": "St. Niklaus",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2303,
+    "name": "St. Silvester",
+    "canton": "FR"
+  },
+  {
+    "ofs": 793,
+    "name": "St. Stephan",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2304,
+    "name": "St. Ursen",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5266,
+    "name": "Stabio",
+    "canton": "TI"
+  },
+  {
+    "ofs": 100,
+    "name": "Stadel",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 158,
+    "name": "Stäfa",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4284,
+    "name": "Staffelbach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6293,
+    "name": "Stalden (VS)",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6294,
+    "name": "Staldenried",
+    "canton": "VS"
+  },
+  {
+    "ofs": 13,
+    "name": "Stallikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 292,
+    "name": "Stammheim",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1509,
+    "name": "Stans",
+    "canton": "NW"
+  },
+  {
+    "ofs": 1510,
+    "name": "Stansstad",
+    "canton": "NW"
+  },
+  {
+    "ofs": 2584,
+    "name": "Starrkirch-Wil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4210,
+    "name": "Staufen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4864,
+    "name": "Steckborn",
+    "canton": "TG"
+  },
+  {
+    "ofs": 939,
+    "name": "Steffisburg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6204,
+    "name": "Steg-Hohtenn",
+    "canton": "VS"
+  },
+  {
+    "ofs": 4260,
+    "name": "Stein (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3005,
+    "name": "Stein (AR)",
+    "canton": "AR"
+  },
+  {
+    "ofs": 2964,
+    "name": "Stein am Rhein",
+    "canton": "SH"
+  },
+  {
+    "ofs": 3217,
+    "name": "Steinach",
+    "canton": "SG"
+  },
+  {
+    "ofs": 1373,
+    "name": "Steinen",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 1374,
+    "name": "Steinerberg",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 1708,
+    "name": "Steinhausen",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 101,
+    "name": "Steinmaur",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4041,
+    "name": "Stetten (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2919,
+    "name": "Stetten (SH)",
+    "canton": "SH"
+  },
+  {
+    "ofs": 4606,
+    "name": "Stettfurt",
+    "canton": "TG"
+  },
+  {
+    "ofs": 358,
+    "name": "Stettlen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 770,
+    "name": "Stocken-Höfen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4285,
+    "name": "Strengelbach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 749,
+    "name": "Studen (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2499,
+    "name": "Stüsslingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2532,
+    "name": "Subingen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 5929,
+    "name": "Suchy",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3695,
+    "name": "Sufers",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4012,
+    "name": "Suhr",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4506,
+    "name": "Sulgen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 5501,
+    "name": "Sullens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 957,
+    "name": "Sumiswald",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3985,
+    "name": "Sumvitg",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2044,
+    "name": "Surpierre",
+    "canton": "FR"
+  },
+  {
+    "ofs": 1103,
+    "name": "Sursee",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3543,
+    "name": "Surses",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5930,
+    "name": "Suscévaz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 750,
+    "name": "Sutz-Lattrigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5688,
+    "name": "Syens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2306,
+    "name": "Tafers",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4077,
+    "name": "Tägerig",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4696,
+    "name": "Tägerwilen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 3733,
+    "name": "Tamins",
+    "canton": "GR"
+  },
+  {
+    "ofs": 5729,
+    "name": "Tannay",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5862,
+    "name": "Tartegnin",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6295,
+    "name": "Täsch",
+    "canton": "VS"
+  },
+  {
+    "ofs": 751,
+    "name": "Täuffelen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 713,
+    "name": "Tavannes",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2862,
+    "name": "Tecknau",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4320,
+    "name": "Tegerfelden",
+    "canton": "AG"
+  },
+  {
+    "ofs": 5131,
+    "name": "Tenero-Contra",
+    "canton": "TI"
+  },
+  {
+    "ofs": 2863,
+    "name": "Tenniken",
+    "canton": "BL"
+  },
+  {
+    "ofs": 2307,
+    "name": "Tentlingen",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6010,
+    "name": "Termen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5396,
+    "name": "Terre di Pedemonte",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3024,
+    "name": "Teufen (AR)",
+    "canton": "AR"
+  },
+  {
+    "ofs": 4145,
+    "name": "Teufenthal (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 940,
+    "name": "Teuffenthal (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5571,
+    "name": "Tévenon",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3237,
+    "name": "Thal",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4117,
+    "name": "Thalheim (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 39,
+    "name": "Thalheim an der Thur",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 141,
+    "name": "Thalwil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2920,
+    "name": "Thayngen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 2775,
+    "name": "Therwil",
+    "canton": "BL"
+  },
+  {
+    "ofs": 941,
+    "name": "Thierachern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 6640,
+    "name": "Thônex",
+    "canton": "GE"
+  },
+  {
+    "ofs": 989,
+    "name": "Thörigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 942,
+    "name": "Thun",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4611,
+    "name": "Thundorf",
+    "canton": "TG"
+  },
+  {
+    "ofs": 342,
+    "name": "Thunstetten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 889,
+    "name": "Thurnen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2864,
+    "name": "Thürnen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 3668,
+    "name": "Thusis",
+    "canton": "GR"
+  },
+  {
+    "ofs": 2894,
+    "name": "Titterten",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4776,
+    "name": "Tobel-Tägerschen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 884,
+    "name": "Toffen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5649,
+    "name": "Tolochenaz",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6296,
+    "name": "Törbel",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2115,
+    "name": "Torny",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5227,
+    "name": "Torricella-Taverne",
+    "canton": "TI"
+  },
+  {
+    "ofs": 958,
+    "name": "Trachselwald",
+    "canton": "BE"
+  },
+  {
+    "ofs": 446,
+    "name": "Tramelan",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2973,
+    "name": "Trasadingen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 500,
+    "name": "Treiten",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5730,
+    "name": "Trélex",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5239,
+    "name": "Tresa",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5827,
+    "name": "Trey",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5931,
+    "name": "Treycovagnes",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5828,
+    "name": "Treytorrens (Payerne)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2226,
+    "name": "Treyvaux",
+    "canton": "FR"
+  },
+  {
+    "ofs": 1104,
+    "name": "Triengen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 6142,
+    "name": "Trient",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2500,
+    "name": "Trimbach",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3945,
+    "name": "Trimmis",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3734,
+    "name": "Trin",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3025,
+    "name": "Trogen",
+    "canton": "AR"
+  },
+  {
+    "ofs": 6641,
+    "name": "Troinex",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6156,
+    "name": "Troistorrents",
+    "canton": "VS"
+  },
+  {
+    "ofs": 908,
+    "name": "Trub",
+    "canton": "BE"
+  },
+  {
+    "ofs": 909,
+    "name": "Trubschachen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 40,
+    "name": "Trüllikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3987,
+    "name": "Trun",
+    "canton": "GR"
+  },
+  {
+    "ofs": 41,
+    "name": "Truttikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3669,
+    "name": "Tschappina",
+    "canton": "GR"
+  },
+  {
+    "ofs": 501,
+    "name": "Tschugg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3218,
+    "name": "Tübach",
+    "canton": "SG"
+  },
+  {
+    "ofs": 1347,
+    "name": "Tuggen",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 3986,
+    "name": "Tujetsch",
+    "canton": "GR"
+  },
+  {
+    "ofs": 228,
+    "name": "Turbenthal",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6119,
+    "name": "Turtmann-Unterems",
+    "canton": "VS"
+  },
+  {
+    "ofs": 756,
+    "name": "Twann-Tüscherz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1067,
+    "name": "Udligenswil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 2308,
+    "name": "Ueberstorf",
+    "canton": "FR"
+  },
+  {
+    "ofs": 943,
+    "name": "Uebeschi",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4286,
+    "name": "Uerkheim",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4616,
+    "name": "Uesslingen-Buch",
+    "canton": "TG"
+  },
+  {
+    "ofs": 944,
+    "name": "Uetendorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 159,
+    "name": "Uetikon am See",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4078,
+    "name": "Uezwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1145,
+    "name": "Ufhusen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 248,
+    "name": "Uitikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 1709,
+    "name": "Unterägeri",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 6201,
+    "name": "Unterbäch",
+    "canton": "VS"
+  },
+  {
+    "ofs": 3219,
+    "name": "Untereggen",
+    "canton": "SG"
+  },
+  {
+    "ofs": 249,
+    "name": "Unterengstringen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4013,
+    "name": "Unterentfelden",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1375,
+    "name": "Unteriberg",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 4146,
+    "name": "Unterkulm",
+    "canton": "AG"
+  },
+  {
+    "ofs": 945,
+    "name": "Unterlangenegg",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4079,
+    "name": "Unterlunkhofen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2463,
+    "name": "Unterramsern",
+    "canton": "SO"
+  },
+  {
+    "ofs": 1219,
+    "name": "Unterschächen",
+    "canton": "UR"
+  },
+  {
+    "ofs": 593,
+    "name": "Unterseen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4044,
+    "name": "Untersiggenthal",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3946,
+    "name": "Untervaz",
+    "canton": "GR"
+  },
+  {
+    "ofs": 250,
+    "name": "Urdorf",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 3670,
+    "name": "Urmein",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3006,
+    "name": "Urnäsch",
+    "canton": "AR"
+  },
+  {
+    "ofs": 344,
+    "name": "Ursenbach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5932,
+    "name": "Ursins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2102,
+    "name": "Ursy",
+    "canton": "FR"
+  },
+  {
+    "ofs": 551,
+    "name": "Urtenen-Schönbühl",
+    "canton": "BE"
+  },
+  {
+    "ofs": 198,
+    "name": "Uster",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 885,
+    "name": "Uttigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4451,
+    "name": "Uttwil",
+    "canton": "TG"
+  },
+  {
+    "ofs": 552,
+    "name": "Utzenstorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3339,
+    "name": "Uznach",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3408,
+    "name": "Uzwil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 5268,
+    "name": "Vacallo",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6037,
+    "name": "Val de Bagnes",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5240,
+    "name": "Val Mara",
+    "canton": "TI"
+  },
+  {
+    "ofs": 3847,
+    "name": "Val Müstair",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6730,
+    "name": "Val Terbi",
+    "canton": "JU"
+  },
+  {
+    "ofs": 6157,
+    "name": "Val-d'Illiez",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2163,
+    "name": "Val-de-Charmey",
+    "canton": "FR"
+  },
+  {
+    "ofs": 6487,
+    "name": "Val-de-Ruz",
+    "canton": "NE"
+  },
+  {
+    "ofs": 6512,
+    "name": "Val-de-Travers",
+    "canton": "NE"
+  },
+  {
+    "ofs": 717,
+    "name": "Valbirse",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5831,
+    "name": "Valbroye",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5933,
+    "name": "Valeyres-sous-Montagny",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5763,
+    "name": "Valeyres-sous-Rances",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5934,
+    "name": "Valeyres-sous-Ursins",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2045,
+    "name": "Vallon",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5764,
+    "name": "Vallorbe",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3603,
+    "name": "Vals",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3764,
+    "name": "Valsot",
+    "canton": "GR"
+  },
+  {
+    "ofs": 6642,
+    "name": "Vandoeuvres",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6116,
+    "name": "Varen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5765,
+    "name": "Vaulion",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2155,
+    "name": "Vaulruz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5650,
+    "name": "Vaux-sur-Morges",
+    "canton": "VD"
+  },
+  {
+    "ofs": 3506,
+    "name": "Vaz/Obervaz",
+    "canton": "GR"
+  },
+  {
+    "ofs": 359,
+    "name": "Vechigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4120,
+    "name": "Veltheim (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 6806,
+    "name": "Vendlincourt",
+    "canton": "JU"
+  },
+  {
+    "ofs": 5230,
+    "name": "Vernate",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6219,
+    "name": "Vernayaz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6643,
+    "name": "Vernier",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6220,
+    "name": "Vérossaz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6644,
+    "name": "Versoix",
+    "canton": "GE"
+  },
+  {
+    "ofs": 5399,
+    "name": "Verzasca",
+    "canton": "TI"
+  },
+  {
+    "ofs": 6025,
+    "name": "Vétroz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5890,
+    "name": "Vevey",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6089,
+    "name": "Vex",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6645,
+    "name": "Veyrier",
+    "canton": "GE"
+  },
+  {
+    "ofs": 6267,
+    "name": "Veysonnaz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 5891,
+    "name": "Veytaux",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5231,
+    "name": "Vezia",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5732,
+    "name": "Vich",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5233,
+    "name": "Vico Morcote",
+    "canton": "TI"
+  },
+  {
+    "ofs": 5935,
+    "name": "Villars-Epeney",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5690,
+    "name": "Villars-le-Comte",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5537,
+    "name": "Villars-le-Terroir",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5651,
+    "name": "Villars-Sainte-Croix",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5652,
+    "name": "Villars-sous-Yens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2228,
+    "name": "Villars-sur-Glâne",
+    "canton": "FR"
+  },
+  {
+    "ofs": 2230,
+    "name": "Villarsel-sur-Marly",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5830,
+    "name": "Villarzel",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2117,
+    "name": "Villaz",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5414,
+    "name": "Villeneuve (VD)",
+    "canton": "VD"
+  },
+  {
+    "ofs": 448,
+    "name": "Villeret",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4121,
+    "name": "Villigen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4080,
+    "name": "Villmergen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2114,
+    "name": "Villorsonnens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 3297,
+    "name": "Vilters-Wangs",
+    "canton": "SG"
+  },
+  {
+    "ofs": 502,
+    "name": "Vinelz",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5863,
+    "name": "Vinzel",
+    "canton": "VD"
+  },
+  {
+    "ofs": 6158,
+    "name": "Vionnaz",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6297,
+    "name": "Visp",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6298,
+    "name": "Visperterminen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 1068,
+    "name": "Vitznau",
+    "canton": "LU"
+  },
+  {
+    "ofs": 43,
+    "name": "Volken",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 199,
+    "name": "Volketswil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4287,
+    "name": "Vordemwald",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1348,
+    "name": "Vorderthal",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 6159,
+    "name": "Vouvry",
+    "canton": "VS"
+  },
+  {
+    "ofs": 2160,
+    "name": "Vuadens",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5539,
+    "name": "Vuarrens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5692,
+    "name": "Vucherens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5503,
+    "name": "Vufflens-la-Ville",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5653,
+    "name": "Vufflens-le-Château",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5937,
+    "name": "Vugelles-La Mothe",
+    "canton": "VD"
+  },
+  {
+    "ofs": 2113,
+    "name": "Vuisternens-devant-Romont",
+    "canton": "FR"
+  },
+  {
+    "ofs": 5766,
+    "name": "Vuiteboeuf",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5803,
+    "name": "Vulliens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5654,
+    "name": "Vullierens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5464,
+    "name": "Vully-les-Lacs",
+    "canton": "VD"
+  },
+  {
+    "ofs": 946,
+    "name": "Wachseldorn",
+    "canton": "BE"
+  },
+  {
+    "ofs": 293,
+    "name": "Wädenswil",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4871,
+    "name": "Wagenhausen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 2792,
+    "name": "Wahlen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1710,
+    "name": "Walchwil",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 3036,
+    "name": "Wald (AR)",
+    "canton": "AR"
+  },
+  {
+    "ofs": 888,
+    "name": "Wald (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 120,
+    "name": "Wald (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2895,
+    "name": "Waldenburg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4701,
+    "name": "Wäldi",
+    "canton": "TG"
+  },
+  {
+    "ofs": 3444,
+    "name": "Waldkirch",
+    "canton": "SG"
+  },
+  {
+    "ofs": 3007,
+    "name": "Waldstatt",
+    "canton": "AR"
+  },
+  {
+    "ofs": 3298,
+    "name": "Walenstadt",
+    "canton": "SG"
+  },
+  {
+    "ofs": 626,
+    "name": "Walkringen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4261,
+    "name": "Wallbach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 69,
+    "name": "Wallisellen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 990,
+    "name": "Walliswil bei Niederbipp",
+    "canton": "BE"
+  },
+  {
+    "ofs": 991,
+    "name": "Walliswil bei Wangen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 754,
+    "name": "Walperswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4240,
+    "name": "Waltenschwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 959,
+    "name": "Walterswil (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2585,
+    "name": "Walterswil (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3037,
+    "name": "Walzenhausen",
+    "canton": "AR"
+  },
+  {
+    "ofs": 1349,
+    "name": "Wangen (SZ)",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 992,
+    "name": "Wangen an der Aare",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2586,
+    "name": "Wangen bei Olten",
+    "canton": "SO"
+  },
+  {
+    "ofs": 200,
+    "name": "Wangen-Brüttisellen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4781,
+    "name": "Wängi",
+    "canton": "TG"
+  },
+  {
+    "ofs": 3276,
+    "name": "Wartau",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4621,
+    "name": "Warth-Weiningen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 1220,
+    "name": "Wassen",
+    "canton": "UR"
+  },
+  {
+    "ofs": 70,
+    "name": "Wasterkingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 886,
+    "name": "Wattenwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3379,
+    "name": "Wattwil",
+    "canton": "SG"
+  },
+  {
+    "ofs": 1146,
+    "name": "Wauwil",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3316,
+    "name": "Weesen",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4262,
+    "name": "Wegenstetten",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1069,
+    "name": "Weggis",
+    "canton": "LU"
+  },
+  {
+    "ofs": 102,
+    "name": "Weiach",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4946,
+    "name": "Weinfelden",
+    "canton": "TG"
+  },
+  {
+    "ofs": 251,
+    "name": "Weiningen (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 180,
+    "name": "Weisslingen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2430,
+    "name": "Welschenrohr-Gänsbrunnen",
+    "canton": "SO"
+  },
+  {
+    "ofs": 394,
+    "name": "Wengi",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2865,
+    "name": "Wenslingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 1009,
+    "name": "Werthenstein",
+    "canton": "LU"
+  },
+  {
+    "ofs": 4045,
+    "name": "Wettingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 14,
+    "name": "Wettswil am Albis",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 121,
+    "name": "Wetzikon (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 632,
+    "name": "Wichtrach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4081,
+    "name": "Widen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 3238,
+    "name": "Widnau",
+    "canton": "SG"
+  },
+  {
+    "ofs": 995,
+    "name": "Wiedlisbach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 298,
+    "name": "Wiesendangen",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 553,
+    "name": "Wiggiswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4951,
+    "name": "Wigoltingen",
+    "canton": "TG"
+  },
+  {
+    "ofs": 1147,
+    "name": "Wikon",
+    "canton": "LU"
+  },
+  {
+    "ofs": 3427,
+    "name": "Wil (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 71,
+    "name": "Wil (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 181,
+    "name": "Wila",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2974,
+    "name": "Wilchingen",
+    "canton": "SH"
+  },
+  {
+    "ofs": 182,
+    "name": "Wildberg",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 594,
+    "name": "Wilderswil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3359,
+    "name": "Wildhaus-Alt St. Johann",
+    "canton": "SG"
+  },
+  {
+    "ofs": 4786,
+    "name": "Wilen (TG)",
+    "canton": "TG"
+  },
+  {
+    "ofs": 6202,
+    "name": "Wiler (Lötschen)",
+    "canton": "VS"
+  },
+  {
+    "ofs": 554,
+    "name": "Wiler bei Utzenstorf",
+    "canton": "BE"
+  },
+  {
+    "ofs": 671,
+    "name": "Wileroltigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4288,
+    "name": "Wiliberg",
+    "canton": "AG"
+  },
+  {
+    "ofs": 423,
+    "name": "Willadingen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 1151,
+    "name": "Willisau",
+    "canton": "LU"
+  },
+  {
+    "ofs": 769,
+    "name": "Wimmis",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4123,
+    "name": "Windisch",
+    "canton": "AG"
+  },
+  {
+    "ofs": 72,
+    "name": "Winkel",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2866,
+    "name": "Wintersingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 230,
+    "name": "Winterthur",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2501,
+    "name": "Winznau",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2502,
+    "name": "Wisen (SO)",
+    "canton": "SO"
+  },
+  {
+    "ofs": 3204,
+    "name": "Wittenbach",
+    "canton": "SG"
+  },
+  {
+    "ofs": 2481,
+    "name": "Witterswil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 2867,
+    "name": "Wittinsburg",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4181,
+    "name": "Wittnau",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4082,
+    "name": "Wohlen (AG)",
+    "canton": "AG"
+  },
+  {
+    "ofs": 360,
+    "name": "Wohlen bei Bern",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4046,
+    "name": "Wohlenschwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1511,
+    "name": "Wolfenschiessen",
+    "canton": "NW"
+  },
+  {
+    "ofs": 3038,
+    "name": "Wolfhalden",
+    "canton": "AR"
+  },
+  {
+    "ofs": 4182,
+    "name": "Wölflinswil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2408,
+    "name": "Wolfwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 1107,
+    "name": "Wolhusen",
+    "canton": "LU"
+  },
+  {
+    "ofs": 1323,
+    "name": "Wollerau",
+    "canton": "SZ"
+  },
+  {
+    "ofs": 627,
+    "name": "Worb",
+    "canton": "BE"
+  },
+  {
+    "ofs": 755,
+    "name": "Worben",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2309,
+    "name": "Wünnewil-Flamatt",
+    "canton": "FR"
+  },
+  {
+    "ofs": 4791,
+    "name": "Wuppenau",
+    "canton": "TG"
+  },
+  {
+    "ofs": 4047,
+    "name": "Würenlingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4048,
+    "name": "Würenlos",
+    "canton": "AG"
+  },
+  {
+    "ofs": 345,
+    "name": "Wynau",
+    "canton": "BE"
+  },
+  {
+    "ofs": 424,
+    "name": "Wynigen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 960,
+    "name": "Wyssachen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 5655,
+    "name": "Yens",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5938,
+    "name": "Yverdon-les-Bains",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5939,
+    "name": "Yvonand",
+    "canton": "VD"
+  },
+  {
+    "ofs": 5415,
+    "name": "Yvorne",
+    "canton": "VD"
+  },
+  {
+    "ofs": 628,
+    "name": "Zäziwil",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2868,
+    "name": "Zeglingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 4183,
+    "name": "Zeihen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4263,
+    "name": "Zeiningen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1150,
+    "name": "Zell (LU)",
+    "canton": "LU"
+  },
+  {
+    "ofs": 231,
+    "name": "Zell (ZH)",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 6299,
+    "name": "Zeneggen",
+    "canton": "VS"
+  },
+  {
+    "ofs": 6300,
+    "name": "Zermatt",
+    "canton": "VS"
+  },
+  {
+    "ofs": 3746,
+    "name": "Zernez",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4147,
+    "name": "Zetzwil",
+    "canton": "AG"
+  },
+  {
+    "ofs": 2834,
+    "name": "Ziefen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 556,
+    "name": "Zielebach",
+    "canton": "BE"
+  },
+  {
+    "ofs": 4511,
+    "name": "Zihlschlacht-Sitterdorf",
+    "canton": "TG"
+  },
+  {
+    "ofs": 3712,
+    "name": "Zillis-Reischen",
+    "canton": "GR"
+  },
+  {
+    "ofs": 3947,
+    "name": "Zizers",
+    "canton": "GR"
+  },
+  {
+    "ofs": 4289,
+    "name": "Zofingen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 361,
+    "name": "Zollikofen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 161,
+    "name": "Zollikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2534,
+    "name": "Zuchwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 4083,
+    "name": "Zufikon",
+    "canton": "AG"
+  },
+  {
+    "ofs": 1711,
+    "name": "Zug",
+    "canton": "ZG"
+  },
+  {
+    "ofs": 2622,
+    "name": "Zullwil",
+    "canton": "SO"
+  },
+  {
+    "ofs": 160,
+    "name": "Zumikon",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 2869,
+    "name": "Zunzgen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 3791,
+    "name": "Zuoz",
+    "canton": "GR"
+  },
+  {
+    "ofs": 261,
+    "name": "Zürich",
+    "canton": "ZH"
+  },
+  {
+    "ofs": 4324,
+    "name": "Zurzach",
+    "canton": "AG"
+  },
+  {
+    "ofs": 4264,
+    "name": "Zuzgen",
+    "canton": "AG"
+  },
+  {
+    "ofs": 557,
+    "name": "Zuzwil (BE)",
+    "canton": "BE"
+  },
+  {
+    "ofs": 3426,
+    "name": "Zuzwil (SG)",
+    "canton": "SG"
+  },
+  {
+    "ofs": 794,
+    "name": "Zweisimmen",
+    "canton": "BE"
+  },
+  {
+    "ofs": 2793,
+    "name": "Zwingen",
+    "canton": "BL"
+  },
+  {
+    "ofs": 6011,
+    "name": "Zwischbergen",
+    "canton": "VS"
+  }
+]
