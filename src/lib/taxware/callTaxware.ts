@@ -60,6 +60,7 @@ export async function callTaxware(params: CallTaxwareParams) {
     const normalized = normalizeTaxwareResponse(data);
 
     console.log("DATA RECUE PAR callTaxware =", data);
+    console.log("DATA RECUE PAR callTaxware JSON =", JSON.stringify(data, null, 2));
     console.log("NORMALIZED PRODUIT =", normalized);
 
     return {

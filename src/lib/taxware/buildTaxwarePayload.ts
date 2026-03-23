@@ -73,7 +73,7 @@ export function buildTaxwarePayload(params: BuildPayloadParams) {
     MiscExpenses: Number(miscExpenses || 0),
     Debts: Number(debts || 0),
     DebtInterests: Number(debtInterests || 0),
-    ChildrenCount: Number(childrenCount || 0),
+    NumChildren: Number(childrenCount || 0),
     ...(realEstates && realEstates.length > 0
       ? {
           RealEstates: realEstates.map((realEstate) => ({

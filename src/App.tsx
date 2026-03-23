@@ -32,6 +32,14 @@ import {
 } from "./lib/strategicRecommendations";
 import CollapsibleHelp from "./components/CollapsibleHelp";
 
+declare const process:
+  | {
+      env?: {
+        NODE_ENV?: string;
+      };
+    }
+  | undefined;
+
 type ZipFiscalRow = {
   zip: string;
   locality: string;
@@ -75,6 +83,69 @@ function sumFiniteNumbers(...values: Array<number | null | undefined>) {
   }
 
   return validValues.reduce((total, value) => total + value, 0);
+}
+
+function roundCurrencyValue(value: number | null | undefined) {
+  return Math.round(typeof value === "number" && Number.isFinite(value) ? value : 0);
+}
+
+function getRecordValueByPath(source: Record<string, any> | null | undefined, path: string) {
+  if (!source) {
+    return undefined;
+  }
+
+  return path.split(".").reduce<any>((current, key) => {
+    if (current && typeof current === "object" && key in current) {
+      return current[key];
+    }
+    return undefined;
+  }, source);
+}
+
+function getNumberFromUnknown(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value
+      .replace(/\s/g, "")
+      .replace(/'/g, "")
+      .replace(/CHF/gi, "")
+      .replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function getFirstNumberByPaths(
+  source: Record<string, any> | null | undefined,
+  paths: string[]
+): number | null {
+  for (const path of paths) {
+    const value = getNumberFromUnknown(getRecordValueByPath(source, path));
+    if (value !== null) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function getFirstDefinedValueByPaths(
+  source: Record<string, any> | null | undefined,
+  paths: string[]
+): unknown {
+  for (const path of paths) {
+    const value = getRecordValueByPath(source, path);
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+
+  return null;
 }
 
 function composeCorrectedTaxwareResult(params: {
@@ -168,16 +239,6 @@ function cloneDossier(source: DossierClient): DossierClient {
 
 function cloneValue<T>(source: T): T {
   return JSON.parse(JSON.stringify(source));
-}
-
-function pickReferenceValue(...values: Array<number | null | undefined>) {
-  for (const value of values) {
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      return value;
-    }
-  }
-
-  return 0;
 }
 
 function roundScore(value: number) {
@@ -858,20 +919,40 @@ export default function App() {
   const interetsHypothecairesImmobiliersBudgetaires =
     interetsHabitationBudgetaires + interetsBiensRendementBudgetaires;
 
-  const valeurLocativeFiscalisee =
-    habitationPropreActive && regimeImmobilierActuel
-      ? dossier.immobilier.valeurLocativeHabitationPropre || 0
-      : 0;
+  const valeurLocativeActuelleHabitation = habitationPropreActive
+    ? dossier.immobilier.valeurLocativeHabitationPropre || 0
+    : 0;
 
-  const interetsHabitationDeductibles =
-    habitationPropreActive && regimeImmobilierActuel
-      ? dossier.immobilier.interetsHypothecairesHabitationPropre || 0
-      : 0;
+  const interetsHabitationActuels = habitationPropreActive
+    ? dossier.immobilier.interetsHypothecairesHabitationPropre || 0
+    : 0;
 
-  const fraisHabitationDeductibles =
-    habitationPropreActive && regimeImmobilierActuel
-      ? dossier.immobilier.fraisEntretienHabitationPropre || 0
-      : 0;
+  const fraisHabitationActuels = habitationPropreActive
+    ? dossier.immobilier.fraisEntretienHabitationPropre || 0
+    : 0;
+
+  const variationValeurLocativeSimulation = regimeImmobilierActuel
+    ? 0
+    : -valeurLocativeActuelleHabitation;
+
+  const variationInteretsHypothecairesSimulation = regimeImmobilierActuel
+    ? 0
+    : interetsHabitationActuels;
+
+  const variationFraisEntretienSimulation = regimeImmobilierActuel
+    ? 0
+    : fraisHabitationActuels;
+
+  const totalAjustementsImmobiliersSimulation =
+    variationValeurLocativeSimulation +
+    variationInteretsHypothecairesSimulation +
+    variationFraisEntretienSimulation;
+
+  const valeurLocativeFiscalisee = valeurLocativeActuelleHabitation;
+
+  const interetsHabitationDeductibles = interetsHabitationActuels;
+
+  const fraisHabitationDeductibles = fraisHabitationActuels;
 
   const loyersBiensRendementImposables = biensRendementActifs
     ? dossier.immobilier.loyersBiensRendement || 0
@@ -949,26 +1030,43 @@ export default function App() {
     dossier.fiscalite.fortuneImposableActuelleSaisie || 0
   );
 
+  const ajustementPrevoyanceSimulation =
+    -(dossier.fiscalite.troisiemePilierSimule || 0) - (dossier.fiscalite.rachatLpp || 0);
+  const ajustementManuelSimulation = dossier.fiscalite.ajustementManuelRevenu || 0;
+  const totalAjustementsSimulationIfd =
+    totalAjustementsImmobiliersSimulation +
+    ajustementPrevoyanceSimulation +
+    ajustementManuelSimulation +
+    (dossier.fiscalite.correctionFiscaleManuelleIfd || 0);
+  const totalAjustementsSimulationCanton =
+    totalAjustementsImmobiliersSimulation +
+    ajustementPrevoyanceSimulation +
+    ajustementManuelSimulation +
+    (dossier.fiscalite.correctionFiscaleManuelleCanton || 0);
+  const totalAjustementsSimulationFortune =
+    dossier.fiscalite.correctionFiscaleManuelleFortune || 0;
+
+  const revenuImposableIfdSimule = Math.max(
+    0,
+    revenuImposableIfdReference + totalAjustementsSimulationIfd
+  );
+  const revenuImposableCantonalSimule = Math.max(
+    0,
+    revenuImposableReference + totalAjustementsSimulationCanton
+  );
+  const fortuneImposableSimulee = Math.max(
+    0,
+    fortuneImposableReference + totalAjustementsSimulationFortune
+  );
+
   const revenuImposableTaxwareIfd =
     typeof taxResultAffiche?.normalized?.taxableIncomeFederal === "number"
       ? taxResultAffiche.normalized.taxableIncomeFederal
       : revenuImposableIfdReference;
 
-  const revenuImposableApresSimulationCalcule = Math.max(
-    0,
-    revenuImposableReference -
-      (dossier.fiscalite.troisiemePilierSimule || 0) -
-      (dossier.fiscalite.rachatLpp || 0) +
-      (dossier.fiscalite.ajustementManuelRevenu || 0)
-  );
+  const revenuImposableApresSimulationCalcule = revenuImposableCantonalSimule;
 
-  const revenuImposableIfdApresSimulationCalcule = Math.max(
-    0,
-    revenuImposableIfdReference -
-      (dossier.fiscalite.troisiemePilierSimule || 0) -
-      (dossier.fiscalite.rachatLpp || 0) +
-      (dossier.fiscalite.ajustementManuelRevenu || 0)
-  );
+  const revenuImposableIfdApresSimulationCalcule = revenuImposableIfdSimule;
 
   const revenuImposableTaxwareCanton =
     typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number"
@@ -994,6 +1092,311 @@ export default function App() {
       ? ifdFamilyRebateDebug.rebateTotal
       : Math.max(0, dossier.famille.nombreEnfants) * 263;
   const impotFederalNet = taxResultAffiche?.normalized?.federalTax ?? 0;
+
+  const isDevelopmentEnvironment =
+    typeof process !== "undefined" && process.env?.NODE_ENV === "development";
+  const taxwareRawDisplayedResult =
+    (taxResultAffiche?.raw?.correctionCanton?.data ??
+      taxResultAffiche?.raw?.correctionCanton ??
+      taxResultAffiche?.raw?.baseline?.data ??
+      taxResultAffiche?.raw?.baseline ??
+      null) as Record<string, any> | null;
+  const vaudDebugTaxableIncomeCantonal = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "TaxableIncomeCantonal",
+    "TaxableIncomeCanton",
+    "IncomeTaxableCantonal",
+    "IncomeTaxableCanton",
+    "Result.TaxableIncomeCantonal",
+    "Summary.TaxableIncomeCantonal",
+  ]);
+  const vaudDebugRateDefiningIncomeCantonal = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "RatedefIncomeCanton",
+    "RateDefiningIncomeCanton",
+    "Result.RatedefIncomeCanton",
+    "Summary.RatedefIncomeCanton",
+  ]);
+  const vaudDebugTaxCanton = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "TaxCanton",
+    "CantonTax",
+    "TaxesIncome.CantonTax",
+    "Taxes.CantonTax",
+    "Taxes.CantonalTax",
+    "Result.CantonTax",
+    "Summary.CantonTax",
+  ]);
+  const vaudDebugTaxMunicipality = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "TaxMunicipality",
+    "MunicipalityTax",
+    "CommunalTax",
+    "TaxesIncome.MunicipalityTax",
+    "Taxes.MunicipalityTax",
+    "Result.MunicipalityTax",
+    "Summary.MunicipalityTax",
+  ]);
+  const vaudDebugCantonAdditionalTax = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "CantonAdditionalTax",
+    "TaxesIncome.CantonAdditionalTax",
+    "Taxes.CantonAdditionalTax",
+    "Result.CantonAdditionalTax",
+    "Summary.CantonAdditionalTax",
+  ]);
+  const vaudDebugMunicipalityAdditionalTax = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "MunicipalityAdditionalTax",
+    "TaxesIncome.MunicipalityAdditionalTax",
+    "Taxes.MunicipalityAdditionalTax",
+    "Result.MunicipalityAdditionalTax",
+    "Summary.MunicipalityAdditionalTax",
+  ]);
+  const vaudDebugCantonalReconstituted = sumFiniteNumbers(
+    vaudDebugTaxCanton,
+    vaudDebugCantonAdditionalTax
+  );
+  const vaudDebugCommunalReconstituted = sumFiniteNumbers(
+    vaudDebugTaxMunicipality,
+    vaudDebugMunicipalityAdditionalTax
+  );
+  const vaudDebugRawUnitaryTax = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "CantonUnitaryTax",
+    "UnitaryTax",
+    "TaxesIncome.CantonUnitaryTax",
+    "Result.CantonUnitaryTax",
+    "Summary.CantonUnitaryTax",
+  ]);
+  const vaudDebugRawTotalTax = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "TaxTotal",
+    "TotalTax",
+    "TaxesIncome.TaxTotal",
+    "TaxesIncome.TotalTax",
+    "Taxes.TotalTax",
+  ]);
+  const vaudDisplayedTaxTotal = taxResultAffiche?.normalized?.cantonalCommunalTax ?? null;
+  const vaudDisplayedCanton = taxResultAffiche?.normalized?.canton ?? null;
+  const vaudDebugContext = taxResultAffiche?.normalized?.cantonalContext ?? null;
+  const vaudCantonalBreakdown = taxResultAffiche?.normalized?.cantonalBreakdown ?? null;
+  const vaudUiChildrenCount = dossier.famille.nombreEnfants;
+  const vaudUiPartnership = dossier.famille.aConjoint ? "Marriage" : "Single";
+  const vaudResponseChildrenEcho = getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+    "NumChildren",
+    "ChildrenCount",
+    "Family.NumChildren",
+    "Family.ChildrenCount",
+  ]);
+  const vaudResponsePartnershipEcho = getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+    "Partnership",
+    "Family.Partnership",
+  ]);
+  const vaudResponseRateDefFederal = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "RatedefIncomeFederation",
+    "RateDefiningIncomeFederation",
+    "Result.RatedefIncomeFederation",
+    "Summary.RatedefIncomeFederation",
+  ]);
+  const vaudResponseFederalChildrenReduction = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "FederalChildrenReduction",
+    "Result.FederalChildrenReduction",
+    "Summary.FederalChildrenReduction",
+  ]);
+  const vaudResponseCantonalChildrenReduction = getFirstNumberByPaths(taxwareRawDisplayedResult, [
+    "CantonChildrenReduction",
+    "Result.CantonChildrenReduction",
+    "Summary.CantonChildrenReduction",
+  ]);
+  const vaudResponseTariffField = getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+    "Tariff",
+    "TaxTariff",
+    "TariffCode",
+    "RateType",
+  ]);
+  const vaudResponseQuotientField = getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+    "Quotient",
+    "FamilyQuotient",
+    "QuotientFamilial",
+  ]);
+  const vaudExpectedQuotientDebug =
+    dossier.famille.aConjoint && dossier.famille.nombreEnfants === 2
+      ? "1.8 (hypothèse debug pour marié + 2 enfants)"
+      : dossier.famille.nombreEnfants === 0
+        ? "1.0 (aucun enfant)"
+        : "À confirmer: le payload actuel ne modélise pas explicitement le quotient Vaud";
+  const shouldShowVaudDebugPanel =
+    isDevelopmentEnvironment &&
+    (vaudDisplayedCanton === "VD" || String(vaudDebugContext?.cantonRule || "").startsWith("vaud"));
+  const vaudAppRecompositionMode =
+    "L’application lit maintenant directement les champs exacts TaxWare retenus pour Vaud, sans recomposition locale.";
+  const vaudDebugRawResponsePretty = taxwareRawDisplayedResult
+    ? JSON.stringify(taxwareRawDisplayedResult, null, 2)
+    : "Aucune réponse brute TaxWare disponible.";
+  const vaudDebugCandidates = [
+    {
+      label: "TaxCanton / CantonTax",
+      paths: [
+        "TaxCanton",
+        "CantonTax",
+        "TaxesIncome.CantonTax",
+        "Taxes.CantonTax",
+        "Taxes.CantonalTax",
+      ],
+      value: vaudDebugTaxCanton,
+      usedByApp: true,
+    },
+    {
+      label: "TaxMunicipality / MunicipalityTax",
+      paths: [
+        "TaxMunicipality",
+        "MunicipalityTax",
+        "CommunalTax",
+        "TaxesIncome.MunicipalityTax",
+        "Taxes.MunicipalityTax",
+      ],
+      value: vaudDebugTaxMunicipality,
+      usedByApp: true,
+    },
+    {
+      label: "CantonAdditionalTax",
+      paths: [
+        "CantonAdditionalTax",
+        "TaxesIncome.CantonAdditionalTax",
+        "Taxes.CantonAdditionalTax",
+      ],
+      value: vaudDebugCantonAdditionalTax,
+      usedByApp: false,
+    },
+    {
+      label: "MunicipalityAdditionalTax",
+      paths: [
+        "MunicipalityAdditionalTax",
+        "TaxesIncome.MunicipalityAdditionalTax",
+        "Taxes.MunicipalityAdditionalTax",
+      ],
+      value: vaudDebugMunicipalityAdditionalTax,
+      usedByApp: false,
+    },
+    {
+      label: "CantonMunicipalityParishTaxTotal",
+      paths: [
+        "CantonMunicipalityParishTaxTotal",
+        "TaxesIncome.CantonMunicipalityParishTaxTotal",
+        "TaxesIncome.CantonMunicipalityTaxTotal",
+      ],
+      value: getFirstNumberByPaths(taxwareRawDisplayedResult, [
+        "CantonMunicipalityParishTaxTotal",
+        "TaxesIncome.CantonMunicipalityParishTaxTotal",
+        "TaxesIncome.CantonMunicipalityTaxTotal",
+      ]),
+      usedByApp: true,
+    },
+    {
+      label: "TaxTotal / TotalTax",
+      paths: [
+        "TaxTotal",
+        "TotalTax",
+        "TaxesIncome.TotalTax",
+        "Taxes.TotalTax",
+      ],
+      value: getFirstNumberByPaths(taxwareRawDisplayedResult, [
+        "TaxTotal",
+        "TotalTax",
+        "TaxesIncome.TotalTax",
+        "Taxes.TotalTax",
+      ]),
+      usedByApp: true,
+    },
+    {
+      label: "CantonCoefficient",
+      paths: ["CantonCoefficient", "TaxesIncome.CantonCoefficient"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+        "CantonCoefficient",
+        "TaxesIncome.CantonCoefficient",
+      ]),
+      usedByApp: false,
+    },
+    {
+      label: "MunicipalityCoefficient",
+      paths: ["MunicipalityCoefficient", "TaxesIncome.MunicipalityCoefficient"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+        "MunicipalityCoefficient",
+        "TaxesIncome.MunicipalityCoefficient",
+      ]),
+      usedByApp: false,
+    },
+    {
+      label: "CantonTaxRate",
+      paths: ["CantonTaxRate", "CantonRate", "TaxesIncome.CantonTaxRate"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+        "CantonTaxRate",
+        "CantonRate",
+        "TaxesIncome.CantonTaxRate",
+      ]),
+      usedByApp: false,
+    },
+    {
+      label: "MunicipalityTaxRate",
+      paths: ["MunicipalityTaxRate", "MunicipalityRate", "TaxesIncome.MunicipalityTaxRate"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+        "MunicipalityTaxRate",
+        "MunicipalityRate",
+        "TaxesIncome.MunicipalityTaxRate",
+      ]),
+      usedByApp: false,
+    },
+    {
+      label: "CantonAdditionalTaxRate",
+      paths: ["CantonAdditionalTaxRate"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, ["CantonAdditionalTaxRate"]),
+      usedByApp: false,
+    },
+    {
+      label: "MunicipalityAdditionalTaxRate",
+      paths: ["MunicipalityAdditionalTaxRate"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+        "MunicipalityAdditionalTaxRate",
+      ]),
+      usedByApp: false,
+    },
+    {
+      label: "CantonUnitaryTaxRate",
+      paths: ["CantonUnitaryTaxRate"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, ["CantonUnitaryTaxRate"]),
+      usedByApp: false,
+    },
+    {
+      label: "TotalTaxRate",
+      paths: ["TotalTaxRate"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, ["TotalTaxRate"]),
+      usedByApp: false,
+    },
+    {
+      label: "CantonCoefficientText",
+      paths: ["CantonCoefficientText"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, ["CantonCoefficientText"]),
+      usedByApp: false,
+    },
+    {
+      label: "MunicipalityCoefficientText",
+      paths: ["MunicipalityCoefficientText"],
+      value: getFirstDefinedValueByPaths(taxwareRawDisplayedResult, [
+        "MunicipalityCoefficientText",
+      ]),
+      usedByApp: false,
+    },
+  ];
+  const vaudDebugMissingCandidates = vaudDebugCandidates.filter(
+    (candidate) => !candidate.usedByApp && candidate.value !== null
+  );
+  const showVaudFiscalBreakdown =
+    String(taxResultAffiche?.normalized?.cantonalContext?.cantonRule || "").startsWith("vaud");
+  const vaudPreviousMapping = {
+    cantonalField: "CantonalTax + CantonAdditionalTax",
+    communalField: "CommunalTax + MunicipalityAdditionalTax",
+    unitaryField: "CantonUnitaryTax / UnitaryTax",
+    totalField: "CantonalCommunalTax reconstitué",
+  };
+  const vaudCurrentMapping = {
+    cantonalField: vaudDebugContext?.exactCantonalField ?? "non trouvé",
+    communalField: vaudDebugContext?.exactCommunalField ?? "non trouvé",
+    unitaryField: vaudDebugContext?.exactUnitaryField ?? "non trouvé",
+    totalField: vaudDebugContext?.exactTotalField ?? "non trouvé",
+  };
 
   const impotRevenuFortuneCharge =
     taxResultAffiche?.normalized?.totalTax ??
@@ -1066,9 +1469,9 @@ export default function App() {
     impotEstimeCalcule;
   const impotCorrigeSynthese =
     taxResultAffiche?.normalized?.totalTax ?? impotReferenceTaxware;
-  const resultatFiscalBrutTitle = "Base imposable de reference";
+  const resultatFiscalBrutTitle = "Base fiscale actuelle";
   const resultatFiscalBrutHelper =
-    "Montants imposables saisis manuellement et transmis a TaxWare pour produire le resultat fiscal";
+    "Montants actuels saisis par le fiduciaire, conserves comme reference et jamais recalcules automatiquement";
   const impotTotalReference =
     impotCorrigeSynthese ??
     taxResultSansOptimisation?.normalized?.totalTax ??
@@ -1095,17 +1498,21 @@ export default function App() {
     return formatMontantCHF(Math.round(typeof valeur === "number" ? valeur : 0));
   };
 
+  const formatMontantCHFSigne = (valeur: number | null | undefined) => {
+    const montant = roundCurrencyValue(valeur);
+    const prefixe = montant > 0 ? "+" : "";
+    return `${prefixe}${formatMontantCHF(montant)}`;
+  };
+
   const lectureImmobiliereSynthese = [
-    habitationPropreActive
-      ? `Habitation propre traitée selon le ${regimeImmobilierLabel.toLowerCase()}`
-      : null,
+    habitationPropreActive ? "La base actuelle intègre déjà le traitement immobilier actuel." : null,
     biensRendementActifs ? "Biens de rendement intégrés dans les revenus imposables" : null,
     interetsHypothecairesImmobiliersBudgetaires > 0
       ? `Les intérêts hypothécaires restent pris en compte dans la marge budgétaire (${formatMontantCHFArrondi(
           interetsHypothecairesImmobiliersBudgetaires
         )})`
       : null,
-    "Le traitement fiscal immobilier dépend du régime sélectionné.",
+    `Le ${regimeImmobilierLabel.toLowerCase()} sert uniquement à calculer le delta de simulation.`,
   ].filter(Boolean) as string[];
 
   const formatMontantCHFCompact = (valeur: number | null | undefined) => {
@@ -1435,6 +1842,38 @@ export default function App() {
   });
 
   const taxwarePayloadJson = JSON.stringify(taxwarePayloadControle, null, 2);
+  const vaudPayloadChildrenCountSent = getFirstDefinedValueByPaths(
+    taxwarePayloadControle as Record<string, any>,
+    ["NumChildren", "ChildrenCount"]
+  );
+  const vaudPayloadPartnershipSent = getFirstDefinedValueByPaths(
+    taxwarePayloadControle as Record<string, any>,
+    ["Partnership"]
+  );
+  const vaudPayloadExpectedChildrenKey = "NumChildren";
+  const vaudPayloadHasNumChildren =
+    getRecordValueByPath(taxwarePayloadControle as Record<string, any>, "NumChildren") !==
+    undefined;
+  const vaudPayloadHasChildrenCount =
+    getRecordValueByPath(taxwarePayloadControle as Record<string, any>, "ChildrenCount") !==
+    undefined;
+  const vaudPayloadActualChildrenKey = vaudPayloadHasNumChildren && vaudPayloadHasChildrenCount
+    ? "NumChildren + ChildrenCount"
+    : vaudPayloadHasNumChildren
+      ? "NumChildren"
+      : vaudPayloadHasChildrenCount
+        ? "ChildrenCount"
+        : "aucune clé enfant";
+  const vaudPayloadChildrenDuplicateState =
+    vaudPayloadHasNumChildren && vaudPayloadHasChildrenCount ? "Oui" : "Non";
+  const vaudPayloadIccTariff = getFirstDefinedValueByPaths(
+    taxwarePayloadControle as Record<string, any>,
+    ["TariffCanton", "IccTariff", "Tariff", "IncomeTaxParameters.Tariff"]
+  );
+  const vaudPayloadFederalTariff = getFirstDefinedValueByPaths(
+    taxwarePayloadControle as Record<string, any>,
+    ["TariffFederal", "IfdTariff", "FederalTariff"]
+  );
 
   const handleNpaChange = (npa: string) => {
     const match = (zipToFiscal as ZipFiscalRow[]).find((item) => item.zip === npa);
@@ -1566,23 +2005,30 @@ export default function App() {
       const comparisonScenarios = getComparisonScenarios(dossier);
       const comparisonScenarioEntries = await Promise.all(
         comparisonScenarios.map(async (scenario) => {
+          const immobilierDelta =
+            scenario.key === "reference" ? 0 : totalAjustementsImmobiliersSimulation;
           const taxableIncomeFederal = Math.max(
             0,
             (dossier.fiscalite.revenuImposableIfd || 0) -
               scenario.thirdPillar -
               scenario.lppBuyback +
-              scenario.manualAdjustment
+              scenario.manualAdjustment +
+              immobilierDelta +
+              (dossier.fiscalite.correctionFiscaleManuelleIfd || 0)
           );
           const taxableIncomeCantonal = Math.max(
             0,
             (dossier.fiscalite.revenuImposable || 0) -
               scenario.thirdPillar -
               scenario.lppBuyback +
-              scenario.manualAdjustment
+              scenario.manualAdjustment +
+              immobilierDelta +
+              (dossier.fiscalite.correctionFiscaleManuelleCanton || 0)
           );
           const taxableAssets = Math.max(
             0,
-            dossier.fiscalite.fortuneImposableActuelleSaisie || 0
+            (dossier.fiscalite.fortuneImposableActuelleSaisie || 0) +
+              (dossier.fiscalite.correctionFiscaleManuelleFortune || 0)
           );
 
           const baseResult = await resolveTaxwareTarget({
@@ -1632,6 +2078,7 @@ export default function App() {
                   taxableIncomeFederal,
                   taxableIncomeCantonal,
                   taxableAssets,
+                  immobilierDelta,
                 },
                 payloads: {
                   canton: buildDirectBaseTaxwareRequest({
@@ -1659,29 +2106,6 @@ export default function App() {
       const baselineResult = comparisonScenarioResults.reference;
       const mixedResult = comparisonScenarioResults.mixed;
       const ajustementResult = comparisonScenarioResults["manual-adjustment"];
-
-      setDossier({
-        ...dossier,
-        fiscalite: {
-          ...dossier.fiscalite,
-          revenuImposableIfd: pickReferenceValue(
-            baselineResult?.normalized?.taxableIncomeFederal,
-            dossier.fiscalite.revenuImposableIfd
-          ),
-          revenuImposable: pickReferenceValue(
-            baselineResult?.normalized?.taxableIncomeCantonal,
-            dossier.fiscalite.revenuImposable
-          ),
-          fortuneImposableActuelleSaisie: pickReferenceValue(
-            baselineResult?.normalized?.taxableAssets,
-            dossier.fiscalite.fortuneImposableActuelleSaisie
-          ),
-          impotsEstimes: pickReferenceValue(
-            baselineResult?.normalized?.totalTax,
-            dossier.fiscalite.impotsEstimes
-          ),
-        },
-      });
 
       setTaxResultSansOptimisation(baselineResult);
       setTaxResultAvecDeductionsEstime(mixedResult);
@@ -4532,7 +4956,7 @@ export default function App() {
           id="fiscalite"
           step="6"
           title="Fiscalité et simulation"
-          description="Saisissez directement le revenu imposable IFD, le revenu imposable Canton / Commune et la fortune imposable, puis lancez un calcul reel TaxWare sans recalcul des deductions dans cette section."
+          description="Saisissez la base fiscale actuelle du client, puis laissez l’application mesurer l’impact du changement de régime immobilier et des leviers de simulation sans reconstruire la fiscalité depuis zéro."
         >
         <div style={sectionCardStyle}>
           <h2 style={{ marginTop: 0, marginBottom: "20px", color: "#0f172a" }}>
@@ -4558,14 +4982,15 @@ export default function App() {
           >
             <strong style={{ color: "#0f172a" }}>Remarque importante</strong>
             <div>
-              Cette section part directement du revenu imposable et de la fortune imposable.
+              La base fiscale actuelle saisie représente déjà la situation fiscale réelle du client.
             </div>
             <div>
-              Les déductions fiscales (frais professionnels, assurances, déductions
-              sociales, etc.) ne sont pas recalculées ici.
+              Elle inclut déjà le traitement immobilier actuel, notamment la valeur locative,
+              les intérêts hypothécaires admis et les frais d’entretien admis.
             </div>
             <div>
-              Le professionnel doit saisir les montants imposables déjà déterminés.
+              Les champs immobiliers servent uniquement à simuler l’écart entre le régime actuel
+              et le régime réformé.
             </div>
           </div>
 
@@ -4579,10 +5004,10 @@ export default function App() {
             }}
           >
             <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
-              Base imposable saisie
+              Base fiscale actuelle
             </h3>
             <span style={helperStyle}>
-              Ces trois montants pilotent exclusivement les appels TaxWare de cette section
+              Ces montants représentent la situation fiscale actuelle du client et incluent déjà le traitement immobilier actuel.
             </span>
             <div
               style={{
@@ -4659,10 +5084,90 @@ export default function App() {
             }}
           >
             <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
+              Ajustements de simulation
+            </h3>
+            <span style={helperStyle}>
+              La simulation ajoute ou retire uniquement les écarts liés au régime sélectionné et aux leviers fiscaux.
+            </span>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "14px",
+                marginTop: "18px",
+              }}
+            >
+              <div>
+                <label style={labelStyle}>Variation valeur locative</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFSigne(variationValeurLocativeSimulation)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+                <span style={helperStyle}>
+                  {regimeImmobilierActuel
+                    ? "Aucun écart: la base actuelle correspond déjà au régime actuel."
+                    : "La valeur locative actuelle est retirée de la base fiscale simulée."}
+                </span>
+              </div>
+              <div>
+                <label style={labelStyle}>Variation intérêts hypothécaires</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFSigne(variationInteretsHypothecairesSimulation)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+                <span style={helperStyle}>
+                  {regimeImmobilierActuel
+                    ? "Aucun écart sur la déductibilité des intérêts en régime actuel."
+                    : "Les intérêts actuellement admis sont réintégrés dans la base simulée."}
+                </span>
+              </div>
+              <div>
+                <label style={labelStyle}>Variation frais d’entretien</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFSigne(variationFraisEntretienSimulation)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+                <span style={helperStyle}>
+                  {regimeImmobilierActuel
+                    ? "Aucun écart sur les frais d’entretien en régime actuel."
+                    : "Les frais actuellement admis sont réintégrés dans la base simulée."}
+                </span>
+              </div>
+              <div>
+                <label style={labelStyle}>Total des ajustements fiscaux immobiliers</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFSigne(totalAjustementsImmobiliersSimulation)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+                <span style={helperStyle}>
+                  Delta immobilier net appliqué à la base actuelle avant calcul TaxWare.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "18px",
+              borderRadius: "14px",
+              backgroundColor: "#ffffff",
+              border: "1px solid #dbeafe",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
               Leviers de simulation
             </h3>
             <span style={helperStyle}>
-              Ces montants servent a comparer les variantes sans remplacer les bases imposables saisies
+              Ces leviers s’ajoutent à la logique par écart sans jamais remplacer la base fiscale actuelle.
             </span>
             <div
               style={{
@@ -4707,6 +5212,86 @@ export default function App() {
                 />
               </div>
             </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "14px",
+                marginTop: "14px",
+              }}
+            >
+              <div>
+                <label style={labelStyle}>Impact prévoyance sur le revenu</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFSigne(ajustementPrevoyanceSimulation)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Ajustement manuel de simulation</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFSigne(ajustementManuelSimulation)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "18px",
+              borderRadius: "14px",
+              background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)",
+              border: "1px solid #bfdbfe",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
+              Base fiscale simulée
+            </h3>
+            <span style={helperStyle}>
+              Lecture seule: base actuelle saisie +/- ajustements de simulation.
+            </span>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "14px",
+                marginTop: "18px",
+              }}
+            >
+              <div>
+                <label style={labelStyle}>Revenu imposable IFD simulé</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFArrondi(revenuImposableIfdSimule)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Revenu imposable canton / commune simulé</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFArrondi(revenuImposableCantonalSimule)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Fortune imposable simulée</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFArrondi(fortuneImposableSimulee)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+              </div>
+            </div>
           </div>
 
           <div style={{ ...sectionCardStyle, marginTop: "20px", marginBottom: 0 }}>
@@ -4714,8 +5299,622 @@ export default function App() {
               Résultat fiscal TaxWare
             </h3>
             <span style={helperStyle}>
-              Les sorties ci-dessous proviennent des appels TaxWare construits a partir des montants imposables saisis
+              Les sorties ci-dessous proviennent des appels TaxWare construits à partir de la base fiscale simulée, elle-même calculée par écart depuis la base actuelle.
             </span>
+
+            {String(
+              taxResultAffiche?.normalized?.cantonalContext?.cantonRule || ""
+            ).startsWith("vaud") && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "14px 16px",
+                  borderRadius: "12px",
+                  backgroundColor: "#f8fafc",
+                  border: "1px solid #bfdbfe",
+                  color: "#334155",
+                  lineHeight: 1.6,
+                }}
+              >
+                La normalisation Vaud additionne les composantes fiscales spécifiques VD renvoyées
+                par TaxWare, notamment les taxes additionnelles cantonales et communales.
+              </div>
+            )}
+
+            {shouldShowVaudDebugPanel && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "18px",
+                  borderRadius: "14px",
+                  backgroundColor: "#0f172a",
+                  border: "1px solid #1d4ed8",
+                  color: "#e2e8f0",
+                }}
+              >
+                <h4 style={{ marginTop: 0, marginBottom: "8px", color: "#ffffff" }}>
+                  Debug Vaud / Lausanne
+                </h4>
+                <div style={{ color: "#93c5fd", fontSize: "13px", lineHeight: 1.6 }}>
+                  Comparaison entre la réponse brute TaxWare et la reconstitution affichée par
+                  l’application. Visible uniquement en développement.
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Revenu imposable cantonal</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugTaxableIncomeCantonal)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                    <span style={{ ...helperStyle, color: "#93c5fd" }}>Valeur brute TaxWare</span>
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Revenu déterminant cantonal</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugRateDefiningIncomeCantonal)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                    <span style={{ ...helperStyle, color: "#93c5fd" }}>Champ `RatedefIncomeCanton`</span>
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>TaxCanton</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugTaxCanton)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>TaxMunicipality</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugTaxMunicipality)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>CantonAdditionalTax</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugCantonAdditionalTax)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>MunicipalityAdditionalTax</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugMunicipalityAdditionalTax)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Total cantonal reconstitué</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugCantonalReconstituted)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                    <span style={{ ...helperStyle, color: "#93c5fd" }}>
+                      `TaxCanton + CantonAdditionalTax`
+                    </span>
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Total communal reconstitué</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugCommunalReconstituted)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                    <span style={{ ...helperStyle, color: "#93c5fd" }}>
+                      `TaxMunicipality + MunicipalityAdditionalTax`
+                    </span>
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>
+                      Total impôt Vaud affiché dans l’application
+                    </label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDisplayedTaxTotal)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                    <span style={{ ...helperStyle, color: "#93c5fd" }}>
+                      `normalized.cantonalCommunalTax`
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Partnership UI / React</label>
+                    <input
+                      type="text"
+                      value={String(vaudUiPartnership)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Children UI / React</label>
+                    <input
+                      type="text"
+                      value={String(vaudUiChildrenCount)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>partnership</label>
+                    <input
+                      type="text"
+                      value={String(vaudPayloadPartnershipSent ?? "-")}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                    <span style={{ ...helperStyle, color: "#93c5fd" }}>Valeur envoyée dans le payload</span>
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>NumChildren envoyé</label>
+                    <input
+                      type="text"
+                      value={String(vaudPayloadChildrenCountSent ?? "-")}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                    <span style={{ ...helperStyle, color: "#93c5fd" }}>
+                      Clé envoyée: {vaudPayloadActualChildrenKey} | Clé attendue: {vaudPayloadExpectedChildrenKey}
+                    </span>
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>quotientAppliedLocally</label>
+                    <input
+                      type="text"
+                      value={String(vaudDebugContext?.quotientAppliedLocally ?? false)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Barème ICC envoyé</label>
+                    <input
+                      type="text"
+                      value={String(vaudPayloadIccTariff ?? "Non transmis explicitement")}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Barème fédéral envoyé</label>
+                    <input
+                      type="text"
+                      value={String(vaudPayloadFederalTariff ?? "Non transmis explicitement")}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>
+                      Quotient attendu théorique Vaud
+                    </label>
+                    <input
+                      type="text"
+                      value={vaudExpectedQuotientDebug}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                    <span style={{ ...helperStyle, color: "#93c5fd" }}>
+                      Information debug uniquement, non utilisée dans le calcul.
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Partnership visible dans la réponse</label>
+                    <input
+                      type="text"
+                      value={String(vaudResponsePartnershipEcho ?? "Non visible dans la réponse")}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>NumChildren visible dans la réponse</label>
+                    <input
+                      type="text"
+                      value={String(vaudResponseChildrenEcho ?? "Non visible dans la réponse")}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Barème ICC / revenu déterminant</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudDebugRateDefiningIncomeCantonal)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Barème fédéral / revenu déterminant</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudResponseRateDefFederal)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Réduction enfants fédérale</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudResponseFederalChildrenReduction)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Réduction enfants cantonale</label>
+                    <input
+                      type="text"
+                      value={formatMontantTaxware(vaudResponseCantonalChildrenReduction)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Champ tarif dans la réponse</label>
+                    <input
+                      type="text"
+                      value={String(vaudResponseTariffField ?? "Aucun champ tarif trouvé")}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+
+                  <div style={{ ...subCardStyle, backgroundColor: "#111c33", border: "1px solid #1e3a8a" }}>
+                    <label style={{ ...labelStyle, color: "#bfdbfe" }}>Champ quotient dans la réponse</label>
+                    <input
+                      type="text"
+                      value={String(vaudResponseQuotientField ?? "Aucun champ quotient trouvé")}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    backgroundColor: "#111827",
+                    border: "1px solid #334155",
+                    color: "#e2e8f0",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <strong style={{ color: "#ffffff" }}>Lecture du montage actuel</strong>
+                  <div>{vaudAppRecompositionMode}</div>
+                  <div>
+                    Audit enfants: le payload envoie désormais <code>NumChildren</code>,
+                    conformément au schéma TaxWare local. <code>ChildrenCount</code> n’est plus envoyé.
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "12px",
+                      backgroundColor: "#3f1d1d",
+                      border: "1px solid #7f1d1d",
+                      color: "#fee2e2",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <strong style={{ color: "#ffffff" }}>Avant</strong>
+                    <div>Canton: {vaudPreviousMapping.cantonalField}</div>
+                    <div>Commune: {vaudPreviousMapping.communalField}</div>
+                    <div>Taux unique: {vaudPreviousMapping.unitaryField}</div>
+                    <div>Total: {vaudPreviousMapping.totalField}</div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "12px",
+                      backgroundColor: "#0b2a1f",
+                      border: "1px solid #14532d",
+                      color: "#dcfce7",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <strong style={{ color: "#ffffff" }}>Après</strong>
+                    <div>Canton: {vaudCurrentMapping.cantonalField}</div>
+                    <div>Commune: {vaudCurrentMapping.communalField}</div>
+                    <div>Taux unique: {vaudCurrentMapping.unitaryField}</div>
+                    <div>Total: {vaudCurrentMapping.totalField}</div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "12px",
+                      backgroundColor: "#111827",
+                      border: "1px solid #334155",
+                      color: "#e2e8f0",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <strong style={{ color: "#ffffff" }}>Montants TaxWare reçus</strong>
+                    <div>Canton brut: {formatMontantTaxware(vaudDebugTaxCanton)}</div>
+                    <div>Commune brute: {formatMontantTaxware(vaudDebugTaxMunicipality)}</div>
+                    <div>Taux unique brut: {formatMontantTaxware(vaudDebugRawUnitaryTax)}</div>
+                    <div>Total brut: {formatMontantTaxware(vaudDebugRawTotalTax)}</div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "12px",
+                      backgroundColor: "#111827",
+                      border: "1px solid #334155",
+                      color: "#e2e8f0",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <strong style={{ color: "#ffffff" }}>Montants normalisés</strong>
+                    <div>Canton: {formatMontantTaxware(taxResultAffiche?.normalized?.cantonalTax)}</div>
+                    <div>Commune: {formatMontantTaxware(taxResultAffiche?.normalized?.communalTax)}</div>
+                    <div>Taux unique: {formatMontantTaxware(vaudCantonalBreakdown?.unitaryTax)}</div>
+                    <div>Total: {formatMontantTaxware(taxResultAffiche?.normalized?.totalTax)}</div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "12px",
+                      backgroundColor: "#111827",
+                      border: "1px solid #334155",
+                      color: "#e2e8f0",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    <strong style={{ color: "#ffffff" }}>Comparaison avant / après</strong>
+                    <div>Avant clé enfants: <code>ChildrenCount</code></div>
+                    <div>Après clé enfants: <code>{vaudPayloadActualChildrenKey}</code></div>
+                    <div>Doublon clé enfant: {vaudPayloadChildrenDuplicateState}</div>
+                    <div>Valeur envoyée: {String(vaudPayloadChildrenCountSent ?? "-")}</div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    backgroundColor: "#111827",
+                    border: "1px solid #334155",
+                    color: "#e2e8f0",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <strong style={{ color: "#ffffff" }}>Mapping actuel de l’application</strong>
+                  <div>
+                    <code>TaxCanton</code> / <code>CantonTax</code> {"->"} <code>normalized.cantonalTax</code>
+                  </div>
+                  <div>
+                    <code>TaxMunicipality</code> / <code>MunicipalityTax</code> {"->"} <code>normalized.communalTax</code>
+                  </div>
+                  <div>
+                    <code>CantonAdditionalTax</code> et <code>MunicipalityAdditionalTax</code> {"->"} ajoutés par la règle
+                    Vaud si présents
+                  </div>
+                  <div>
+                    <code>CantonMunicipalityParishTaxTotal</code> / <code>TaxTotal</code> {"->"} lus comme totaux globaux
+                    si l’API les fournit
+                  </div>
+                  <div>
+                    Les coefficients et taux (`CantonCoefficient`, `MunicipalityCoefficient`,
+                    `*TaxRate`, `*AdditionalTaxRate`) sont aujourd’hui affichés en debug mais ne
+                    modifient pas encore notre normalisation.
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    display: "grid",
+                    gap: "10px",
+                  }}
+                >
+                  <h5 style={{ margin: 0, color: "#ffffff" }}>
+                    Champs fiscaux candidats détectés
+                  </h5>
+                  {vaudDebugCandidates.map((candidate) => (
+                    <div
+                      key={candidate.label}
+                      style={{
+                        padding: "12px 14px",
+                        borderRadius: "12px",
+                        backgroundColor: candidate.usedByApp ? "#0b2a1f" : "#1f2937",
+                        border: candidate.usedByApp
+                          ? "1px solid #14532d"
+                          : "1px solid #334155",
+                        color: "#e2e8f0",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: "#ffffff" }}>{candidate.label}</div>
+                      <div style={{ fontSize: "13px", color: "#93c5fd", marginTop: "4px" }}>
+                        Paths: {candidate.paths.join(" | ")}
+                      </div>
+                      <div style={{ marginTop: "6px" }}>
+                        Valeur brute:{" "}
+                        {typeof candidate.value === "number"
+                          ? formatMontantCHFArrondi(candidate.value)
+                          : String(candidate.value ?? "non trouvée")}
+                      </div>
+                      <div style={{ marginTop: "4px", color: "#cbd5e1", fontSize: "13px" }}>
+                        {candidate.usedByApp ? "Actuellement lu par l’application" : "Présent mais non utilisé dans le calcul affiché"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    backgroundColor: "#111827",
+                    border: "1px solid #334155",
+                    color: "#e2e8f0",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <strong style={{ color: "#ffffff" }}>Ce qui manque potentiellement</strong>
+                  {vaudDebugMissingCandidates.length > 0 ? (
+                    vaudDebugMissingCandidates.map((candidate) => (
+                      <div key={candidate.label}>
+                        {candidate.label}:{" "}
+                        {typeof candidate.value === "number"
+                          ? formatMontantCHFArrondi(candidate.value)
+                          : String(candidate.value)}
+                      </div>
+                    ))
+                  ) : (
+                    <div>Aucun champ candidat supplémentaire détecté dans la réponse brute utile.</div>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    backgroundColor: "#111827",
+                    border: "1px solid #334155",
+                  }}
+                >
+                  <div style={{ color: "#ffffff", fontWeight: 700, marginBottom: "8px" }}>
+                    Réponse brute TaxWare utile
+                  </div>
+                  <pre
+                    style={{
+                      margin: 0,
+                      color: "#cbd5e1",
+                      fontSize: "12px",
+                      lineHeight: 1.6,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      overflowX: "auto",
+                    }}
+                  >
+                    {vaudDebugRawResponsePretty}
+                  </pre>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    backgroundColor: "#111827",
+                    border: "1px solid #334155",
+                  }}
+                >
+                  <div style={{ color: "#ffffff", fontWeight: 700, marginBottom: "8px" }}>
+                    Payload TaxWare réellement envoyé
+                  </div>
+                  <pre
+                    style={{
+                      margin: 0,
+                      color: "#cbd5e1",
+                      fontSize: "12px",
+                      lineHeight: 1.6,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      overflowX: "auto",
+                    }}
+                  >
+                    {taxwarePayloadJson}
+                  </pre>
+                </div>
+              </div>
+            )}
 
             <div
               style={{
@@ -4728,7 +5927,7 @@ export default function App() {
             >
               <div style={subCardStyle}>
                 <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
-                  Montants saisis
+                  Base actuelle saisie
                 </h4>
                 <div style={{ display: "grid", gap: "10px" }}>
                   <div>
@@ -4754,6 +5953,41 @@ export default function App() {
                     <input
                       type="text"
                       value={formatMontantCHFArrondi(fortuneImposableReference)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={subCardStyle}>
+                <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                  Base simulée transmise
+                </h4>
+                <div style={{ display: "grid", gap: "10px" }}>
+                  <div>
+                    <label style={labelStyle}>Revenu imposable IFD simulé</label>
+                    <input
+                      type="text"
+                      value={formatMontantCHFArrondi(revenuImposableIfdApresSimulationCalcule)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Revenu imposable Canton / Commune simulé</label>
+                    <input
+                      type="text"
+                      value={formatMontantCHFArrondi(revenuImposableApresSimulationCalcule)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Fortune imposable simulée</label>
+                    <input
+                      type="text"
+                      value={formatMontantCHFArrondi(fortuneImposableSimulee)}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -4841,11 +6075,189 @@ export default function App() {
                   }}
                 >
                   Le bloc Immobilier est conservé pour la simulation métier et la comparaison
-                  des scénarios, mais il n’est plus utilisé ici pour reconstruire le revenu
-                  imposable.
+                  des scénarios. Il sert uniquement à calculer un delta de simulation à partir
+                  de la base fiscale actuelle.
                 </div>
               </div>
             </div>
+
+            {showVaudFiscalBreakdown && (
+              <div
+                style={{
+                  marginTop: "18px",
+                  padding: "20px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)",
+                  border: "1px solid #bfdbfe",
+                  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.05)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: "14px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <h4 style={{ marginTop: 0, marginBottom: "6px", color: "#0f172a" }}>
+                      Structure de l’impôt Vaud
+                    </h4>
+                    <div style={{ color: "#475569", lineHeight: 1.6, fontSize: "14px" }}>
+                      Présentation détaillée des composantes renvoyées par TaxWare, dans une
+                      lecture plus proche de TaxWare Office.
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "12px",
+                      backgroundColor: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      color: "#1e3a8a",
+                      fontWeight: 700,
+                      fontSize: "13px",
+                    }}
+                  >
+                    Lecture Vaud dédiée
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                    gap: "16px",
+                    alignItems: "stretch",
+                  }}
+                >
+                  <div style={subCardStyle}>
+                    <h5 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Impôt principal
+                    </h5>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>Canton</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            vaudCantonalBreakdown?.principalCantonalTax
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Commune</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            vaudCantonalBreakdown?.principalCommunalTax
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={subCardStyle}>
+                    <h5 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Impôt à taux unique
+                    </h5>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>Montant séparé</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(vaudCantonalBreakdown?.unitaryTax)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                        <span style={helperStyle}>
+                          Champ TaxWare `CantonUnitaryTax` / `UnitaryTax` si disponible.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={subCardStyle}>
+                    <h5 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Autres composantes
+                    </h5>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>Supplément cantonal</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            vaudCantonalBreakdown?.cantonAdditionalTax
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Supplément communal</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            vaudCantonalBreakdown?.municipalityAdditionalTax
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Impôt paroissial / autre</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(vaudCantonalBreakdown?.churchTax)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={subCardStyle}>
+                    <h5 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Total impôt Vaud
+                    </h5>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>Somme complète</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            vaudCantonalBreakdown?.displayedCantonalTotal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                        <span style={helperStyle}>
+                          Total cantonal / communal affiché par l’application, inchangé.
+                        </span>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Autres composantes éventuelles</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            vaudCantonalBreakdown?.otherComponentsTotal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div

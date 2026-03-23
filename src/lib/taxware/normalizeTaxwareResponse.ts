@@ -10,6 +10,29 @@ export type TaxwareNormalizedResponse = {
   cantonalCommunalTax: number | null;
   wealthTax: number | null;
   totalTax: number | null;
+  cantonalBreakdown: {
+    principalCantonalTax: number | null;
+    principalCommunalTax: number | null;
+    unitaryTax: number | null;
+    cantonAdditionalTax: number | null;
+    municipalityAdditionalTax: number | null;
+    churchTax: number | null;
+    otherComponentsTotal: number | null;
+    displayedCantonalTotal: number | null;
+  };
+  cantonalContext: {
+    cantonRule: string;
+    quotientAppliedLocally: boolean;
+    rateDefiningIncomeCantonal: number | null;
+    cantonAdditionalTax: number | null;
+    municipalityAdditionalTax: number | null;
+    exactCantonalField: string | null;
+    exactCommunalField: string | null;
+    exactUnitaryField: string | null;
+    exactTotalField: string | null;
+    partnership: string | null;
+    childrenCount: number | null;
+  };
   deductions: {
     occupational: {
       federal: number | null;
@@ -104,6 +127,17 @@ function firstNumberFromPaths(obj: AnyRecord, paths: string[]): number | null {
   return firstNumber(obj, paths);
 }
 
+function firstNumberWithMatchedPath(obj: AnyRecord, paths: string[]) {
+  for (const path of paths) {
+    const value = toNumber(getByPath(obj, path));
+    if (value !== null) {
+      return { value, path };
+    }
+  }
+
+  return { value: null, path: null };
+}
+
 export function normalizeTaxwareResponse(
   rawResponse: AnyRecord | null | undefined
 ): TaxwareNormalizedResponse {
@@ -147,28 +181,36 @@ export function normalizeTaxwareResponse(
     "Summary.FederalTax",
   ]);
 
-  const cantonalTax = firstNumber(source, [
-    "CantonalTax",
+  const exactCantonalTax = firstNumberWithMatchedPath(source, [
+    "CantonTax",
     "TaxesIncome.CantonTax",
-    "Taxes.CantonalTax",
+    "Result.CantonTax",
+    "Summary.CantonTax",
+    "CantonalTax",
     "Taxes.CantonTax",
-    "TaxAmountCantonal",
-    "TaxesCantonal",
+    "Taxes.CantonalTax",
     "Result.CantonalTax",
     "Summary.CantonalTax",
+    "TaxAmountCantonal",
+    "TaxesCantonal",
   ]);
+  const rawCantonalTax = exactCantonalTax.value;
 
-  const communalTax = firstNumber(source, [
-    "CommunalTax",
-    "MunicipalTax",
+  const exactCommunalTax = firstNumberWithMatchedPath(source, [
+    "MunicipalityTax",
     "TaxesIncome.MunicipalityTax",
+    "Result.MunicipalityTax",
+    "Summary.MunicipalityTax",
+    "MunicipalTax",
     "Taxes.CommunalTax",
     "Taxes.MunicipalityTax",
-    "TaxAmountMunicipality",
-    "TaxesMunicipality",
+    "CommunalTax",
     "Result.CommunalTax",
     "Summary.CommunalTax",
+    "TaxAmountMunicipality",
+    "TaxesMunicipality",
   ]);
+  const rawCommunalTax = exactCommunalTax.value;
 
   const churchTax = firstNumber(source, [
     "ChurchTax",
@@ -182,17 +224,61 @@ export function normalizeTaxwareResponse(
     "Summary.ChurchTax",
   ]);
 
-  const cantonalCommunalTax =
-    firstNumber(source, [
-      "CantonalCommunalTax",
+  const exactCantonalCommunalTax = firstNumberWithMatchedPath(source, [
+      "CantonMunicipalityParishTaxTotal",
       "TaxesIncome.CantonMunicipalityParishTaxTotal",
       "TaxesIncome.CantonMunicipalityTaxTotal",
+      "CantonMunicipalityTaxTotal",
+      "CantonalCommunalTax",
       "Taxes.CantonalCommunalTax",
+      "Result.CantonMunicipalityParishTaxTotal",
+      "Summary.CantonMunicipalityParishTaxTotal",
       "TaxAmountCantonalCommunal",
       "TaxesCantonalCommunal",
       "Result.CantonalCommunalTax",
       "Summary.CantonalCommunalTax",
-    ]) ?? sumNumbers(cantonalTax, communalTax, churchTax);
+    ]);
+  const rawCantonalCommunalTax =
+    exactCantonalCommunalTax.value ?? sumNumbers(rawCantonalTax, rawCommunalTax, churchTax);
+
+  const cantonAdditionalTax = firstNumber(source, [
+    "CantonAdditionalTax",
+    "TaxesIncome.CantonAdditionalTax",
+    "Taxes.CantonAdditionalTax",
+    "Result.CantonAdditionalTax",
+    "Summary.CantonAdditionalTax",
+  ]);
+
+  const municipalityAdditionalTax = firstNumber(source, [
+    "MunicipalityAdditionalTax",
+    "TaxesIncome.MunicipalityAdditionalTax",
+    "Taxes.MunicipalityAdditionalTax",
+    "Result.MunicipalityAdditionalTax",
+    "Summary.MunicipalityAdditionalTax",
+  ]);
+
+  const rateDefiningIncomeCantonal = firstNumber(source, [
+    "RatedefIncomeCanton",
+    "RateDefiningIncomeCanton",
+    "Result.RatedefIncomeCanton",
+    "Summary.RatedefIncomeCanton",
+  ]);
+
+  const partnership = (getByPath(source, "Partnership") as string | undefined) ?? null;
+  const childrenCount = firstNumber(source, [
+    "NumChildren",
+    "ChildrenCount",
+    "Family.NumChildren",
+    "Family.ChildrenCount",
+  ]);
+  const exactUnitaryTax = firstNumberWithMatchedPath(source, [
+    "CantonUnitaryTax",
+    "UnitaryTax",
+    "TaxesIncome.CantonUnitaryTax",
+    "Result.CantonUnitaryTax",
+    "Summary.CantonUnitaryTax",
+  ]);
+  const unitaryTax = exactUnitaryTax.value;
 
   const wealthTax =
     firstNumber(source, [
@@ -203,18 +289,19 @@ export function normalizeTaxwareResponse(
       "TaxesAssets.TaxTotal",
     ]);
 
-  const totalTax =
-    firstNumber(source, [
+  const exactTotalTax = firstNumberWithMatchedPath(source, [
       "TotalTax",
+      "TaxTotal",
       "TaxesIncome.TotalTax",
       "TaxesIncome.Total",
       "Taxes.TotalTax",
-      "TaxTotal",
       "TaxesTotal",
       "TaxAmountTotal",
       "Result.TotalTax",
       "Summary.TotalTax",
-    ]) ?? sumNumbers(federalTax, cantonalCommunalTax, wealthTax);
+    ]);
+  const totalTax =
+    exactTotalTax.value ?? sumNumbers(federalTax, rawCantonalCommunalTax, wealthTax);
 
   const occupationalFederalLeading = firstNumberFromPaths(source, [
     "PersonLeading.DeductionsOccupationalExpensesTotalFederal",
@@ -329,11 +416,34 @@ export function normalizeTaxwareResponse(
     taxableIncomeFederal,
     taxableAssets,
     federalTax,
-    cantonalTax,
-    communalTax,
-    cantonalCommunalTax,
+    cantonalTax: rawCantonalTax,
+    communalTax: rawCommunalTax,
+    cantonalCommunalTax: rawCantonalCommunalTax,
     wealthTax,
     totalTax,
+    cantonalBreakdown: {
+      principalCantonalTax: rawCantonalTax,
+      principalCommunalTax: rawCommunalTax,
+      unitaryTax,
+      cantonAdditionalTax,
+      municipalityAdditionalTax,
+      churchTax,
+      otherComponentsTotal: sumNumbers(cantonAdditionalTax, municipalityAdditionalTax, churchTax),
+      displayedCantonalTotal: exactTotalTax.value ?? rawCantonalCommunalTax,
+    },
+    cantonalContext: {
+      cantonRule: canton === "VD" ? "vaud-office-mapping" : "default",
+      quotientAppliedLocally: false,
+      rateDefiningIncomeCantonal,
+      cantonAdditionalTax,
+      municipalityAdditionalTax,
+      exactCantonalField: exactCantonalTax.path,
+      exactCommunalField: exactCommunalTax.path,
+      exactUnitaryField: exactUnitaryTax.path,
+      exactTotalField: exactTotalTax.path,
+      partnership,
+      childrenCount,
+    },
     deductions: {
       occupational: {
         federal: occupationalFederal,
