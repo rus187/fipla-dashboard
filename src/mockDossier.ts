@@ -6,6 +6,7 @@ export const emptyDossier: DossierClient = {
     nom: "",
     age: 0,
     etatCivil: "",
+    lieuVie: "domicile",
     npa: "",
     commune: "",
     canton: "",
@@ -18,6 +19,7 @@ export const emptyDossier: DossierClient = {
     aConjoint: false,
     ageConjoint: null,
     nombreEnfants: 0,
+    situationConjoint: "domicile",
   },
   revenus: {
     salaire: 0,
@@ -43,6 +45,7 @@ export const emptyDossier: DossierClient = {
     troisiemePilier: 0,
     fortuneLppActuelle: 0,
     immobilier: 0,
+    autresActifs: 0,
     fortuneTotale: 0,
   },
   dettes: {
@@ -51,6 +54,7 @@ export const emptyDossier: DossierClient = {
     totalDettes: 0,
   },
   charges: {
+    fraisEms: 0,
     logement: 0,
     logementIsHypothequeDeductible: false,
     primesMaladie: 0,
@@ -90,6 +94,7 @@ export const mockDossier: DossierClient = {
   nom: "Dupont",
   age: 63,
   etatCivil: "Marié",
+  lieuVie: "domicile",
   npa: "2000",
 
   commune: "Neuchâtel",
@@ -105,6 +110,7 @@ export const mockDossier: DossierClient = {
     aConjoint: true,
     ageConjoint: 61,
     nombreEnfants: 0,
+    situationConjoint: "domicile",
   },
   revenus: {
     salaire: 0,
@@ -130,7 +136,8 @@ export const mockDossier: DossierClient = {
     troisiemePilier: 95000,
     fortuneLppActuelle: 420000,
     immobilier: 900000,
-    fortuneTotale: 1465000,
+    autresActifs: 240000,
+    fortuneTotale: 1610000,
   },
   dettes: {
     hypotheques: 300000,
@@ -138,6 +145,7 @@ export const mockDossier: DossierClient = {
     totalDettes: 310000,
   },
   charges: {
+    fraisEms: 0,
     logement: 18000,
     logementIsHypothequeDeductible: false,
     primesMaladie: 9600,

@@ -3,6 +3,7 @@ export type ClientIdentite = {
   nom: string;
   age: number;
   etatCivil: string;
+  lieuVie: "domicile" | "ems";
 
   npa: string;
 
@@ -20,6 +21,7 @@ export type ClientFamille = {
   aConjoint: boolean;
   ageConjoint: number | null;
   nombreEnfants: number;
+  situationConjoint: "domicile" | "ems";
 };
 
 export type ClientRevenus = {
@@ -48,6 +50,7 @@ export type ClientFortune = {
   troisiemePilier: number;
   fortuneLppActuelle: number;
   immobilier: number;
+  autresActifs: number;
   fortuneTotale: number;
 };
 
@@ -58,6 +61,7 @@ export type ClientDettes = {
 };
 
 export type ClientCharges = {
+  fraisEms: number;
   logement: number;
   logementIsHypothequeDeductible: boolean;
   primesMaladie: number;
