@@ -33,10 +33,8 @@ import {
 } from "./lib/strategicRecommendations";
 import CollapsibleHelp from "./components/CollapsibleHelp";
 import DecisionIntro, { type AnalysisMode } from "./components/DecisionIntro";
-import DynamicRecommendationPreview from "./components/DynamicRecommendationPreview";
 import SituationEntryScreen from "./components/SituationEntryScreen";
 import { buildDynamicAdvisoryPreview } from "./lib/advisory/recommendationEngine";
-import { recommendationDemoScenarios } from "./lib/advisory/recommendationDemoScenarios";
 
 declare const process:
   | {
@@ -70,6 +68,7 @@ type ScenarioVariant = {
 };
 
 const MAX_VARIANTS = 7;
+const INTRO_SECTION_ID = "intro";
 
 function hasSeparatedFiscalManualCorrections(fiscalite: DossierClient["fiscalite"]) {
   return (
@@ -671,7 +670,7 @@ export default function App() {
   const autoSimulationStatusRef = useRef<Record<string, "running" | "done">>({});
   const activeStepViewportRef = useRef<HTMLDivElement | null>(null);
   const [activeVariantIndex, setActiveVariantIndex] = useState(0);
-  const [activeSectionId, setActiveSectionId] = useState("informations-generales");
+  const [activeSectionId, setActiveSectionId] = useState(INTRO_SECTION_ID);
   const [showConseillerPrompt, setShowConseillerPrompt] = useState(false);
   const [conseillerPasswordInput, setConseillerPasswordInput] = useState("");
   const [isConseillerAccessGranted, setIsConseillerAccessGranted] = useState(false);
@@ -684,9 +683,6 @@ export default function App() {
   const [isSimulatingVariants, setIsSimulatingVariants] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [simulationStatusMessage, setSimulationStatusMessage] = useState("");
-  const [selectedDemoScenarioId, setSelectedDemoScenarioId] = useState(
-    recommendationDemoScenarios[0]?.id ?? "single-no-children"
-  );
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode | null>(null);
   const [isDecisionHelpOpen, setIsDecisionHelpOpen] = useState(false);
   const [variants, setVariants] = useState<ScenarioVariant[]>(createInitialVariants);
@@ -867,6 +863,9 @@ export default function App() {
 
     autoSimulationStatusRef.current = {};
     setActiveVariantIndex(0);
+    setActiveSectionId(INTRO_SECTION_ID);
+    setAnalysisMode(null);
+    setIsDecisionHelpOpen(false);
     setVariants(createInitialVariants());
   };
 
@@ -2191,6 +2190,7 @@ export default function App() {
   const handleTaxSimulation = async (options?: {
     silentMissingRequirements?: boolean;
     targetVariantIds?: string[];
+    navigateToResults?: boolean;
   }) => {
     const requestedVariantIds = options?.targetVariantIds;
     const targetVariants =
@@ -2240,9 +2240,11 @@ export default function App() {
         autoSimulationStatusRef.current[variant.id] = "done";
       });
 
-      setActiveSectionId("resultats");
+      if (options?.navigateToResults) {
+        setActiveSectionId("resultats");
+      }
 
-      if (typeof window !== "undefined") {
+      if (options?.navigateToResults && typeof window !== "undefined") {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
 
@@ -2414,11 +2416,6 @@ export default function App() {
   const summaryToneIntro = getToneSummaryIntro(advisoryToneProfile);
   const recommendationToneIntro = getToneRecommendationIntro(advisoryToneProfile);
   const conclusionStrategique = getToneConclusion(advisoryToneProfile);
-  const toneProfileLabel = advisoryToneProfile
-    .replace("client ", "Client ")
-    .replace("couple", "Couple")
-    .replace("celibataire", "Celibataire");
-
   const diagnosticStrategique = `Profil dominant : ${profilsClient.join(" / ")}. Le dossier combine ${formatMontantCHF(
     totalRevenusCalcule
   )} de revenus annuels, ${formatMontantCHF(
@@ -2426,16 +2423,6 @@ export default function App() {
   )} de patrimoine brut et un impot de reference de ${formatMontantCHF(
     dossier.fiscalite.impotsEstimes || 0
   )}.`;
-
-  const enjeuxStrategiques = recommandationsStrategiques.map(
-    (recommendation) => recommendation.enjeu
-  );
-
-  const resultatAttenduStrategique =
-    recommandationsStrategiques.length > 0
-      ? recommandationsStrategiques[0].expectedResult
-      : "Une meilleure lisibilite des priorites patrimoniales et fiscales du client.";
-
   const syntheseAutomatiquePersonnalisee = `${summaryToneIntro} ${syntheseAutomatique}`;
   const recommandationFiscalePrincipale = recommandationsFiscalite[0];
   const recommandationFortunePrincipale = recommandationsFortune[0];
@@ -2600,9 +2587,15 @@ export default function App() {
       ? "Le calcul relance automatiquement toutes les variantes existantes."
       : taxSimulationMissingRequirementsMessage;
   const canExportPdf = simulatedVariantsCount > 0;
-  const activeJourneyStep =
-    journeyNavigation.find((item) => item.id === activeSectionId) ?? journeyNavigation[0];
-  const activeJourneyStepIndex = journeyNavigation.findIndex((item) => item.id === activeJourneyStep.id);
+  const activeJourneyStep = journeyNavigation.find((item) => item.id === activeSectionId) ?? null;
+  const activeJourneyStepIndex = activeJourneyStep
+    ? journeyNavigation.findIndex((item) => item.id === activeJourneyStep.id)
+    : -1;
+  const isIntroActive = activeSectionId === INTRO_SECTION_ID;
+  const activeJourneyLabel = activeJourneyStep?.label ?? "Introduction";
+  const activeJourneyProgressLabel = activeJourneyStep
+    ? `Étape ${activeJourneyStep.step} sur ${journeyNavigation.length}`
+    : "Introduction avant l’étape 1";
   const activeVariantTotalTax = getVariantTaxTotal(activeVariant);
   const activeVariantSavingsVsBase =
     typeof referenceVariantTotalTax === "number" && typeof activeVariantTotalTax === "number"
@@ -2636,13 +2629,10 @@ export default function App() {
     },
     {
       label: "Section active",
-      value: activeJourneyStep.label,
-      helper: `Étape ${activeJourneyStep.step} sur ${journeyNavigation.length}`,
+      value: activeJourneyLabel,
+      helper: activeJourneyProgressLabel,
     },
   ];
-  const selectedDemoScenario =
-    recommendationDemoScenarios.find((scenario) => scenario.id === selectedDemoScenarioId) ??
-    recommendationDemoScenarios[0];
   const dynamicAdvisoryPreview = buildDynamicAdvisoryPreview({
     age: dossier.identite.age,
     partnership: dossier.famille.aConjoint ? "Marriage" : "Single",
@@ -2679,7 +2669,6 @@ export default function App() {
     .map((item) => item.text.trim())
     .filter(Boolean);
   const dynamicPdfConclusion = dynamicAdvisoryPreview.blocks.conclusion.text.trim();
-  const demoAdvisoryPreview = buildDynamicAdvisoryPreview(selectedDemoScenario.context);
   const variantChartCandidates = variants
     .map((variant) => {
       const totalTax = getVariantTaxTotal(variant);
@@ -2994,13 +2983,13 @@ export default function App() {
             </p>
 
             <div className="workflow-command__actions">
-              <button
-                type="button"
-                onClick={() => {
-                  void handleTaxSimulation();
-                }}
-                disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
-                className="workflow-command__button"
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleTaxSimulation({ navigateToResults: true });
+                  }}
+                  disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
+                  className="workflow-command__button"
                 title={simulationPrimaryHelper}
               >
                 {simulationPrimaryButtonLabel}
@@ -3086,7 +3075,7 @@ export default function App() {
           <div className="journey-nav__title">
             Parcours guidé
             <span className="journey-nav__title-meta">
-              Étape {activeJourneyStep.step} sur {journeyNavigation.length}
+              {activeJourneyProgressLabel}
             </span>
           </div>
           <div className="journey-nav__items">
@@ -3869,11 +3858,12 @@ export default function App() {
           analysisMode={analysisMode}
           canLaunchSimulation={isGlobalTaxSimulationReady}
           dossier={dossier}
+          totalCharges={totalChargesCalcule}
           isSimulating={isSimulatingVariants}
           launchHelper={simulationPrimaryHelper}
           onDossierChange={setDossier}
           onLaunchSimulation={() => {
-            void handleTaxSimulation();
+            void handleTaxSimulation({ navigateToResults: true });
           }}
           onNpaChange={handleNpaChange}
           formatCurrency={formatMontantCHFArrondi}
@@ -7539,256 +7529,6 @@ export default function App() {
         >
           <div
             style={{
-              border: "1px solid #c7d2fe",
-              borderRadius: "16px",
-              padding: "24px",
-              marginTop: "0",
-              marginBottom: "24px",
-              background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)",
-              boxShadow: "0 8px 20px rgba(30, 41, 59, 0.05)",
-            }}
-          >
-            <h2 style={{ marginTop: 0, marginBottom: "16px", color: "#312e81", fontSize: "24px" }}>
-              Recommandations strategiques personnalisees
-            </h2>
-
-            <CollapsibleHelp title="Aide recommandations">
-              {sectionHelpTexts.recommandations.map((text) => (
-                <div key={text}>{text}</div>
-              ))}
-            </CollapsibleHelp>
-            <p style={{ marginTop: 0, marginBottom: "16px", color: "#475569", lineHeight: 1.7 }}>
-              Ton de conseil applique : <strong>{toneProfileLabel}</strong>. {recommendationToneIntro}
-            </p>
-
-            <DynamicRecommendationPreview preview={dynamicAdvisoryPreview} />
-
-            <div
-              style={{
-                border: "1px solid #cbd5e1",
-                borderRadius: "18px",
-                padding: "24px",
-                marginBottom: "24px",
-                background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-                boxShadow: "0 10px 24px rgba(15, 23, 42, 0.05)",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "16px",
-                  alignItems: "flex-start",
-                  flexWrap: "wrap",
-                  marginBottom: "18px",
-                }}
-              >
-                <div style={{ display: "grid", gap: "8px" }}>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      width: "fit-content",
-                      alignItems: "center",
-                      padding: "5px 10px",
-                      borderRadius: "999px",
-                      backgroundColor: "#fef3c7",
-                      border: "1px solid #fde68a",
-                      color: "#92400e",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Cas de démonstration
-                  </span>
-                  <h2 style={{ margin: 0, color: "#0f172a", fontSize: "24px" }}>
-                    Laboratoire de test du moteur dynamique
-                  </h2>
-                  <p style={{ margin: 0, color: "#475569", lineHeight: 1.7, maxWidth: "880px" }}>
-                    Cette zone permet de tester plusieurs situations types sans toucher au dossier
-                    en cours, aux calculs ni au PDF final. Sélectionne un scénario pour vérifier la
-                    qualité réelle des textes, les règles activées et la conclusion choisie.
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    padding: "14px 16px",
-                    borderRadius: "14px",
-                    border: "1px solid #dbeafe",
-                    backgroundColor: "#eff6ff",
-                    color: "#1e3a8a",
-                    fontWeight: 700,
-                  }}
-                >
-                  {recommendationDemoScenarios.length} scénarios disponibles
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: "12px",
-                  marginBottom: "20px",
-                }}
-              >
-                {recommendationDemoScenarios.map((scenario) => {
-                  const isSelected = scenario.id === selectedDemoScenario.id;
-
-                  return (
-                    <button
-                      key={scenario.id}
-                      type="button"
-                      onClick={() => setSelectedDemoScenarioId(scenario.id)}
-                      style={{
-                        textAlign: "left",
-                        borderRadius: "16px",
-                        border: isSelected ? "1px solid #1d4ed8" : "1px solid #e2e8f0",
-                        background: isSelected
-                          ? "linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%)"
-                          : "#ffffff",
-                        padding: "16px",
-                        cursor: "pointer",
-                        boxShadow: isSelected
-                          ? "0 10px 24px rgba(29, 78, 216, 0.14)"
-                          : "0 6px 16px rgba(15, 23, 42, 0.04)",
-                        display: "grid",
-                        gap: "10px",
-                      }}
-                    >
-                      <div style={{ color: "#0f172a", fontWeight: 800 }}>{scenario.title}</div>
-                      <div style={{ color: "#475569", lineHeight: 1.6, fontSize: "14px" }}>
-                        {scenario.summary}
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                        {scenario.tags.map((tag) => (
-                          <span
-                            key={`${scenario.id}-${tag}`}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              padding: "4px 8px",
-                              borderRadius: "999px",
-                              backgroundColor: "#f8fafc",
-                              border: "1px solid #cbd5e1",
-                              color: "#334155",
-                              fontSize: "12px",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <DynamicRecommendationPreview
-                preview={demoAdvisoryPreview}
-                eyebrow="Mode démo"
-                title={`Cas test : ${selectedDemoScenario.title}`}
-                description={selectedDemoScenario.summary}
-              />
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                gap: "16px",
-              }}
-            >
-              <div style={subCardStyle}>
-                <h3 style={{ marginTop: 0, marginBottom: "10px", color: "#1e293b" }}>Diagnostic</h3>
-                <div style={{ display: "grid", gap: "10px" }}>
-                  <p style={{ margin: 0, color: "#334155", lineHeight: 1.7 }}>
-                    {diagnosticStrategique}
-                  </p>
-                  {recommandationsStrategiques[0] ? (
-                    <div
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: "12px",
-                        backgroundColor: "#ffffff",
-                        border: "1px solid #dbeafe",
-                        color: "#334155",
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {recommandationsStrategiques[0].diagnostic}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div style={subCardStyle}>
-                <h3 style={{ marginTop: 0, marginBottom: "10px", color: "#1e293b" }}>Enjeux</h3>
-                <div style={{ display: "grid", gap: "8px", color: "#334155", lineHeight: 1.6 }}>
-                  {[...new Set(enjeuxStrategiques)].map((enjeu, index) => (
-                    <div key={index}>• {enjeu}</div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={subCardStyle}>
-                <h3 style={{ marginTop: 0, marginBottom: "10px", color: "#1e293b" }}>
-                  Orientation du conseil
-                </h3>
-                <div style={{ display: "grid", gap: "10px", color: "#334155", lineHeight: 1.6 }}>
-                  {sectionsAutomatiques.map((section) => (
-                    <div
-                      key={section.titre}
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: "12px",
-                        border: "1px solid #e2e8f0",
-                        backgroundColor: "#ffffff",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                          alignItems: "center",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        <strong style={{ color: "#0f172a" }}>{section.titre}</strong>
-                        <span
-                          style={{
-                            fontSize: "12px",
-                            fontWeight: "bold",
-                            color: "#1d4ed8",
-                          }}
-                        >
-                          Conseil premium
-                        </span>
-                      </div>
-                      <div>{section.transformation}</div>
-                      <div style={{ marginTop: "8px", fontSize: "13px", color: "#475569" }}>
-                        Resultat attendu : {section.resultat}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={subCardStyle}>
-                <h3 style={{ marginTop: 0, marginBottom: "10px", color: "#1e293b" }}>
-                  Resultat attendu
-                </h3>
-                <p style={{ margin: 0, color: "#334155", lineHeight: 1.7 }}>
-                  {resultatAttenduStrategique}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
               border: "1px solid #f5d48a",
               borderRadius: "16px",
               padding: "24px",
@@ -7853,7 +7593,9 @@ export default function App() {
               {conclusionStrategique}
             </p>
           </div>
-          {sectionsAutomatiques.map((section, index) => (
+          {sectionsAutomatiques
+            .filter((section) => section.titre === "Fiscalité" || section.titre === "Retraite")
+            .map((section, index) => (
             <ReportSection
               key={index}
               titre={section.titre}
@@ -7863,6 +7605,41 @@ export default function App() {
               resultat={section.resultat}
             />
           ))}
+          <ReportSection
+            titre="Recommandations"
+            situation={syntheseAutomatiquePersonnalisee}
+            analyse={recommandationsStrategiques.map((recommendation) => recommendation.diagnostic).join(" ")}
+            transformation={recommandationsStrategiques
+              .map((recommendation) => recommendation.recommendation)
+              .join(" ")}
+            resultat={recommandationsStrategiques.map((recommendation) => recommendation.expectedResult).join(" ")}
+          />
+          <div
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: "16px",
+              padding: "24px",
+              marginTop: "24px",
+              backgroundColor: "#ffffff",
+              boxShadow: "0 6px 18px rgba(0, 0, 0, 0.06)",
+              textAlign: "left",
+            }}
+          >
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: "18px",
+                fontSize: "24px",
+                color: "#0f172a",
+                textAlign: "left",
+              }}
+            >
+              Conclusion
+            </h2>
+            <p style={{ margin: 0, color: "#475569", lineHeight: 1.8 }}>
+              {dynamicPdfConclusion || conclusionStrategique}
+            </p>
+          </div>
         </GuidedSection>
         )}
         </div>
@@ -7871,17 +7648,19 @@ export default function App() {
           <div className="sticky-sim-footer__meta">
             <div className="sticky-sim-footer__eyebrow">Section affichée</div>
             <div className="sticky-sim-footer__title">
-              {activeJourneyStep.label}
+              {activeJourneyLabel}
             </div>
             <div className="sticky-sim-footer__helper">
-              Étape {activeJourneyStep.step} sur {journeyNavigation.length}
+              {activeJourneyProgressLabel}
             </div>
           </div>
 
           <div className="sticky-sim-footer__nav">
             <button
               type="button"
-              onClick={() => handleJourneyNavigation(journeyNavigation[Math.max(0, activeJourneyStepIndex - 1)].id)}
+              onClick={() =>
+                handleJourneyNavigation(journeyNavigation[Math.max(0, activeJourneyStepIndex - 1)].id)
+              }
               disabled={activeJourneyStepIndex <= 0}
               className="sticky-sim-footer__secondary"
             >
@@ -7890,11 +7669,15 @@ export default function App() {
             <button
               type="button"
               onClick={() =>
-                handleJourneyNavigation(
-                  journeyNavigation[Math.min(journeyNavigation.length - 1, activeJourneyStepIndex + 1)].id
-                )
+                isIntroActive
+                  ? handleJourneyNavigation(journeyNavigation[0].id)
+                  : handleJourneyNavigation(
+                      journeyNavigation[Math.min(journeyNavigation.length - 1, activeJourneyStepIndex + 1)].id
+                    )
               }
-              disabled={activeJourneyStepIndex >= journeyNavigation.length - 1}
+              disabled={
+                isIntroActive ? !analysisMode : activeJourneyStepIndex >= journeyNavigation.length - 1
+              }
               className="sticky-sim-footer__secondary"
             >
               Étape suivante
@@ -7905,7 +7688,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                void handleTaxSimulation();
+                void handleTaxSimulation({ navigateToResults: true });
               }}
               disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
               className="sticky-sim-footer__primary"
