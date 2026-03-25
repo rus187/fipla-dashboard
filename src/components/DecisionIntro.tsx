@@ -53,42 +53,6 @@ export default function DecisionIntro({
             </p>
           </div>
 
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifySelf: "center",
-              gap: "10px",
-              padding: "10px 16px",
-              borderRadius: "999px",
-              border: "1px solid #dbeafe",
-              background: "#f8fbff",
-              color: "#36516e",
-              fontSize: "14px",
-              fontWeight: 600,
-              lineHeight: 1.5,
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "22px",
-                height: "22px",
-                borderRadius: "999px",
-                background: "#e0f2fe",
-                color: "#0f766e",
-                fontSize: "13px",
-                fontWeight: 800,
-              }}
-            >
-              ✓
-            </span>
-            <span>Inclut aussi les calculs liés à la réforme de la valeur locative</span>
-          </div>
-
           <div className="decision-screen__cards" role="list" aria-label="Choix d'analyse">
             {decisionCards.map((card) => {
               const isSelected = analysisMode === card.id;

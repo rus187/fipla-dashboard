@@ -53,10 +53,13 @@ type ZipFiscalRow = {
   fiscalCanton?: string | null;
 };
 
+type VariantTaxRegime = "current" | "valeur_locative_reform";
+
 type ScenarioVariant = {
   id: string;
   label: string;
   customLabel: string;
+  taxRegime: VariantTaxRegime;
   dossier: DossierClient;
   taxResult: any;
   taxResultSansOptimisation: any;
@@ -69,6 +72,10 @@ type ScenarioVariant = {
 
 const MAX_VARIANTS = 7;
 const INTRO_SECTION_ID = "intro";
+const VARIANT_TAX_REGIME_LABELS: Record<VariantTaxRegime, string> = {
+  current: "Situation actuelle",
+  valeur_locative_reform: "Réforme valeur locative",
+};
 
 function hasSeparatedFiscalManualCorrections(fiscalite: DossierClient["fiscalite"]) {
   return (
@@ -256,9 +263,21 @@ function cloneVariantStateFromBase(
   targetVariant: ScenarioVariant,
   keepLinkToVariant1: boolean
 ): ScenarioVariant {
+  const clonedDossier = cloneDossier(baseVariant.dossier);
+  const isReformVariant = targetVariant.taxRegime === "valeur_locative_reform";
+  const regimeFiscal: DossierClient["immobilier"]["regimeFiscal"] = isReformVariant
+    ? "reforme"
+    : "actuel";
+
+  clonedDossier.immobilier = {
+    ...clonedDossier.immobilier,
+    regimeFiscal,
+  };
+
   return {
     ...targetVariant,
-    dossier: cloneDossier(baseVariant.dossier),
+    taxRegime: targetVariant.taxRegime,
+    dossier: clonedDossier,
     taxResult: cloneValue(baseVariant.taxResult),
     taxResultSansOptimisation: cloneValue(baseVariant.taxResultSansOptimisation),
     taxResultAvecDeductionsEstime: cloneValue(baseVariant.taxResultAvecDeductionsEstime),
@@ -276,6 +295,7 @@ function createEmptyVariant(index: number): ScenarioVariant {
     id: `variant-${index + 1}`,
     label: index === 0 ? "Base" : `Variante ${index}`,
     customLabel: "",
+    taxRegime: "current",
     dossier: cloneDossier(emptyDossier),
     taxResult: null,
     taxResultSansOptimisation: null,
@@ -306,39 +326,76 @@ function isDossierReadyForTaxSimulation(dossier: DossierClient) {
   return location.zip.length > 0 && location.city.length > 0;
 }
 
-function getSimulationImmobilierDelta(dossier: DossierClient) {
+function getValeurLocativeReformProfile(
+  dossier: DossierClient,
+  options?: {
+    includeValeurLocative?: boolean;
+  }
+) {
   const habitationPropreActive = Boolean(dossier.immobilier.proprietaireOccupant);
-  const regimeImmobilierActuel = dossier.immobilier.regimeFiscal === "actuel";
+  const shouldApply =
+    Boolean(options?.includeValeurLocative) &&
+    habitationPropreActive &&
+    dossier.immobilier.regimeFiscal === "reforme";
 
-  const valeurLocativeActuelleHabitation = habitationPropreActive
+  const valeurLocativeRetiree = shouldApply
     ? dossier.immobilier.valeurLocativeHabitationPropre || 0
     : 0;
-
-  const interetsHabitationActuels = habitationPropreActive
+  const fraisEntretienRetires = shouldApply
+    ? dossier.immobilier.fraisEntretienHabitationPropre || 0
+    : 0;
+  const interetsPassifsRetires = shouldApply
     ? dossier.immobilier.interetsHypothecairesHabitationPropre || 0
     : 0;
 
-  const fraisHabitationActuels = habitationPropreActive
-    ? dossier.immobilier.fraisEntretienHabitationPropre || 0
-    : 0;
-
-  const variationValeurLocativeSimulation = regimeImmobilierActuel
-    ? 0
-    : -valeurLocativeActuelleHabitation;
-
-  const variationInteretsHypothecairesSimulation = regimeImmobilierActuel
-    ? 0
-    : interetsHabitationActuels;
-
-  const variationFraisEntretienSimulation = regimeImmobilierActuel
-    ? 0
-    : fraisHabitationActuels;
-
-  return (
-    variationValeurLocativeSimulation +
-    variationInteretsHypothecairesSimulation +
-    variationFraisEntretienSimulation
+  // V1: aucun cas spécifique de conservation d'intérêts du logement occupé n'est modélisé.
+  const interetsPassifsConserves = 0;
+  const interetsPassifsNetRetires = Math.max(
+    0,
+    interetsPassifsRetires - interetsPassifsConserves
   );
+  const taxableIncomeDelta =
+    -valeurLocativeRetiree + fraisEntretienRetires + interetsPassifsNetRetires;
+
+  return {
+    shouldApply,
+    valeurLocativeRetiree,
+    fraisEntretienRetires,
+    interetsPassifsRetires: interetsPassifsNetRetires,
+    interetsPassifsConserves,
+    taxableIncomeDelta,
+  };
+}
+
+function clearVariantSimulationOutputs(variant: ScenarioVariant): ScenarioVariant {
+  return {
+    ...variant,
+    taxResult: null,
+    taxResultSansOptimisation: null,
+    taxResultAvecDeductionsEstime: null,
+    taxResultAjustementManuel: null,
+    taxResultCorrectionFiscaleManuelle: null,
+    comparisonTaxResults: {},
+  };
+}
+
+function applyVariantTaxRegime(variant: ScenarioVariant, nextTaxRegime: VariantTaxRegime) {
+  const regimeFiscal: DossierClient["immobilier"]["regimeFiscal"] =
+    nextTaxRegime === "valeur_locative_reform"
+    ? "reforme"
+    : "actuel";
+
+  return {
+    ...variant,
+    taxRegime: nextTaxRegime,
+    dossier: {
+      ...variant.dossier,
+      immobilier: {
+        ...variant.dossier.immobilier,
+        regimeFiscal,
+      },
+    },
+  };
 }
 
 function normalizeVariantLabels(variants: ScenarioVariant[]) {
@@ -730,17 +787,37 @@ export default function App() {
     );
   };
 
+  const handleActiveVariantTaxRegimeChange = (nextTaxRegime: VariantTaxRegime) => {
+    if (activeVariant.taxRegime === nextTaxRegime) {
+      return;
+    }
+
+    delete autoSimulationStatusRef.current[activeVariant.id];
+
+    setVariants((current) =>
+      current.map((variant, index) =>
+        index === activeVariantIndex
+          ? clearVariantSimulationOutputs(applyVariantTaxRegime(variant, nextTaxRegime))
+          : variant
+      )
+    );
+  };
+
   const handleAnalysisModeSelection = (mode: AnalysisMode) => {
     setAnalysisMode(mode);
 
     if (mode === "current" || mode === "projected") {
-      setDossier({
-        ...dossier,
-        immobilier: {
-          ...dossier.immobilier,
-          regimeFiscal: mode === "current" ? "actuel" : "reforme",
-        },
-      });
+      const nextTaxRegime: VariantTaxRegime =
+        mode === "current" ? "current" : "valeur_locative_reform";
+
+      delete autoSimulationStatusRef.current[activeVariant.id];
+      setVariants((current) =>
+        current.map((variant, index) =>
+          index === activeVariantIndex
+            ? clearVariantSimulationOutputs(applyVariantTaxRegime(variant, nextTaxRegime))
+            : variant
+        )
+      );
       return;
     }
 
@@ -751,28 +828,51 @@ export default function App() {
       const hasReformedVariant = current.some(
         (variant, index) => index > 0 && variant.dossier.immobilier.regimeFiscal === "reforme"
       );
+      const reformVariantLabel = "Situation projetée";
 
       nextVariants[0] = {
-        ...baseVariant,
-        dossier: {
-          ...baseDossier,
-          immobilier: {
-            ...baseDossier.immobilier,
-            regimeFiscal: "actuel",
+        ...applyVariantTaxRegime(
+          {
+            ...baseVariant,
+            dossier: {
+              ...baseDossier,
+            },
           },
-        },
+          "current"
+        ),
         customLabel: baseVariant.customLabel.trim() || "Situation actuelle",
         isLinkedToVariant1: false,
       };
+
+      for (let index = 1; index < nextVariants.length; index += 1) {
+        const variant = nextVariants[index];
+
+        if (variant.dossier.immobilier.regimeFiscal !== "reforme") {
+          continue;
+        }
+
+        nextVariants[index] = {
+          ...clearVariantSimulationOutputs(
+            applyVariantTaxRegime(variant, "valeur_locative_reform")
+          ),
+          customLabel:
+            variant.customLabel.trim() === "" || variant.customLabel.trim() === "Situation projetée"
+              ? reformVariantLabel
+              : variant.customLabel,
+        };
+      }
 
       if (!hasReformedVariant && current.length < MAX_VARIANTS) {
         const compareVariant = cloneVariantStateFromBase(nextVariants[0], createEmptyVariant(1), false);
         const compareVariantDossier = cloneDossier(compareVariant.dossier);
 
         nextVariants.push({
-          ...compareVariant,
+          ...clearVariantSimulationOutputs(
+            applyVariantTaxRegime(compareVariant, "valeur_locative_reform")
+          ),
           id: `variant-compare-${Date.now()}`,
-          customLabel: "Situation projetée",
+          customLabel: reformVariantLabel,
+          taxRegime: "valeur_locative_reform",
           dossier: {
             ...compareVariantDossier,
             immobilier: {
@@ -801,6 +901,7 @@ export default function App() {
         ...cloneVariantStateFromBase(sourceVariant, createEmptyVariant(nextIndex), false),
         id: `variant-${Date.now()}-${nextIndex}`,
         customLabel: `Copie de ${getVariantUserLabel(sourceVariant) || sourceVariant.label}`,
+        taxRegime: sourceVariant.taxRegime,
         isLinkedToVariant1: false,
       };
 
@@ -895,7 +996,35 @@ export default function App() {
     setConseillerAccessError("Acces refuse");
   };
 
-  console.log("DOSSIER ACTIF =", dossier, "VARIANTE =", getVariantDisplayLabel(activeVariant));
+  console.log(
+    "DOSSIER ACTIF =",
+    dossier,
+    "VARIANTE =",
+    getVariantDisplayLabel(activeVariant),
+    "taxRegime =",
+    activeVariant.taxRegime
+  );
+
+  useEffect(() => {
+    console.info("[Réforme VL] variante active", {
+      activeVariantId: activeVariant.id,
+      activeVariantName: getVariantDisplayLabel(activeVariant),
+      taxRegime: activeVariant.taxRegime,
+    });
+    console.info(
+      "[Réforme VL] variante active detail",
+      JSON.stringify({
+        activeVariantId: activeVariant.id,
+        activeVariantName: getVariantDisplayLabel(activeVariant),
+        taxRegime: activeVariant.taxRegime,
+      })
+    );
+  }, [
+    activeVariant.id,
+    activeVariant.customLabel,
+    activeVariant.label,
+    activeVariant.taxRegime,
+  ]);
 
   const totalRevenusCalcule =
     (dossier.revenus.salaire || 0) +
@@ -906,6 +1035,7 @@ export default function App() {
   const regimeImmobilierActuel = dossier.immobilier.regimeFiscal === "actuel";
   const regimeImmobilierLabel =
     dossier.immobilier.regimeFiscal === "actuel" ? "Régime actuel" : "Régime réformé";
+  const activeVariantTaxRegimeLabel = VARIANT_TAX_REGIME_LABELS[activeVariant.taxRegime];
 
   const habitationPropreActive = Boolean(dossier.immobilier.proprietaireOccupant);
   const biensRendementActifs = Boolean(dossier.immobilier.possedeBienRendement);
@@ -1556,9 +1686,33 @@ export default function App() {
       id: variant.id,
       customLabel: getVariantUserLabel(variant),
       label: getVariantDisplayLabel(variant),
+      taxRegime: variant.taxRegime,
       totalTax: getVariantTaxTotal(variant),
     };
   });
+
+  useEffect(() => {
+    console.info(
+      "[Réforme VL] rendu cartes resultats",
+      variantTotals.map((variant) => ({
+        variantId: variant.id,
+        variantName: variant.label,
+        taxRegime: variant.taxRegime,
+        totalTaxAffiche: variant.totalTax,
+      }))
+    );
+    console.info(
+      "[Réforme VL] rendu cartes resultats detail",
+      JSON.stringify(
+        variantTotals.map((variant) => ({
+          variantId: variant.id,
+          variantName: variant.label,
+          taxRegime: variant.taxRegime,
+          totalTaxAffiche: variant.totalTax,
+        }))
+      )
+    );
+  }, [variantTotals]);
 
   const bestVariant = variantTotals.reduce<{
     id: string;
@@ -2069,9 +2223,26 @@ export default function App() {
   };
 
   const runTaxSimulationForVariant = async (variant: ScenarioVariant) => {
+    console.info("[Réforme VL] calcul de variante", {
+      id: variant.id,
+      nom: getVariantDisplayLabel(variant),
+      taxRegime: variant.taxRegime,
+    });
+    console.info(
+      "[Réforme VL] calcul de variante detail",
+      JSON.stringify({
+        id: variant.id,
+        nom: getVariantDisplayLabel(variant),
+        taxRegime: variant.taxRegime,
+      })
+    );
+
     const dossierForSimulation = variant.dossier;
     const comparisonScenarios = getComparisonScenarios(dossierForSimulation);
-    const immobilierSimulationDelta = getSimulationImmobilierDelta(dossierForSimulation);
+    const reformProfile = getValeurLocativeReformProfile(dossierForSimulation, {
+      includeValeurLocative: variant.taxRegime === "valeur_locative_reform",
+    });
+    const immobilierSimulationDelta = reformProfile.taxableIncomeDelta;
 
     const comparisonScenarioEntries = await Promise.all(
       comparisonScenarios.map(async (scenario) => {
@@ -2145,6 +2316,13 @@ export default function App() {
             fortuneResult,
             debug: {
               source: "taxware-direct-bases",
+              valeurLocativeReform: {
+                applied: reformProfile.shouldApply,
+                valeurLocativeRetiree: reformProfile.valeurLocativeRetiree,
+                fraisEntretienRetires: reformProfile.fraisEntretienRetires,
+                interetsPassifsRetires: reformProfile.interetsPassifsRetires,
+                interetsPassifsConserves: reformProfile.interetsPassifsConserves,
+              },
               targets: {
                 taxableIncomeFederal,
                 taxableIncomeCantonal,
@@ -2175,6 +2353,52 @@ export default function App() {
     const baselineResult = comparisonTaxResults.reference;
     const mixedResult = comparisonTaxResults.mixed;
     const ajustementResult = comparisonTaxResults["manual-adjustment"];
+    const displayedResult =
+      (dossierForSimulation.fiscalite.ajustementManuelRevenu || 0) !== 0 && ajustementResult?.normalized
+        ? ajustementResult
+        : mixedResult;
+
+    if (reformProfile.shouldApply) {
+      console.info("[Réforme VL] deltas appliqués", {
+        id: variant.id,
+        variante: getVariantDisplayLabel(variant),
+        taxRegime: variant.taxRegime,
+        valeurLocativeRetiree: reformProfile.valeurLocativeRetiree,
+        entretienRetire: reformProfile.fraisEntretienRetires,
+        interetsPassifsRetires: reformProfile.interetsPassifsRetires,
+        revenuImposableAvant:
+          dossierForSimulation.fiscalite.revenuImposable ??
+          dossierForSimulation.fiscalite.revenuImposableIfd ??
+          null,
+        nouveauRevenuImposable:
+          displayedResult?.normalized?.taxableIncomeCantonal ??
+          baselineResult?.normalized?.taxableIncomeCantonal ??
+          null,
+        impotTotalAvant: baselineResult?.normalized?.totalTax ?? null,
+        nouvelImpotTotal:
+          displayedResult?.normalized?.totalTax ?? baselineResult?.normalized?.totalTax ?? null,
+      });
+    } else {
+      console.info("[Réforme VL] calcul sans réforme", {
+        id: variant.id,
+        variante: getVariantDisplayLabel(variant),
+        taxRegime: variant.taxRegime,
+        valeurLocativeRetiree: 0,
+        entretienRetire: 0,
+        interetsPassifsRetires: 0,
+        revenuImposableAvant:
+          dossierForSimulation.fiscalite.revenuImposable ??
+          dossierForSimulation.fiscalite.revenuImposableIfd ??
+          null,
+        nouveauRevenuImposable:
+          displayedResult?.normalized?.taxableIncomeCantonal ??
+          baselineResult?.normalized?.taxableIncomeCantonal ??
+          null,
+        impotTotalAvant: baselineResult?.normalized?.totalTax ?? null,
+        nouvelImpotTotal:
+          displayedResult?.normalized?.totalTax ?? baselineResult?.normalized?.totalTax ?? null,
+      });
+    }
 
     return {
       ...variant,
@@ -2225,6 +2449,25 @@ export default function App() {
     );
 
     try {
+      console.info(
+        "[Réforme VL] variantes au moment du calcul",
+        targetVariants.map((variant) => ({
+          id: variant.id,
+          nom: getVariantDisplayLabel(variant),
+          taxRegime: variant.taxRegime,
+        }))
+      );
+      console.info(
+        "[Réforme VL] variantes au moment du calcul detail",
+        JSON.stringify(
+          targetVariants.map((variant) => ({
+            id: variant.id,
+            nom: getVariantDisplayLabel(variant),
+            taxRegime: variant.taxRegime,
+          }))
+        )
+      );
+
       const simulatedVariants = await Promise.all(
         targetVariants.map((variant) => runTaxSimulationForVariant(variant))
       );
@@ -3108,7 +3351,8 @@ export default function App() {
               <div className="variant-board__summary-label">Variante active</div>
               <div className="variant-board__summary-value">{getVariantDisplayLabel(activeVariant)}</div>
               <div className="variant-board__summary-helper">
-                Régime {regimeImmobilierLabel.toLowerCase()} et données propres à cette variante.
+                Régime sélectionné : {activeVariantTaxRegimeLabel}. Le recalcul reste limité à cette
+                variante.
               </div>
             </div>
             <div className="variant-board__summary-card">
@@ -3148,6 +3392,10 @@ export default function App() {
                 <div
                   key={`${variant.id}-tab`}
                   className="variant-board__tab-wrapper"
+                  style={{
+                    display: "grid",
+                    gap: index === activeVariantIndex ? "8px" : "0",
+                  }}
                 >
                 <div
                   key={variant.id}
@@ -3225,6 +3473,44 @@ export default function App() {
                     </button>
                   )}
                 </div>
+                {index === activeVariantIndex ? (
+                  <div style={{ minWidth: "240px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        marginBottom: "6px",
+                        color: "#334155",
+                        fontSize: "12px",
+                        fontWeight: 800,
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Régime fiscal
+                    </label>
+                    <select
+                      value={variant.taxRegime}
+                      onChange={(event) =>
+                        handleActiveVariantTaxRegimeChange(event.target.value as VariantTaxRegime)
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        border: "1px solid #93c5fd",
+                        fontSize: "14px",
+                        fontWeight: 700,
+                        color: "#0f172a",
+                        backgroundColor: "#ffffff",
+                        boxSizing: "border-box",
+                      }}
+                      aria-label={`Régime fiscal de ${getVariantDisplayLabel(variant)}`}
+                    >
+                      <option value="current">Situation actuelle</option>
+                      <option value="valeur_locative_reform">Réforme valeur locative</option>
+                    </select>
+                  </div>
+                ) : null}
                 </div>
               ))}
 

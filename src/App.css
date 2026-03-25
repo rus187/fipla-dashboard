@@ -92,6 +92,25 @@
   line-height: 1.7;
 }
 
+.decision-screen__checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  gap: 10px;
+  color: #36516e;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.decision-screen__checkbox-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #36516e;
+}
+
 .decision-screen__cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
