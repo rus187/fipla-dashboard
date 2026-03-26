@@ -2991,6 +2991,11 @@ export default function App() {
       color: "#2f7d5a",
     },
   ].filter((item) => item.value > 0);
+  const pdfLiquiditesDebut = dossier.fortune.liquidites || 0;
+  const pdfRevenusAnnuels = totalRevenusCalcule;
+  const pdfChargesAnnuelles = totalChargesCalcule;
+  const pdfLiquiditesFin = pdfLiquiditesDebut + pdfRevenusAnnuels - pdfChargesAnnuelles;
+  const pdfDeltaLiquidites = pdfLiquiditesFin - pdfLiquiditesDebut;
   const pdfPayload = {
     title: "FIPLA Dashboard",
     clientName:
@@ -3097,6 +3102,13 @@ export default function App() {
         value: formatMontantCHF(bestVariantDisplayedTaxResult?.normalized?.totalTax || 0),
       },
     ],
+    liquidityEvolution: {
+      liquiditesDebut: formatMontantCHF(pdfLiquiditesDebut),
+      revenusAnnuels: formatMontantCHF(pdfRevenusAnnuels),
+      chargesAnnuelles: formatMontantCHF(pdfChargesAnnuelles),
+      liquiditesFin: formatMontantCHF(pdfLiquiditesFin),
+      delta: formatMontantCHFSigne(pdfDeltaLiquidites),
+    },
     variants: variants.map((variant) => {
       const totalTax = getVariantTaxTotal(variant);
       const differenceVsBase =
@@ -5429,6 +5441,18 @@ export default function App() {
                   style={inputStyle}
                 />
                 <span style={helperStyle}>Saisie manuelle</span>
+              </div>
+              <div style={chargeFieldStackStyle}>
+                <label style={labelStyle}>Intérêts hypothécaires (habitation propre)</label>
+                <input
+                  type="text"
+                  value={formatMontantCHFArrondi(interetsHabitationBudgetaires)}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+                <span style={helperStyle}>
+                  Repris automatiquement du bloc immobilier et inclus dans le total des charges.
+                </span>
               </div>
               <div style={chargeFooterPlaceholderStyle} />
             </div>

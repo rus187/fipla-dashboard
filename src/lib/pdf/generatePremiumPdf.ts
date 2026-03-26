@@ -39,6 +39,13 @@ export type PremiumPdfPayload = {
   };
   taxDetails: PdfField[];
   recommendedTaxDetails?: PdfField[];
+  liquidityEvolution: {
+    liquiditesDebut: string;
+    revenusAnnuels: string;
+    chargesAnnuelles: string;
+    liquiditesFin: string;
+    delta: string;
+  };
   variants: PdfVariantComparison[];
   realEstate: {
     currentRegime: string;
@@ -1157,6 +1164,63 @@ function drawMetricBand(doc: jsPDF, y: number, metrics: PdfField[]) {
   return boxHeight;
 }
 
+function drawLiquidityMetricBand(
+  doc: jsPDF,
+  y: number,
+  metrics: Array<PdfField & { emphasize?: boolean }>
+) {
+  const gap = 10;
+  const boxWidth = (CONTENT_WIDTH - gap * (metrics.length - 1)) / metrics.length;
+  const preparedMetrics = metrics.map((metric) => {
+    const labelLines = splitText(doc, metric.label, boxWidth - 24);
+    doc.setFont("helvetica", "bold");
+    const fittedValue = fitTextBlock(doc, metric.value, boxWidth - 24, {
+      maxFontSize: 15.5,
+      minFontSize: 10.5,
+      maxLines: 3,
+    });
+
+    return { metric, labelLines, fittedValue };
+  });
+  const maxLabelLines = Math.max(...preparedMetrics.map((metric) => metric.labelLines.length), 1);
+  const maxValueLines = Math.max(...preparedMetrics.map((metric) => metric.fittedValue.lines.length), 1);
+  const labelY = y + 20;
+  const valueY = labelY + maxLabelLines * 12 + 14;
+  const boxHeight = Math.max(110, valueY - y + maxValueLines * 16 + 18);
+
+  preparedMetrics.forEach(({ metric, labelLines, fittedValue }, index) => {
+    const x = MARGIN_X + index * (boxWidth + gap);
+    const fill = metric.emphasize ? DARK : SOFT;
+    const valueColor = metric.emphasize ? WHITE : DARK;
+    const labelColor = metric.emphasize ? ACCENT : MUTED;
+
+    drawRect(doc, x, y, boxWidth, boxHeight, fill);
+    setDraw(doc, LINE);
+    doc.roundedRect(x, y, boxWidth, boxHeight, 12, 12);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    setText(doc, labelColor);
+    drawTextLines(
+      doc,
+      labelLines.map((line) => normalizePdfText(line).toUpperCase()),
+      x + 12,
+      labelY,
+      { lineHeight: 12, maxWidth: boxWidth - 24 }
+    );
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fittedValue.fontSize);
+    setText(doc, valueColor);
+    drawTextLines(doc, fittedValue.lines, x + 12, valueY, {
+      lineHeight: 16,
+      maxWidth: boxWidth - 24,
+    });
+  });
+
+  return boxHeight;
+}
+
 function drawBulletPanel(
   doc: jsPDF,
   x: number,
@@ -1424,6 +1488,122 @@ function getVariantComparisonChartData(payload: PremiumPdfPayload) {
     }));
 }
 
+function drawLiquidityWaterfallChart(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  values: {
+    liquiditesDebut: number;
+    revenusAnnuels: number;
+    chargesAnnuelles: number;
+    liquiditesFin: number;
+  }
+) {
+  drawChartPanel(
+    doc,
+    x,
+    y,
+    width,
+    height,
+    "Évolution des liquidités",
+    "Lecture des flux financiers annuels."
+  );
+
+  const chartTop = y + 74;
+  const chartBottom = y + height - 52;
+  const chartLeft = x + 32;
+  const chartRight = x + width - 32;
+  const innerWidth = chartRight - chartLeft;
+  const baselineY = chartBottom;
+  const steps = [
+    {
+      label: "Début",
+      value: values.liquiditesDebut,
+      start: 0,
+      end: values.liquiditesDebut,
+      color: "#94a3b8",
+    },
+    {
+      label: "Revenus",
+      value: values.revenusAnnuels,
+      start: values.liquiditesDebut,
+      end: values.liquiditesDebut + values.revenusAnnuels,
+      color: "#2f7d5a",
+    },
+    {
+      label: "Charges",
+      value: -values.chargesAnnuelles,
+      start: values.liquiditesDebut + values.revenusAnnuels,
+      end: values.liquiditesFin,
+      color: "#c85b5b",
+    },
+    {
+      label: "Fin",
+      value: values.liquiditesFin,
+      start: 0,
+      end: values.liquiditesFin,
+      color: "#1f4c7a",
+    },
+  ];
+  const maxValue = Math.max(
+    values.liquiditesDebut,
+    values.liquiditesDebut + values.revenusAnnuels,
+    values.liquiditesFin,
+    1
+  );
+  const chartHeight = Math.max(10, chartBottom - chartTop - 8);
+  const barWidth = Math.min(74, innerWidth / 6);
+  const gap = (innerWidth - barWidth * steps.length) / Math.max(1, steps.length - 1);
+
+  setDraw(doc, LINE);
+  doc.setLineWidth(1);
+  doc.line(chartLeft, baselineY, chartRight, baselineY);
+
+  steps.forEach((step, index) => {
+    const normalizedStart = Math.max(0, step.start);
+    const normalizedEnd = Math.max(0, step.end);
+    const topValue = Math.max(normalizedStart, normalizedEnd);
+    const bottomValue = Math.min(normalizedStart, normalizedEnd);
+    const topY = baselineY - (topValue / maxValue) * chartHeight;
+    const bottomY = baselineY - (bottomValue / maxValue) * chartHeight;
+    const barHeight = Math.max(12, bottomY - topY);
+    const barX = chartLeft + index * (barWidth + gap);
+
+    drawRect(doc, barX, topY, barWidth, barHeight, step.color);
+
+    if (index > 0) {
+      const previous = steps[index - 1];
+      const previousEnd = Math.max(0, previous.end);
+      const currentStart = Math.max(0, step.start);
+      const connectorY = baselineY - (previousEnd / maxValue) * chartHeight;
+      const nextConnectorY = baselineY - (currentStart / maxValue) * chartHeight;
+
+      setDraw(doc, "#cbd5e1");
+      doc.setLineWidth(1);
+      doc.line(barX - gap + barWidth, connectorY, barX, nextConnectorY);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    setText(doc, DARK);
+    doc.text(
+      `${normalizeSwissNumber(String(Math.round(Math.abs(step.value))))} CHF`,
+      barX + barWidth / 2,
+      topY - 8,
+      { align: "center" }
+    );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    setText(doc, MUTED);
+    doc.text(normalizePdfText(step.label), barX + barWidth / 2, baselineY + 18, {
+      align: "center",
+    });
+  });
+}
+
 function getTaxBreakdownChartData(payload: PremiumPdfPayload) {
   const providedData = (payload.charts?.taxBreakdown ?? []).filter((item) => item.value > 0);
 
@@ -1648,6 +1828,7 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const sectionPages = {
     executiveSummary: 0,
+    liquidityEvolution: 0,
     currentSituation: 0,
     taxDetails: 0,
     variantComparison: 0,
@@ -1729,8 +1910,19 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
   const gainWidth = 192;
   const gainCardGap = 18;
   const recommendationWidth = CONTENT_WIDTH - gainWidth - 72;
-  const recommendationLines = splitText(doc, payload.summary.recommendation, recommendationWidth);
-  const recommendationHeight = recommendationLines.length * 17;
+  const recommendationLineHeight = 17;
+  const recommendationParagraphGap = 10;
+  const recommendationParagraphs = splitTextByParagraphs(
+    doc,
+    payload.summary.recommendation,
+    recommendationWidth
+  );
+  const recommendationHeight =
+    recommendationParagraphs.reduce(
+      (total, paragraph) => total + paragraph.length * recommendationLineHeight,
+      0
+    ) +
+    Math.max(0, recommendationParagraphs.length - 1) * recommendationParagraphGap;
   const fittedGain = fitTextBlock(doc, payload.summary.estimatedGain, gainWidth - 32, {
     maxFontSize: 24,
     minFontSize: 12,
@@ -1762,9 +1954,16 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   setText(doc, TEXT);
-  drawTextLines(doc, recommendationLines, MARGIN_X + 18, synthesisY + 56, {
-    lineHeight: 17,
-    maxWidth: recommendationWidth,
+  let recommendationY = synthesisY + 56;
+  recommendationParagraphs.forEach((paragraph, index) => {
+    drawTextLines(doc, paragraph, MARGIN_X + 18, recommendationY, {
+      lineHeight: recommendationLineHeight,
+      maxWidth: recommendationWidth,
+    });
+    recommendationY += paragraph.length * recommendationLineHeight;
+    if (index < recommendationParagraphs.length - 1) {
+      recommendationY += recommendationParagraphGap;
+    }
   });
 
   const gainX = MARGIN_X + CONTENT_WIDTH - gainWidth - gainCardGap;
@@ -1802,6 +2001,57 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
   if (variantComparisonChartData.length > 0 && summaryChartHeight >= 136) {
     drawVariantBarChart(doc, MARGIN_X, summaryChartY, CONTENT_WIDTH, summaryChartHeight, variantComparisonChartData);
   }
+
+  doc.addPage();
+  currentPageNumber += 1;
+  sectionPages.liquidityEvolution = currentPageNumber;
+  addPageTitle(
+    doc,
+    currentPageNumber,
+    "Évolution des liquidités",
+    "Lecture des flux financiers annuels."
+  );
+  const liquidityMetrics: Array<PdfField & { emphasize?: boolean }> = [
+    { label: "Liquidités début", value: payload.liquidityEvolution.liquiditesDebut },
+    { label: "Revenus annuels", value: payload.liquidityEvolution.revenusAnnuels },
+    { label: "Charges annuelles", value: payload.liquidityEvolution.chargesAnnuelles },
+    {
+      label: "Liquidités fin",
+      value: payload.liquidityEvolution.liquiditesFin,
+      emphasize: true,
+    },
+  ];
+  const liquidityMetricBandHeight = drawLiquidityMetricBand(doc, 150, liquidityMetrics);
+  const liquidityChartY = 150 + liquidityMetricBandHeight + 22;
+  drawLiquidityWaterfallChart(doc, MARGIN_X, liquidityChartY, CONTENT_WIDTH, 272, {
+    liquiditesDebut: parseCurrencyNumber(payload.liquidityEvolution.liquiditesDebut),
+    revenusAnnuels: parseCurrencyNumber(payload.liquidityEvolution.revenusAnnuels),
+    chargesAnnuelles: parseCurrencyNumber(payload.liquidityEvolution.chargesAnnuelles),
+    liquiditesFin: parseCurrencyNumber(payload.liquidityEvolution.liquiditesFin),
+  });
+
+  const liquidityDeltaValue = parseCurrencyNumber(payload.liquidityEvolution.delta);
+  const liquidityDeltaText =
+    liquidityDeltaValue > 0
+      ? `Vos liquidités progressent de ${normalizeSwissNumber(String(Math.round(liquidityDeltaValue)))} CHF sur l'exercice.`
+      : liquidityDeltaValue < 0
+        ? `Vos liquidités diminuent de ${normalizeSwissNumber(String(Math.round(Math.abs(liquidityDeltaValue))))} CHF sur l'exercice.`
+        : "Vos liquidités restent stables sur l'exercice.";
+  const liquidityNarrativeY = liquidityChartY + 272 + 20;
+  drawInfoBlock(
+    doc,
+    MARGIN_X,
+    liquidityNarrativeY,
+    CONTENT_WIDTH,
+    "Lecture rapide",
+    `${liquidityDeltaText}\n\nLiquidités fin = Liquidités début + Revenus - Charges`,
+    {
+      fill: SOFT,
+      minHeight: 104,
+      paragraphGap: 10,
+      preserveParagraphs: true,
+    }
+  );
 
   doc.addPage();
   currentPageNumber += 1;
@@ -2157,6 +2407,7 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
     .replace(/^-+|-+$/g, "");
   drawTableOfContents(doc, tocPageNumber, [
     { title: "Résumé exécutif", pageNumber: sectionPages.executiveSummary },
+    { title: "Évolution des liquidités", pageNumber: sectionPages.liquidityEvolution },
     { title: "Situation actuelle", pageNumber: sectionPages.currentSituation },
     { title: "Projection fiscale recommandée", pageNumber: sectionPages.taxDetails },
     { title: "Comparaison des variantes", pageNumber: sectionPages.variantComparison },
