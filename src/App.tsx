@@ -263,16 +263,7 @@ function cloneVariantStateFromBase(
   targetVariant: ScenarioVariant,
   keepLinkToVariant1: boolean
 ): ScenarioVariant {
-  const clonedDossier = cloneDossier(baseVariant.dossier);
-  const isReformVariant = targetVariant.taxRegime === "valeur_locative_reform";
-  const regimeFiscal: DossierClient["immobilier"]["regimeFiscal"] = isReformVariant
-    ? "reforme"
-    : "actuel";
-
-  clonedDossier.immobilier = {
-    ...clonedDossier.immobilier,
-    regimeFiscal,
-  };
+  const clonedDossier = applyDossierTaxRegime(cloneDossier(baseVariant.dossier), targetVariant.taxRegime);
 
   return {
     ...targetVariant,
@@ -379,22 +370,34 @@ function clearVariantSimulationOutputs(variant: ScenarioVariant): ScenarioVarian
   };
 }
 
-function applyVariantTaxRegime(variant: ScenarioVariant, nextTaxRegime: VariantTaxRegime) {
-  const regimeFiscal: DossierClient["immobilier"]["regimeFiscal"] =
-    nextTaxRegime === "valeur_locative_reform"
-    ? "reforme"
-    : "actuel";
+function getImmobilierRegimeForVariantTaxRegime(nextTaxRegime: VariantTaxRegime) {
+  return nextTaxRegime === "valeur_locative_reform" ? "reforme" : "actuel";
+}
 
+function applyDossierTaxRegime(
+  dossier: DossierClient,
+  nextTaxRegime: VariantTaxRegime
+): DossierClient {
+  const regimeFiscal = getImmobilierRegimeForVariantTaxRegime(nextTaxRegime);
+
+  if (dossier.immobilier.regimeFiscal === regimeFiscal) {
+    return dossier;
+  }
+
+  return {
+    ...dossier,
+    immobilier: {
+      ...dossier.immobilier,
+      regimeFiscal,
+    },
+  };
+}
+
+function applyVariantTaxRegime(variant: ScenarioVariant, nextTaxRegime: VariantTaxRegime) {
   return {
     ...variant,
     taxRegime: nextTaxRegime,
-    dossier: {
-      ...variant.dossier,
-      immobilier: {
-        ...variant.dossier.immobilier,
-        regimeFiscal,
-      },
-    },
+    dossier: applyDossierTaxRegime(variant.dossier, nextTaxRegime),
   };
 }
 
@@ -897,13 +900,18 @@ export default function App() {
 
       const sourceVariant = current[activeVariantIndex] ?? current[0];
       const nextIndex = current.length;
-      const nextVariant: ScenarioVariant = {
-        ...cloneVariantStateFromBase(sourceVariant, createEmptyVariant(nextIndex), false),
-        id: `variant-${Date.now()}-${nextIndex}`,
-        customLabel: `Copie de ${getVariantUserLabel(sourceVariant) || sourceVariant.label}`,
+      const targetVariant = {
+        ...createEmptyVariant(nextIndex),
         taxRegime: sourceVariant.taxRegime,
-        isLinkedToVariant1: false,
       };
+      const nextVariant: ScenarioVariant = clearVariantSimulationOutputs(
+        {
+          ...cloneVariantStateFromBase(sourceVariant, targetVariant, false),
+          id: `variant-${Date.now()}-${nextIndex}`,
+          customLabel: `Copie de ${getVariantUserLabel(sourceVariant) || sourceVariant.label}`,
+          isLinkedToVariant1: false,
+        }
+      );
 
       const nextVariants = normalizeVariantLabels([...current, nextVariant]);
       setActiveVariantIndex(nextVariants.length - 1);
