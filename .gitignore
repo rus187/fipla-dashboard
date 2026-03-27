@@ -7,10 +7,20 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+fipla-dashboard/node_modules
+
+# Build outputs
 dist
 dist-ssr
+fipla-dashboard/dist
+
+# Local environment files
+.env.local
+.env.*.local
 *.local
+fipla-dashboard/.env.local
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +32,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Browser test profiles
+.chrome-test-profile/
+.edge-proof-profile/
+.edge-proof-profile-2/
+.edge-test-profile/
+
+# Local temp folders
+.served-*/
