@@ -401,6 +401,48 @@ function applyVariantTaxRegime(variant: ScenarioVariant, nextTaxRegime: VariantT
   };
 }
 
+function getLocalRentalPropertyTaxBase(dossier: DossierClient) {
+  if (!dossier.immobilier.possedeBienRendement) {
+    return 0;
+  }
+
+  const loyers = dossier.immobilier.loyersBiensRendement || 0;
+  const interets = dossier.immobilier.interetsHypothecairesBiensRendement || 0;
+  const frais = dossier.immobilier.fraisEntretienBiensRendement || 0;
+
+  return loyers - interets - frais;
+}
+
+function getLocalSimulatedTaxableAssets(dossier: DossierClient) {
+  const liquiditesAjustees =
+    (dossier.fortune.liquidites || 0) -
+    (dossier.fiscalite.troisiemePilierSimule || 0) -
+    (dossier.fiscalite.rachatLpp || 0) +
+    (dossier.fiscalite.ajustementManuelRevenu || 0);
+  const fortuneFiscale =
+    liquiditesAjustees + (dossier.fortune.titres || 0) + (dossier.fortune.immobilier || 0);
+  const totalDettes = (dossier.dettes.hypotheques || 0) + (dossier.dettes.autresDettes || 0);
+
+  return Math.max(
+    0,
+    fortuneFiscale - totalDettes + (dossier.fiscalite.correctionFiscaleManuelleFortune || 0)
+  );
+}
+
+function hasLocalSimulatedTaxableAssetsInputs(dossier: DossierClient) {
+  return [
+    dossier.fortune.liquidites || 0,
+    dossier.fortune.titres || 0,
+    dossier.fortune.immobilier || 0,
+    dossier.dettes.hypotheques || 0,
+    dossier.dettes.autresDettes || 0,
+    dossier.fiscalite.troisiemePilierSimule || 0,
+    dossier.fiscalite.rachatLpp || 0,
+    dossier.fiscalite.ajustementManuelRevenu || 0,
+    dossier.fiscalite.correctionFiscaleManuelleFortune || 0,
+  ].some((value) => value !== 0);
+}
+
 function normalizeVariantLabels(variants: ScenarioVariant[]) {
   return variants.map((variant, index) => ({
     ...variant,
@@ -926,23 +968,23 @@ export default function App() {
     }
 
     setVariants((current) => {
-      const nextVariants = normalizeVariantLabels(
-        current.filter((_, index) => index !== variantIndex)
-      );
+      if (variantIndex < 0 || variantIndex >= current.length) {
+        return current;
+      }
 
-      setActiveVariantIndex((currentActiveIndex) => {
-        if (currentActiveIndex === variantIndex) {
-          return Math.max(0, variantIndex - 1);
-        }
+      return normalizeVariantLabels(current.filter((_, index) => index !== variantIndex));
+    });
 
-        if (currentActiveIndex > variantIndex) {
-          return currentActiveIndex - 1;
-        }
+    setActiveVariantIndex((currentActiveIndex) => {
+      if (currentActiveIndex === variantIndex) {
+        return Math.max(0, variantIndex - 1);
+      }
 
-        return currentActiveIndex;
-      });
+      if (currentActiveIndex > variantIndex) {
+        return currentActiveIndex - 1;
+      }
 
-      return nextVariants;
+      return currentActiveIndex;
     });
   };
 
@@ -1040,7 +1082,6 @@ export default function App() {
     (dossier.revenus.lpp || 0) +
     (dossier.revenus.autresRevenus || 0);
 
-  const regimeImmobilierActuel = dossier.immobilier.regimeFiscal === "actuel";
   const regimeImmobilierLabel =
     dossier.immobilier.regimeFiscal === "actuel" ? "Régime actuel" : "Régime réformé";
   const activeVariantTaxRegimeLabel = VARIANT_TAX_REGIME_LABELS[activeVariant.taxRegime];
@@ -1071,28 +1112,36 @@ export default function App() {
     ? dossier.immobilier.fraisEntretienHabitationPropre || 0
     : 0;
 
-  const variationValeurLocativeSimulation = regimeImmobilierActuel
-    ? 0
-    : -valeurLocativeActuelleHabitation;
+  const reformImmobilierProfile = getValeurLocativeReformProfile(dossier, {
+    includeValeurLocative: true,
+  });
+  const reformeValeurLocativeHabitationAppliquee = reformImmobilierProfile.shouldApply;
 
-  const variationInteretsHypothecairesSimulation = regimeImmobilierActuel
+  const variationValeurLocativeSimulation = reformeValeurLocativeHabitationAppliquee
+    ? -valeurLocativeActuelleHabitation
+    : 0;
+
+  const variationInteretsHypothecairesSimulation = reformeValeurLocativeHabitationAppliquee
+    ? reformImmobilierProfile.interetsPassifsRetires
+    : 0;
+
+  const variationFraisEntretienSimulation = reformeValeurLocativeHabitationAppliquee
+    ? reformImmobilierProfile.fraisEntretienRetires
+    : 0;
+
+  const totalAjustementsImmobiliersSimulation = reformImmobilierProfile.taxableIncomeDelta;
+
+  const valeurLocativeFiscalisee = reformeValeurLocativeHabitationAppliquee
     ? 0
+    : valeurLocativeActuelleHabitation;
+
+  const interetsHabitationDeductibles = reformeValeurLocativeHabitationAppliquee
+    ? reformImmobilierProfile.interetsPassifsConserves
     : interetsHabitationActuels;
 
-  const variationFraisEntretienSimulation = regimeImmobilierActuel
+  const fraisHabitationDeductibles = reformeValeurLocativeHabitationAppliquee
     ? 0
     : fraisHabitationActuels;
-
-  const totalAjustementsImmobiliersSimulation =
-    variationValeurLocativeSimulation +
-    variationInteretsHypothecairesSimulation +
-    variationFraisEntretienSimulation;
-
-  const valeurLocativeFiscalisee = valeurLocativeActuelleHabitation;
-
-  const interetsHabitationDeductibles = interetsHabitationActuels;
-
-  const fraisHabitationDeductibles = fraisHabitationActuels;
 
   const loyersBiensRendementImposables = biensRendementActifs
     ? dossier.immobilier.loyersBiensRendement || 0
@@ -1169,17 +1218,22 @@ export default function App() {
     0,
     dossier.fiscalite.fortuneImposableActuelleSaisie || 0
   );
+  const ajustementBienRendementSimulation = getLocalRentalPropertyTaxBase(dossier);
+  const fortuneImposableLocaleSimulee = getLocalSimulatedTaxableAssets(dossier);
+  const utiliseFortuneLocaleSimulee = hasLocalSimulatedTaxableAssetsInputs(dossier);
 
   const ajustementPrevoyanceSimulation =
     -(dossier.fiscalite.troisiemePilierSimule || 0) - (dossier.fiscalite.rachatLpp || 0);
   const ajustementManuelSimulation = dossier.fiscalite.ajustementManuelRevenu || 0;
   const totalAjustementsSimulationIfd =
     totalAjustementsImmobiliersSimulation +
+    ajustementBienRendementSimulation +
     ajustementPrevoyanceSimulation +
     ajustementManuelSimulation +
     (dossier.fiscalite.correctionFiscaleManuelleIfd || 0);
   const totalAjustementsSimulationCanton =
     totalAjustementsImmobiliersSimulation +
+    ajustementBienRendementSimulation +
     ajustementPrevoyanceSimulation +
     ajustementManuelSimulation +
     (dossier.fiscalite.correctionFiscaleManuelleCanton || 0);
@@ -1194,10 +1248,9 @@ export default function App() {
     0,
     revenuImposableReference + totalAjustementsSimulationCanton
   );
-  const fortuneImposableSimulee = Math.max(
-    0,
-    fortuneImposableReference + totalAjustementsSimulationFortune
-  );
+  const fortuneImposableSimulee = utiliseFortuneLocaleSimulee
+    ? fortuneImposableLocaleSimulee
+    : Math.max(0, fortuneImposableReference + totalAjustementsSimulationFortune);
 
   const revenuImposableTaxwareIfd =
     typeof taxResultAffiche?.normalized?.taxableIncomeFederal === "number"
@@ -1560,7 +1613,7 @@ export default function App() {
     chargesDeductiblesGeneriques + fraisHabitationDeductibles + fraisBiensRendementDeductibles;
 
   const realEstatesTaxware = [
-    ...(habitationPropreActive && regimeImmobilierActuel
+    ...(habitationPropreActive && !reformeValeurLocativeHabitationAppliquee
       ? [
           {
             rentalIncome: valeurLocativeFiscalisee,
@@ -2251,6 +2304,15 @@ export default function App() {
       includeValeurLocative: variant.taxRegime === "valeur_locative_reform",
     });
     const immobilierSimulationDelta = reformProfile.taxableIncomeDelta;
+    const ajustementBienRendementSimulation =
+      getLocalRentalPropertyTaxBase(dossierForSimulation);
+    const taxableAssets = hasLocalSimulatedTaxableAssetsInputs(dossierForSimulation)
+      ? getLocalSimulatedTaxableAssets(dossierForSimulation)
+      : Math.max(
+          0,
+          (dossierForSimulation.fiscalite.fortuneImposableActuelleSaisie || 0) +
+            (dossierForSimulation.fiscalite.correctionFiscaleManuelleFortune || 0)
+        );
 
     const comparisonScenarioEntries = await Promise.all(
       comparisonScenarios.map(async (scenario) => {
@@ -2261,6 +2323,7 @@ export default function App() {
             scenario.thirdPillar -
             scenario.lppBuyback +
             scenario.manualAdjustment +
+            ajustementBienRendementSimulation +
             immobilierDelta +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleIfd || 0)
         );
@@ -2270,13 +2333,9 @@ export default function App() {
             scenario.thirdPillar -
             scenario.lppBuyback +
             scenario.manualAdjustment +
+            ajustementBienRendementSimulation +
             immobilierDelta +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleCanton || 0)
-        );
-        const taxableAssets = Math.max(
-          0,
-          (dossierForSimulation.fiscalite.fortuneImposableActuelleSaisie || 0) +
-            (dossierForSimulation.fiscalite.correctionFiscaleManuelleFortune || 0)
         );
 
         const buildVariantRequest = (params: { miscIncome: number; assets: number }) =>
@@ -3493,7 +3552,10 @@ export default function App() {
                   {index > 0 && (
                     <button
                       type="button"
-                      onClick={() => handleDeleteVariant(index)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDeleteVariant(index);
+                      }}
                       style={{
                         padding: "0 12px",
                         border: "none",
@@ -5787,9 +5849,9 @@ export default function App() {
                   style={inputReadOnlyStyle}
                 />
                 <span style={helperStyle}>
-                  {regimeImmobilierActuel
-                    ? "Aucun écart: la base actuelle correspond déjà au régime actuel."
-                    : "La valeur locative actuelle est retirée de la base fiscale simulée."}
+                  {reformeValeurLocativeHabitationAppliquee
+                    ? "La valeur locative actuelle est retirée de la base fiscale simulée."
+                    : "Aucun écart: la réforme VL n'affecte pas ce dossier sans habitation propre active."}
                 </span>
               </div>
               <div>
@@ -5801,9 +5863,9 @@ export default function App() {
                   style={inputReadOnlyStyle}
                 />
                 <span style={helperStyle}>
-                  {regimeImmobilierActuel
-                    ? "Aucun écart sur la déductibilité des intérêts en régime actuel."
-                    : "Les intérêts actuellement admis sont réintégrés dans la base simulée."}
+                  {reformeValeurLocativeHabitationAppliquee
+                    ? "Les intérêts de l'habitation propre actuellement admis sont réintégrés dans la base simulée."
+                    : "Aucun écart sur les intérêts du bien de rendement ni sur l'habitation propre hors réforme applicable."}
                 </span>
               </div>
               <div>
@@ -5815,9 +5877,9 @@ export default function App() {
                   style={inputReadOnlyStyle}
                 />
                 <span style={helperStyle}>
-                  {regimeImmobilierActuel
-                    ? "Aucun écart sur les frais d’entretien en régime actuel."
-                    : "Les frais actuellement admis sont réintégrés dans la base simulée."}
+                  {reformeValeurLocativeHabitationAppliquee
+                    ? "Les frais d'entretien de l'habitation propre actuellement admis sont réintégrés dans la base simulée."
+                    : "Aucun écart sur les frais du bien de rendement ni sur l'habitation propre hors réforme applicable."}
                 </span>
               </div>
               <div>
