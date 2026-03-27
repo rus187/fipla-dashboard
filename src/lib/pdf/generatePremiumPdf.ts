@@ -45,6 +45,9 @@ export type PremiumPdfPayload = {
     chargesAnnuelles: string;
     liquiditesFin: string;
     delta: string;
+    troisiemePilierA: string;
+    rachatLpp: string;
+    totalEpargneRetraite: string;
   };
   variants: PdfVariantComparison[];
   realEstate: {
@@ -349,19 +352,6 @@ function splitSentences(text: string) {
     .filter(Boolean);
 }
 
-function clampTextLines(doc: jsPDF, text: string, width: number, maxLines: number) {
-  const lines = splitText(doc, text, width);
-
-  if (lines.length <= maxLines) {
-    return lines;
-  }
-
-  const truncated = lines.slice(0, maxLines);
-  const last = truncated[maxLines - 1] ?? "";
-  truncated[maxLines - 1] = `${last.replace(/[. ]+$/g, "")}...`;
-  return truncated;
-}
-
 function buildExecutiveDecisionItems(payload: PremiumPdfPayload): ExecutiveDecisionItem[] {
   return [
     {
@@ -393,12 +383,30 @@ function drawExecutiveDecisionPanel(
   const paddingX = 18;
   const innerWidth = width - paddingX * 2;
   const rowGap = 12;
-  const rowHeight = 64;
   const titleY = y + 24;
+  const titleWidth = innerWidth - 36;
+  const bodyWidth = innerWidth - 36;
+  const rowMetrics = items.map((item) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.75);
+    const titleLines = splitText(doc, normalizePdfText(item.title).toUpperCase(), titleWidth);
 
-  drawRect(doc, x, y, width, 56 + items.length * rowHeight + (items.length - 1) * rowGap, WHITE);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const bodyLines = splitText(doc, item.text, bodyWidth);
+
+    const titleHeight = Math.max(1, titleLines.length) * 12;
+    const bodyHeight = Math.max(1, bodyLines.length) * 14;
+    const rowHeight = Math.max(64, 18 + titleHeight + 8 + bodyHeight + 14);
+
+    return { titleLines, bodyLines, rowHeight };
+  });
+  const panelHeight =
+    56 + rowMetrics.reduce((sum, row) => sum + row.rowHeight, 0) + Math.max(0, items.length - 1) * rowGap;
+
+  drawRect(doc, x, y, width, panelHeight, WHITE);
   setDraw(doc, LINE);
-  doc.roundedRect(x, y, width, 56 + items.length * rowHeight + (items.length - 1) * rowGap, 12, 12);
+  doc.roundedRect(x, y, width, panelHeight, 12, 12);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -406,7 +414,8 @@ function drawExecutiveDecisionPanel(
   doc.text("LECTURE DÉCISIONNELLE", x + paddingX, titleY);
 
   let rowY = y + 42;
-  items.forEach((item, index) => {
+  items.forEach((_item, index) => {
+    const { titleLines, bodyLines, rowHeight } = rowMetrics[index];
     drawRect(doc, x + paddingX, rowY, innerWidth, rowHeight, SOFT);
     setDraw(doc, LINE);
     doc.roundedRect(x + paddingX, rowY, innerWidth, rowHeight, 10, 10);
@@ -416,26 +425,29 @@ function drawExecutiveDecisionPanel(
     setText(doc, ACCENT);
     doc.text("•", x + paddingX + 14, rowY + 20);
     setText(doc, DARK);
-    doc.text(normalizePdfText(item.title).toUpperCase(), x + paddingX + 28, rowY + 20);
+    drawTextLines(doc, titleLines, x + paddingX + 28, rowY + 20, {
+      lineHeight: 12,
+      maxWidth: titleWidth,
+    });
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     setText(doc, TEXT);
     drawTextLines(
       doc,
-      clampTextLines(doc, item.text, innerWidth - 36, 2),
+      bodyLines,
       x + paddingX + 28,
-      rowY + 38,
+      rowY + 20 + Math.max(1, titleLines.length) * 12 + 8,
       {
         lineHeight: 14,
-        maxWidth: innerWidth - 36,
+        maxWidth: bodyWidth,
       }
     );
 
     rowY += rowHeight + (index < items.length - 1 ? rowGap : 0);
   });
 
-  return 56 + items.length * rowHeight + (items.length - 1) * rowGap;
+  return panelHeight;
 }
 
 function buildOperationalOptimisationItems(fields: PdfField[]): OperationalOptimisationItem[] {
@@ -1164,12 +1176,246 @@ function drawMetricBand(doc: jsPDF, y: number, metrics: PdfField[]) {
   return boxHeight;
 }
 
+function getLiquidityDiagnostic(deltaValue: number) {
+  if (deltaValue > 0) {
+    return {
+      label: "EXCÉDENTAIRE",
+      color: "#2f6f59",
+      fill: "#eff5f0",
+    };
+  }
+
+  if (deltaValue < 0) {
+    return {
+      label: "SOUS TENSION",
+      color: "#ad5f5f",
+      fill: "#faf1f1",
+    };
+  }
+
+  return {
+    label: "ÉQUILIBRÉE",
+    color: "#8b6f45",
+    fill: "#f8f2e8",
+  };
+}
+
+function formatLiquidityDeltaValue(deltaValue: number) {
+  const rounded = normalizeSwissNumber(String(Math.round(Math.abs(deltaValue))));
+  return `${deltaValue > 0 ? "+" : deltaValue < 0 ? "-" : ""}${rounded} CHF`;
+}
+
+function getLiquidityAnalysisText(deltaValue: number) {
+  const formattedDelta = formatLiquidityDeltaValue(deltaValue);
+  const formattedDeltaAbs = `${normalizeSwissNumber(String(Math.round(Math.abs(deltaValue))))} CHF`;
+
+  if (deltaValue > 0) {
+    return `La trésorerie de fin d'exercice ressort en progression de ${formattedDelta} par rapport à l'ouverture. Les revenus annuels couvrent les charges courantes et dégagent un excédent de liquidité, ce qui renforce la marge de manœuvre patrimoniale.`;
+  }
+
+  if (deltaValue < 0) {
+    return `La trésorerie de fin d'exercice se contracte de ${formattedDeltaAbs} par rapport à l'ouverture. Les charges annuelles absorbent davantage que les revenus encaissés sur l'exercice, ce qui traduit une consommation progressive de liquidité et appelle une vigilance renforcée.`;
+  }
+
+  return "La trésorerie de fin d'exercice demeure globalement stable par rapport à l'ouverture. Les revenus annuels équilibrent les charges courantes, traduisant une situation financière maîtrisée, sans tension immédiate ni excédent significatif.";
+}
+
+function drawLiquidityHeroPanel(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  width: number,
+  values: {
+    liquiditesFin: string;
+    delta: string;
+    diagnostic: string;
+    diagnosticColor: string;
+    diagnosticFill: string;
+  }
+) {
+  const panelHeight = 122;
+  const rightPanelWidth = 154;
+  const contentPaddingX = 20;
+  const valueWidth = width - rightPanelWidth - 62;
+  const valueBlock = fitTextBlock(doc, values.liquiditesFin, valueWidth, {
+    maxFontSize: 26,
+    minFontSize: 14,
+    maxLines: 2,
+  });
+  const diagnosticBlock = fitTextBlock(doc, values.diagnostic, rightPanelWidth - 24, {
+    maxFontSize: 14,
+    minFontSize: 9.5,
+    maxLines: 2,
+  });
+
+  drawRect(doc, x, y, width, panelHeight, DARK);
+  setDraw(doc, LINE);
+  doc.roundedRect(x, y, width, panelHeight, 12, 12);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  setText(doc, ACCENT);
+  doc.text("POSITION DE CLÔTURE", x + contentPaddingX, y + 24);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  setText(doc, "#dbe3ec");
+  drawTextLines(
+    doc,
+    splitText(doc, "Liquidités disponibles en fin d'exercice", valueWidth),
+    x + contentPaddingX,
+    y + 44,
+    {
+      lineHeight: 13,
+      maxWidth: valueWidth,
+    }
+  );
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(valueBlock.fontSize);
+  setText(doc, WHITE);
+  drawTextLines(doc, valueBlock.lines, x + contentPaddingX, y + 78, {
+    lineHeight: 20,
+    maxWidth: valueWidth,
+  });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  setText(doc, "#dbe3ec");
+  doc.text(`Évolution annuelle : ${normalizePdfText(values.delta)}`, x + contentPaddingX, y + panelHeight - 20);
+
+  const rightPanelX = x + width - rightPanelWidth - 18;
+  const rightPanelY = y + 20;
+  const rightPanelHeight = panelHeight - 40;
+
+  drawRect(doc, rightPanelX, rightPanelY, rightPanelWidth, rightPanelHeight, "#f8f6f2");
+  setDraw(doc, LINE);
+  doc.roundedRect(rightPanelX, rightPanelY, rightPanelWidth, rightPanelHeight, 10, 10);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  setText(doc, MUTED);
+  doc.text("DIAGNOSTIC", rightPanelX + 12, rightPanelY + 18);
+
+  drawRect(doc, rightPanelX + 12, rightPanelY + 30, rightPanelWidth - 24, 32, values.diagnosticFill);
+  setDraw(doc, values.diagnosticColor);
+  doc.roundedRect(rightPanelX + 12, rightPanelY + 30, rightPanelWidth - 24, 32, 9, 9);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(diagnosticBlock.fontSize);
+  setText(doc, values.diagnosticColor);
+  drawTextLines(doc, diagnosticBlock.lines, rightPanelX + rightPanelWidth / 2, rightPanelY + 49, {
+    lineHeight: 12,
+    align: "center",
+    maxWidth: rightPanelWidth - 30,
+  });
+
+  return panelHeight;
+}
+
+function drawRetirementSavingsEffortBlock(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  width: number,
+  values: {
+    troisiemePilierA: string;
+    rachatLpp: string;
+    totalEpargneRetraite: string;
+  }
+) {
+  const paddingX = 18;
+  const panelHeight = 118;
+  const columnsY = y + 44;
+  const columnGap = 12;
+  const firstColumnWidth = 128;
+  const secondColumnWidth = 120;
+  const totalColumnWidth = width - paddingX * 2 - firstColumnWidth - secondColumnWidth - columnGap * 2;
+  const totalX = x + paddingX + firstColumnWidth + secondColumnWidth + columnGap * 2;
+
+  drawRect(doc, x, y, width, panelHeight, "#fbfaf7");
+  setDraw(doc, LINE);
+  doc.roundedRect(x, y, width, panelHeight, 12, 12);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  setText(doc, DARK);
+  doc.text("Effort d'épargne retraite", x + paddingX, y + 24);
+
+  const rows = [
+    {
+      label: "3e pilier A",
+      value: values.troisiemePilierA,
+      x: x + paddingX,
+      width: firstColumnWidth,
+    },
+    {
+      label: "Rachat LPP",
+      value: values.rachatLpp,
+      x: x + paddingX + firstColumnWidth + columnGap,
+      width: secondColumnWidth,
+    },
+  ];
+
+  rows.forEach((row) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.75);
+    setText(doc, MUTED);
+    drawTextLines(doc, splitText(doc, row.label, row.width), row.x, columnsY, {
+      lineHeight: 11,
+      maxWidth: row.width,
+    });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11.5);
+    setText(doc, DARK);
+    drawTextLines(doc, splitText(doc, row.value, row.width), row.x, columnsY + 22, {
+      lineHeight: 14,
+      maxWidth: row.width,
+    });
+  });
+
+  drawRect(doc, totalX, y + 40, totalColumnWidth, 42, SOFT);
+  setDraw(doc, "#e7dcc8");
+  doc.roundedRect(totalX, y + 40, totalColumnWidth, 42, 10, 10);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.75);
+  setText(doc, ACCENT);
+  doc.text("TOTAL ÉPARGNE RETRAITE", totalX + 12, y + 56);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  setText(doc, DARK);
+  doc.text(normalizePdfText(values.totalEpargneRetraite), totalX + 12, y + 74);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.75);
+  setText(doc, MUTED);
+  drawTextLines(
+    doc,
+    splitText(
+      doc,
+      "Ces montants correspondent à une sortie de trésorerie réelle, mais ne sont pas entièrement intégrés dans les charges retenues pour l'analyse des liquidités.",
+      width - paddingX * 2
+    ),
+    x + paddingX,
+    y + 96,
+    {
+      lineHeight: 11,
+      maxWidth: width - paddingX * 2,
+    }
+  );
+
+  return panelHeight;
+}
+
 function drawLiquidityMetricBand(
   doc: jsPDF,
   y: number,
   metrics: Array<PdfField & { emphasize?: boolean }>
 ) {
-  const gap = 10;
+  const gap = 12;
   const boxWidth = (CONTENT_WIDTH - gap * (metrics.length - 1)) / metrics.length;
   const preparedMetrics = metrics.map((metric) => {
     const labelLines = splitText(doc, metric.label, boxWidth - 24);
@@ -1184,13 +1430,13 @@ function drawLiquidityMetricBand(
   });
   const maxLabelLines = Math.max(...preparedMetrics.map((metric) => metric.labelLines.length), 1);
   const maxValueLines = Math.max(...preparedMetrics.map((metric) => metric.fittedValue.lines.length), 1);
-  const labelY = y + 20;
-  const valueY = labelY + maxLabelLines * 12 + 14;
-  const boxHeight = Math.max(110, valueY - y + maxValueLines * 16 + 18);
+  const labelY = y + 22;
+  const valueY = labelY + maxLabelLines * 11 + 12;
+  const boxHeight = Math.max(90, valueY - y + maxValueLines * 15 + 18);
 
   preparedMetrics.forEach(({ metric, labelLines, fittedValue }, index) => {
     const x = MARGIN_X + index * (boxWidth + gap);
-    const fill = metric.emphasize ? DARK : SOFT;
+    const fill = metric.emphasize ? DARK : WHITE;
     const valueColor = metric.emphasize ? WHITE : DARK;
     const labelColor = metric.emphasize ? ACCENT : MUTED;
 
@@ -1199,21 +1445,21 @@ function drawLiquidityMetricBand(
     doc.roundedRect(x, y, boxWidth, boxHeight, 12, 12);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
+    doc.setFontSize(8.8);
     setText(doc, labelColor);
     drawTextLines(
       doc,
       labelLines.map((line) => normalizePdfText(line).toUpperCase()),
       x + 12,
       labelY,
-      { lineHeight: 12, maxWidth: boxWidth - 24 }
+      { lineHeight: 11, maxWidth: boxWidth - 24 }
     );
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(fittedValue.fontSize);
     setText(doc, valueColor);
     drawTextLines(doc, fittedValue.lines, x + 12, valueY, {
-      lineHeight: 16,
+      lineHeight: 15,
       maxWidth: boxWidth - 24,
     });
   });
@@ -1507,19 +1753,21 @@ function drawLiquidityWaterfallChart(
     y,
     width,
     height,
-    "Évolution des liquidités",
-    "Lecture des flux financiers annuels."
+    "Variation annuelle de trésorerie",
+    "Lecture de la position d'ouverture à la position de clôture, après encaissement des revenus et couverture des charges."
   );
 
-  const chartTop = y + 74;
-  const chartBottom = y + height - 52;
-  const chartLeft = x + 32;
-  const chartRight = x + width - 32;
+  drawRect(doc, x + 16, y + 58, width - 32, height - 74, "#fbfaf7");
+
+  const chartTop = y + 92;
+  const chartBottom = y + height - 42;
+  const chartLeft = x + 38;
+  const chartRight = x + width - 38;
   const innerWidth = chartRight - chartLeft;
   const baselineY = chartBottom;
   const steps = [
     {
-      label: "Début",
+      label: "Ouverture",
       value: values.liquiditesDebut,
       start: 0,
       end: values.liquiditesDebut,
@@ -1540,7 +1788,7 @@ function drawLiquidityWaterfallChart(
       color: "#c85b5b",
     },
     {
-      label: "Fin",
+      label: "Clôture",
       value: values.liquiditesFin,
       start: 0,
       end: values.liquiditesFin,
@@ -1554,12 +1802,13 @@ function drawLiquidityWaterfallChart(
     1
   );
   const chartHeight = Math.max(10, chartBottom - chartTop - 8);
-  const barWidth = Math.min(74, innerWidth / 6);
+  const barWidth = Math.min(68, innerWidth / 6.4);
   const gap = (innerWidth - barWidth * steps.length) / Math.max(1, steps.length - 1);
+  const zeroLineY = baselineY;
 
-  setDraw(doc, LINE);
+  setDraw(doc, "#d9dee5");
   doc.setLineWidth(1);
-  doc.line(chartLeft, baselineY, chartRight, baselineY);
+  doc.line(chartLeft, zeroLineY, chartRight, zeroLineY);
 
   steps.forEach((step, index) => {
     const normalizedStart = Math.max(0, step.start);
@@ -1573,32 +1822,20 @@ function drawLiquidityWaterfallChart(
 
     drawRect(doc, barX, topY, barWidth, barHeight, step.color);
 
-    if (index > 0) {
-      const previous = steps[index - 1];
-      const previousEnd = Math.max(0, previous.end);
-      const currentStart = Math.max(0, step.start);
-      const connectorY = baselineY - (previousEnd / maxValue) * chartHeight;
-      const nextConnectorY = baselineY - (currentStart / maxValue) * chartHeight;
-
-      setDraw(doc, "#cbd5e1");
-      doc.setLineWidth(1);
-      doc.line(barX - gap + barWidth, connectorY, barX, nextConnectorY);
-    }
-
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     setText(doc, DARK);
     doc.text(
       `${normalizeSwissNumber(String(Math.round(Math.abs(step.value))))} CHF`,
       barX + barWidth / 2,
-      topY - 8,
+      topY - 10,
       { align: "center" }
     );
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
+    doc.setFontSize(8.75);
     setText(doc, MUTED);
-    doc.text(normalizePdfText(step.label), barX + barWidth / 2, baselineY + 18, {
+    doc.text(normalizePdfText(step.label), barX + barWidth / 2, baselineY + 20, {
       align: "center",
     });
   });
@@ -1665,10 +1902,6 @@ function drawVariantBarChart(doc: jsPDF, x: number, y: number, width: number, he
   const baselineY = chartBottom;
   const barWidth = Math.min(62, innerWidth / (chartData.length * 1.7));
   const gap = chartData.length > 1 ? (innerWidth - barWidth * chartData.length) / (chartData.length - 1) : 0;
-
-  setDraw(doc, LINE);
-  doc.setLineWidth(1);
-  doc.line(chartLeft, baselineY, chartRight, baselineY);
 
   chartData.forEach((item, index) => {
     const barHeight = Math.max(12, ((chartBottom - chartTop - 18) * item.value) / maxValue);
@@ -1817,8 +2050,8 @@ function drawTaxDonutChart(doc: jsPDF, x: number, y: number, width: number, heig
 
 function drawPatrimonyDonutChart(doc: jsPDF, x: number, y: number, width: number, height: number, data: ChartDatum[]) {
   drawDonutChart(doc, x, y, width, height, {
-    title: "Structure patrimoniale",
-    subtitle: "Répartition actuelle entre liquidités, immobilier, titres et prévoyance.",
+    title: "Structure patrimoniale proposée",
+    subtitle: "Répartition proposée entre liquidités, immobilier, titres et prévoyance.",
     totalLabel: "Patrimoine total",
     data,
   });
@@ -1907,11 +2140,16 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
     buildExecutiveDecisionItems(payload)
   );
   const synthesisY = 160 + executiveDecisionHeight + 22;
+  const synthesisPadding = 18;
   const gainWidth = 192;
   const gainCardGap = 18;
-  const recommendationWidth = CONTENT_WIDTH - gainWidth - 72;
+  const recommendationX = MARGIN_X + synthesisPadding;
+  const gainX = MARGIN_X + CONTENT_WIDTH - gainWidth - gainCardGap;
+  const recommendationWidth = gainX - recommendationX - 26;
   const recommendationLineHeight = 17;
   const recommendationParagraphGap = 10;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
   const recommendationParagraphs = splitTextByParagraphs(
     doc,
     payload.summary.recommendation,
@@ -1942,7 +2180,7 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
   const gainAmountHeight = fittedGain.lines.length * 18;
   const gainDescriptionHeight = gainDescriptionLines.length * 12;
   const gainHeight = Math.max(156, 86 + gainAmountHeight + 14 + gainDescriptionHeight + 22);
-  const synthesisHeight = Math.max(170, 68 + recommendationHeight, gainHeight + 18);
+  const synthesisHeight = Math.max(184, 86 + recommendationHeight, gainHeight + 18);
 
   drawRect(doc, MARGIN_X, synthesisY, CONTENT_WIDTH, synthesisHeight, WHITE);
   setDraw(doc, LINE);
@@ -1956,7 +2194,7 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
   setText(doc, TEXT);
   let recommendationY = synthesisY + 56;
   recommendationParagraphs.forEach((paragraph, index) => {
-    drawTextLines(doc, paragraph, MARGIN_X + 18, recommendationY, {
+    drawTextLines(doc, paragraph, recommendationX, recommendationY, {
       lineHeight: recommendationLineHeight,
       maxWidth: recommendationWidth,
     });
@@ -1966,7 +2204,6 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
     }
   });
 
-  const gainX = MARGIN_X + CONTENT_WIDTH - gainWidth - gainCardGap;
   const gainY = synthesisY + Math.max(18, (synthesisHeight - gainHeight) / 2);
   const gainAmountY = gainY + 68;
   const gainDescriptionY = gainAmountY + gainAmountHeight + 18;
@@ -2008,49 +2245,90 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
   addPageTitle(
     doc,
     currentPageNumber,
-    "Évolution des liquidités",
-    "Lecture des flux financiers annuels."
+    "Position de liquidité annuelle",
+    "Lecture synthétique de la trésorerie disponible en fin d'exercice et de son évolution sur la période."
   );
+  const liquidityDeltaValue = parseCurrencyNumber(payload.liquidityEvolution.delta);
+  const liquidityDiagnostic = getLiquidityDiagnostic(liquidityDeltaValue);
+  const liquidityHeroHeight = drawLiquidityHeroPanel(doc, MARGIN_X, 150, CONTENT_WIDTH, {
+    liquiditesFin: payload.liquidityEvolution.liquiditesFin,
+    delta: payload.liquidityEvolution.delta,
+    diagnostic: liquidityDiagnostic.label,
+    diagnosticColor: liquidityDiagnostic.color,
+    diagnosticFill: liquidityDiagnostic.fill,
+  });
   const liquidityMetrics: Array<PdfField & { emphasize?: boolean }> = [
-    { label: "Liquidités début", value: payload.liquidityEvolution.liquiditesDebut },
+    { label: "Position d'ouverture", value: payload.liquidityEvolution.liquiditesDebut },
     { label: "Revenus annuels", value: payload.liquidityEvolution.revenusAnnuels },
     { label: "Charges annuelles", value: payload.liquidityEvolution.chargesAnnuelles },
-    {
-      label: "Liquidités fin",
-      value: payload.liquidityEvolution.liquiditesFin,
-      emphasize: true,
-    },
   ];
-  const liquidityMetricBandHeight = drawLiquidityMetricBand(doc, 150, liquidityMetrics);
-  const liquidityChartY = 150 + liquidityMetricBandHeight + 22;
-  drawLiquidityWaterfallChart(doc, MARGIN_X, liquidityChartY, CONTENT_WIDTH, 272, {
+  const liquidityMetricBandY = 150 + liquidityHeroHeight + 14;
+  const liquidityMetricBandHeight = drawLiquidityMetricBand(doc, liquidityMetricBandY, liquidityMetrics);
+  const liquidityChartY = liquidityMetricBandY + liquidityMetricBandHeight + 18;
+  const liquidityChartHeight = 236;
+  drawLiquidityWaterfallChart(doc, MARGIN_X, liquidityChartY, CONTENT_WIDTH, liquidityChartHeight, {
     liquiditesDebut: parseCurrencyNumber(payload.liquidityEvolution.liquiditesDebut),
     revenusAnnuels: parseCurrencyNumber(payload.liquidityEvolution.revenusAnnuels),
     chargesAnnuelles: parseCurrencyNumber(payload.liquidityEvolution.chargesAnnuelles),
     liquiditesFin: parseCurrencyNumber(payload.liquidityEvolution.liquiditesFin),
   });
+  const retirementSavingsY = liquidityChartY + liquidityChartHeight + 16;
+  const retirementSavingsHeight = drawRetirementSavingsEffortBlock(
+    doc,
+    MARGIN_X,
+    retirementSavingsY,
+    CONTENT_WIDTH,
+    {
+      troisiemePilierA: payload.liquidityEvolution.troisiemePilierA,
+      rachatLpp: payload.liquidityEvolution.rachatLpp,
+      totalEpargneRetraite: payload.liquidityEvolution.totalEpargneRetraite,
+    }
+  );
+  const liquidityAnalysisOptions = {
+    fill: WHITE,
+    titleColor: ACCENT,
+    bodyColor: TEXT,
+    minHeight: 118,
+    paddingX: 18,
+    titleOffsetY: 24,
+    bodyOffsetY: 58,
+    lineHeight: 17,
+    bodyFontSize: 10.25,
+    paragraphGap: 12,
+    preserveParagraphs: true as const,
+  };
+  const liquidityAnalysisBody = `${getLiquidityAnalysisText(
+    liquidityDeltaValue
+  )}\n\nClôture = Ouverture + Revenus - Charges`;
+  const liquidityNarrativeHeight = getInfoBlockHeight(
+    doc,
+    CONTENT_WIDTH,
+    "Analyse financière",
+    liquidityAnalysisBody,
+    liquidityAnalysisOptions
+  );
+  let liquidityNarrativeY = retirementSavingsY + retirementSavingsHeight + 14;
 
-  const liquidityDeltaValue = parseCurrencyNumber(payload.liquidityEvolution.delta);
-  const liquidityDeltaText =
-    liquidityDeltaValue > 0
-      ? `Vos liquidités progressent de ${normalizeSwissNumber(String(Math.round(liquidityDeltaValue)))} CHF sur l'exercice.`
-      : liquidityDeltaValue < 0
-        ? `Vos liquidités diminuent de ${normalizeSwissNumber(String(Math.round(Math.abs(liquidityDeltaValue))))} CHF sur l'exercice.`
-        : "Vos liquidités restent stables sur l'exercice.";
-  const liquidityNarrativeY = liquidityChartY + 272 + 20;
+  if (liquidityNarrativeY + liquidityNarrativeHeight > PAGE_HEIGHT - MARGIN_Y - 18) {
+    doc.addPage();
+    currentPageNumber += 1;
+    addPageTitle(
+      doc,
+      currentPageNumber,
+      "Position de liquidité annuelle",
+      "Complément de lecture sur la trésorerie disponible et son analyse financière."
+    );
+    liquidityNarrativeY = 154;
+  }
+
   drawInfoBlock(
     doc,
     MARGIN_X,
     liquidityNarrativeY,
     CONTENT_WIDTH,
-    "Lecture rapide",
-    `${liquidityDeltaText}\n\nLiquidités fin = Liquidités début + Revenus - Charges`,
-    {
-      fill: SOFT,
-      minHeight: 104,
-      paragraphGap: 10,
-      preserveParagraphs: true,
-    }
+    "Analyse financière",
+    liquidityAnalysisBody,
+    liquidityAnalysisOptions
   );
 
   doc.addPage();
@@ -2092,8 +2370,8 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
     addPageTitle(
       doc,
       currentPageNumber,
-      "Situation actuelle",
-      "Lecture visuelle de la structure patrimoniale actuelle entre liquidités, immobilier, titres et prévoyance."
+      "Situation proposée",
+      "Lecture visuelle de la structure patrimoniale proposée entre liquidités, immobilier, titres et prévoyance."
     );
     drawPatrimonyDonutChart(doc, MARGIN_X, 174, CONTENT_WIDTH, 286, patrimonyStructureChartData);
   }
@@ -2407,7 +2685,7 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
     .replace(/^-+|-+$/g, "");
   drawTableOfContents(doc, tocPageNumber, [
     { title: "Résumé exécutif", pageNumber: sectionPages.executiveSummary },
-    { title: "Évolution des liquidités", pageNumber: sectionPages.liquidityEvolution },
+    { title: "Position de liquidité annuelle", pageNumber: sectionPages.liquidityEvolution },
     { title: "Situation actuelle", pageNumber: sectionPages.currentSituation },
     { title: "Projection fiscale recommandée", pageNumber: sectionPages.taxDetails },
     { title: "Comparaison des variantes", pageNumber: sectionPages.variantComparison },

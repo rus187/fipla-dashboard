@@ -2969,25 +2969,36 @@ export default function App() {
       color: "#b88a44",
     },
   ].filter((item) => item.value > 0);
+  const proposedDossier = bestVariantState.dossier;
+  const proposedLiquiditesAjusteesCalcule =
+    (proposedDossier.fortune.liquidites || 0) -
+    (proposedDossier.fiscalite.troisiemePilierSimule || 0) -
+    (proposedDossier.fiscalite.rachatLpp || 0) +
+    (proposedDossier.fiscalite.ajustementManuelRevenu || 0);
+  const proposedTroisiemePilierPatrimonialCalcule =
+    (proposedDossier.fortune.troisiemePilier || 0) +
+    (proposedDossier.fiscalite.troisiemePilierSimule || 0);
+  const proposedFortuneLppPatrimonialeCalcule =
+    (proposedDossier.fortune.fortuneLppActuelle || 0) + (proposedDossier.fiscalite.rachatLpp || 0);
   const patrimonyStructureChartData = [
     {
       label: "Liquidités",
-      value: Math.max(0, referenceLiquiditesAjusteesCalcule),
+      value: Math.max(0, proposedLiquiditesAjusteesCalcule),
       color: "#94a3b8",
     },
     {
       label: "Immobilier (Valeur fiscale)",
-      value: referenceDossier.fortune.immobilier || 0,
+      value: proposedDossier.fortune.immobilier || 0,
       color: "#1f4c7a",
     },
     {
       label: "Fortune mobilière",
-      value: referenceDossier.fortune.titres || 0,
+      value: proposedDossier.fortune.titres || 0,
       color: "#b88a44",
     },
     {
       label: "Prévoyance",
-      value: referenceTroisiemePilierPatrimonialCalcule + referenceFortuneLppPatrimonialeCalcule,
+      value: proposedTroisiemePilierPatrimonialCalcule + proposedFortuneLppPatrimonialeCalcule,
       color: "#2f7d5a",
     },
   ].filter((item) => item.value > 0);
@@ -3108,6 +3119,11 @@ export default function App() {
       chargesAnnuelles: formatMontantCHF(pdfChargesAnnuelles),
       liquiditesFin: formatMontantCHF(pdfLiquiditesFin),
       delta: formatMontantCHFSigne(pdfDeltaLiquidites),
+      troisiemePilierA: formatMontantCHF(dossier.fiscalite.troisiemePilierSimule || 0),
+      rachatLpp: formatMontantCHF(dossier.fiscalite.rachatLpp || 0),
+      totalEpargneRetraite: formatMontantCHF(
+        (dossier.fiscalite.troisiemePilierSimule || 0) + (dossier.fiscalite.rachatLpp || 0)
+      ),
     },
     variants: variants.map((variant) => {
       const totalTax = getVariantTaxTotal(variant);
