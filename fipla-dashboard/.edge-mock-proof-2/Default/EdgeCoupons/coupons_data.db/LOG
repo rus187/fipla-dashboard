@@ -1,0 +1,5 @@
+2026/03/28-16:45:54.634 19f4 Creating DB D:\Russo\CloudStation\fipla-platform\fipla-dashboard\.edge-mock-proof-2\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/03/28-16:45:54.646 19f4 Reusing MANIFEST D:\Russo\CloudStation\fipla-platform\fipla-dashboard\.edge-mock-proof-2\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/03/28-16:45:54.851 640c Level-0 table #5: started
+2026/03/28-16:45:54.856 640c Level-0 table #5: 681961 bytes OK
+2026/03/28-16:45:54.859 640c Delete type=0 #3
