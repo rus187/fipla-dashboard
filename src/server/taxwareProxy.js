@@ -2,66 +2,217 @@ import express from "express";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import cors from "cors";
+import { pathToFileURL } from "url";
 
-dotenv.config({ path: "./src/server/.env" });
+const DEFAULT_PROXY_PORT = 3001;
+const DEFAULT_TAXWARE_PROXY_TIMEOUT_MS = 15000;
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+function readRequiredEnv(env, key, errorMessage) {
+  const value = env[key]?.trim();
 
-function basicAuthHeader() {
-  const username = process.env.TAXWARE_USERNAME?.trim();
-  const password = process.env.TAXWARE_PASSWORD?.trim();
-
-  if (!username || !password) {
-    throw new Error("Identifiants TaxWare manquants");
+  if (!value) {
+    throw new Error(errorMessage);
   }
 
-  return "Basic " + Buffer.from(`${username}:${password}`).toString("base64");
+  return value;
 }
 
-app.post("/api/taxware/simulate", async (req, res) => {
-  console.log(">>> REQUETE RECUE PAR LE SERVEUR TAXWARE");
+function parseTimeoutMs(env) {
+  const timeoutSource = env.TAXWARE_PROXY_TIMEOUT_MS?.trim();
+
+  if (!timeoutSource) {
+    return DEFAULT_TAXWARE_PROXY_TIMEOUT_MS;
+  }
+
+  const timeoutMs = Number.parseInt(timeoutSource, 10);
+
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("TAXWARE_PROXY_TIMEOUT_MS doit être un entier strictement positif");
+  }
+
+  return timeoutMs;
+}
+
+export function resolveTaxwareProxyRuntimeConfig(env = process.env) {
+  const apiUrl = readRequiredEnv(env, "TAXWARE_API_URL", "TAXWARE_API_URL manquante");
+  const username = readRequiredEnv(
+    env,
+    "TAXWARE_USERNAME",
+    "Identifiant TaxWare manquant"
+  );
+  const password = readRequiredEnv(
+    env,
+    "TAXWARE_PASSWORD",
+    "Mot de passe TaxWare manquant"
+  );
+
   try {
-    const payload = req.body;
+    new URL(apiUrl);
+  } catch {
+    throw new Error("TAXWARE_API_URL doit être une URL absolue valide");
+  }
 
-    console.log("PAYLOAD ENVOYÉ À TAXWARE =", JSON.stringify(payload, null, 2));
+  return {
+    apiUrl,
+    timeoutMs: parseTimeoutMs(env),
+    authorizationHeader:
+      "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
+  };
+}
 
-    const response = await fetch(process.env.TAXWARE_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: basicAuthHeader(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+export function buildTaxwareProxyPreflight(env = process.env) {
+  try {
+    const runtimeConfig = resolveTaxwareProxyRuntimeConfig(env);
+    const { host, pathname, protocol } = new URL(runtimeConfig.apiUrl);
+
+    return {
+      ready: true,
+      apiTarget: `${protocol}//${host}${pathname}`,
+      timeoutMs: runtimeConfig.timeoutMs,
+      credentialsConfigured: true,
+      issues: [],
+    };
+  } catch (error) {
+    return {
+      ready: false,
+      apiTarget: null,
+      timeoutMs: null,
+      credentialsConfigured: Boolean(
+        env.TAXWARE_USERNAME?.trim() && env.TAXWARE_PASSWORD?.trim()
+      ),
+      issues: [error instanceof Error ? error.message : "Configuration TaxWare invalide"],
+    };
+  }
+}
+
+function parseTaxwareJsonResponse(text) {
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("La réponse amont TaxWare n'est pas un JSON valide");
+  }
+}
+
+function validateProxyPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Le proxy TaxWare attend un payload JSON objet non vide");
+  }
+}
+
+export function createTaxwareProxyApp(env = process.env) {
+  const app = express();
+
+  app.use(cors());
+  app.use(express.json());
+
+  app.get("/health", (_req, res) => {
+    const preflight = buildTaxwareProxyPreflight(env);
+
+    res.status(preflight.ready ? 200 : 503).json({
+      status: preflight.ready ? "ready" : "misconfigured",
+      preflight,
     });
+  });
 
-    const text = await response.text();
-
-    let data;
+  app.post("/api/taxware/simulate", async (req, res) => {
     try {
-      data = JSON.parse(text);
-    } catch {
-      data = { message: text };
-    }
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: "Erreur TaxWare",
-        details: data,
+      validateProxyPayload(req.body);
+    } catch (error) {
+      return res.status(400).json({
+        error: "taxware_proxy_invalid_payload",
+        message: error instanceof Error ? error.message : "Payload proxy invalide",
       });
     }
 
-    return res.json(data);
-  } catch (error) {
-    return res.status(500).json({
-      error: error.message || "Erreur serveur",
-    });
-  }
-});
+    try {
+      const payload = req.body;
+      const runtimeConfig = resolveTaxwareProxyRuntimeConfig(env);
+      const abortController = new AbortController();
+      const timeoutHandle = setTimeout(
+        () => abortController.abort(),
+        runtimeConfig.timeoutMs
+      );
 
-const PORT = 3001;
+      let response;
 
-app.listen(PORT, () => {
-  console.log("Serveur TaxWare lancé sur http://localhost:" + PORT);
-});
+      try {
+        response = await fetch(runtimeConfig.apiUrl, {
+          method: "POST",
+          headers: {
+            Authorization: runtimeConfig.authorizationHeader,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: abortController.signal,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return res.status(504).json({
+            error: "taxware_proxy_timeout",
+            message: `Le service TaxWare n'a pas répondu dans le délai configuré (${runtimeConfig.timeoutMs} ms).`,
+          });
+        }
+
+        return res.status(502).json({
+          error: "taxware_proxy_network_error",
+          message:
+            error instanceof Error ? error.message : "Le proxy TaxWare n'a pas pu joindre l'amont.",
+        });
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
+
+      const text = await response.text();
+      let data;
+
+      try {
+        data = parseTaxwareJsonResponse(text);
+      } catch (error) {
+        return res.status(502).json({
+          error: "taxware_proxy_invalid_json",
+          message:
+            error instanceof Error
+              ? error.message
+              : "La réponse amont TaxWare n'est pas exploitable.",
+        });
+      }
+
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: "taxware_upstream_error",
+          details: data,
+        });
+      }
+
+      return res.json(data);
+    } catch (error) {
+      return res.status(500).json({
+        error: "taxware_proxy_misconfigured",
+        message: error instanceof Error ? error.message : "Erreur serveur",
+      });
+    }
+  });
+
+  return app;
+}
+
+export function startTaxwareProxyServer(options = {}) {
+  const { env = process.env, port = DEFAULT_PROXY_PORT } = options;
+  const app = createTaxwareProxyApp(env);
+
+  return app.listen(port, () => {
+    console.log(`Serveur TaxWare lancé sur http://localhost:${port}`);
+  });
+}
+
+const isDirectExecution =
+  process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+
+if (isDirectExecution) {
+  dotenv.config({ path: "./src/server/.env" });
+  startTaxwareProxyServer();
+}

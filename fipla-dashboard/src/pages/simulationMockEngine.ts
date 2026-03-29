@@ -1,4 +1,7 @@
-import type { TargetSimulationPayload } from './simulationAdapter'
+import {
+  buildMinimalContractReadinessFromPayload,
+  type TargetSimulationPayload,
+} from './simulationAdapter'
 
 export const MOCK_SIMULATION_ROUTE_PATH = '/api/simulation-fiscale/mock'
 
@@ -60,18 +63,13 @@ function buildLocationLabel(payload: TargetSimulationPayload) {
 }
 
 function buildInputReadinessLabel(payload: TargetSimulationPayload) {
-  if (
-    payload.declaredFinancials.annualIncome !== null &&
-    payload.declaredFinancials.totalWealth !== null
-  ) {
-    return 'Le payload contient revenu et fortune pour un futur moteur.'
+  const minimalContractReadiness = buildMinimalContractReadinessFromPayload(payload)
+
+  if (minimalContractReadiness.status === 'minimal-compatible') {
+    return `Le dossier remplit ${minimalContractReadiness.readyRequiredFieldCount}/${minimalContractReadiness.requiredFieldCount} champs requis du contrat minimal et reste en fallback sécurisé tant que l’opt-in serveur réel est désactivé.`
   }
 
-  if (payload.declaredFinancials.annualIncome !== null) {
-    return 'Le revenu est prêt, mais certains postes patrimoniaux restent à confirmer.'
-  }
-
-  return 'La route interne a reçu le payload, avec plusieurs entrées encore à compléter.'
+  return `Le dossier remplit ${minimalContractReadiness.readyRequiredFieldCount}/${minimalContractReadiness.requiredFieldCount} champs requis du contrat minimal; des données obligatoires restent absentes pour une entrée buildTaxwarePayload complète.`
 }
 
 export function buildFallbackMockSimulationResponse(params: {
