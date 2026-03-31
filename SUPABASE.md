@@ -26,6 +26,9 @@
 - subscriptions
 - org_usage_monthly
 
+## D2. SQL de création
+- `SUPABASE_SCHEMA.sql` : schéma complet des tables avec champs Stripe et quotas
+
 ## E. Ce qu’il reste à faire pour Stripe
 1. Installer et configurer `@stripe/stripe-node` côté serveur.
 2. Créer des webhooks pour `invoice.payment_succeeded`, `customer.subscription.updated` et `customer.subscription.deleted`.
