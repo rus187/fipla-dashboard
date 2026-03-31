@@ -2,9 +2,10 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { calculateTaxware } from "./taxwareProxy.js";
-import { stripe, supabase } from "./stripe/stripeClient.js";
 
-dotenv.config();
+dotenv.config({ path: './src/server/.env' });
+
+const { stripe, supabase } = await import("./stripe/stripeClient.js");
 
 const app = express();
 
