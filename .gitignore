@@ -28,6 +28,7 @@ dist-ssr
 .edge-test-profile/
 .chrome-test-profile/
 .served-*/
+**/.served-*
 **/.edge-*/
 **/.chrome-*/
 **/.served-*/
