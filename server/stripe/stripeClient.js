@@ -12,5 +12,5 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
   throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
 }
 
-export const stripe = new Stripe(stripeSecretKey, { apiVersion: '2022-11-15' });
+export const stripe = new Stripe(stripeSecretKey, { apiVersion: '2026-03-25.dahlia' });
 export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);

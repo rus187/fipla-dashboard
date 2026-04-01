@@ -1,4 +1,5 @@
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent, type ReactNode } from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import {
   Bar,
   BarChart,
@@ -34,7 +35,11 @@ import {
 import CollapsibleHelp from "./components/CollapsibleHelp";
 import DecisionIntro, { type AnalysisMode } from "./components/DecisionIntro";
 import SituationEntryScreen from "./components/SituationEntryScreen";
+import StripeCheckoutCard from "./components/StripeCheckoutCard";
 import { buildDynamicAdvisoryPreview } from "./lib/advisory/recommendationEngine";
+import { supabaseClient } from "./lib/supabase/client";
+import { ensureCurrentUserProfile } from "./lib/supabase/profiles";
+import type { Profile } from "./lib/supabase/types";
 
 declare const process:
   | {
@@ -771,6 +776,15 @@ function GuidedSection({ id, step, title, description, children }: GuidedSection
 export default function App() {
   const autoSimulationStatusRef = useRef<Record<string, "running" | "done">>({});
   const activeStepViewportRef = useRef<HTMLDivElement | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [profileSyncSource, setProfileSyncSource] = useState<"id" | "email" | "created" | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authError, setAuthError] = useState("");
   const [activeVariantIndex, setActiveVariantIndex] = useState(0);
   const [activeSectionId, setActiveSectionId] = useState(INTRO_SECTION_ID);
   const [showConseillerPrompt, setShowConseillerPrompt] = useState(false);
@@ -3280,6 +3294,102 @@ export default function App() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+
+    const initializeSession = async () => {
+      const { data, error } = await supabaseClient.auth.getSession();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        setAuthError(error.message);
+      }
+
+      const nextSession = data.session ?? null;
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+      setLoading(false);
+    };
+
+    void initializeSession();
+
+    const {
+      data: { subscription },
+    } = supabaseClient.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncProfile = async () => {
+      if (!user) {
+        if (isMounted) {
+          setProfile(null);
+          setProfileSyncSource(null);
+          setIsProfileLoading(false);
+        }
+        return;
+      }
+
+      setIsProfileLoading(true);
+
+      try {
+        const result = await ensureCurrentUserProfile(user);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProfile(result.profile);
+        setProfileSyncSource(result.source);
+        setAuthError("");
+        console.info("[App][profiles] Profile synchronisé", {
+          userId: user.id,
+          profileId: result.profile.id,
+          source: result.source,
+          email: result.profile.email,
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        const message =
+          error instanceof Error ? error.message : "Impossible de recuperer le profile utilisateur.";
+        setAuthError(message);
+        setProfile(null);
+        setProfileSyncSource(null);
+        console.error("[App][profiles] Echec de synchronisation du profile", {
+          userId: user.id,
+          email: user.email ?? null,
+          message,
+        });
+      } finally {
+        if (isMounted) {
+          setIsProfileLoading(false);
+        }
+      }
+    };
+
+    void syncProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
     if (!activeStepViewportRef.current) {
       return;
     }
@@ -3290,9 +3400,282 @@ export default function App() {
     });
   }, [activeSectionId]);
 
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthError("");
+    setLoading(true);
+
+    const { error } = await supabaseClient.auth.signInWithPassword({
+      email: loginEmail,
+      password: loginPassword,
+    });
+
+    if (error) {
+      setAuthError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    setLoginPassword("");
+  };
+
+  const handleLogout = async () => {
+    setAuthError("");
+    setLoading(true);
+
+    const { error } = await supabaseClient.auth.signOut();
+
+    if (error) {
+      setAuthError(error.message);
+      setLoading(false);
+    }
+  };
+
+  if (loading || (user !== null && isProfileLoading)) {
+    return (
+      <div className="app-shell">
+        <div
+          className="app-shell__inner"
+          style={{
+            minHeight: "70vh",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "min(100%, 420px)",
+              padding: "32px",
+              borderRadius: "24px",
+              background: "rgba(255, 255, 255, 0.94)",
+              boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              textAlign: "center",
+            }}
+          >
+            <h1 style={{ marginTop: 0, marginBottom: "12px", color: "#0f172a", fontSize: "28px" }}>
+              FIPLA Dashboard
+            </h1>
+            <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
+              {loading
+                ? "Chargement de la session utilisateur..."
+                : "Chargement du profile utilisateur..."}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="app-shell">
+        <div
+          className="app-shell__inner"
+          style={{
+            minHeight: "100vh",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <form
+            onSubmit={handleLogin}
+            style={{
+              width: "min(100%, 440px)",
+              padding: "36px",
+              borderRadius: "28px",
+              background: "rgba(255, 255, 255, 0.96)",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.12)",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              display: "grid",
+              gap: "18px",
+            }}
+          >
+            <div style={{ display: "grid", gap: "10px" }}>
+              <div
+                style={{
+                  color: "#36516e",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Authentification
+              </div>
+              <h1 style={{ margin: 0, color: "#0f172a", fontSize: "32px", lineHeight: 1.1 }}>
+                Connexion
+              </h1>
+              <p style={{ margin: 0, color: "#475569", lineHeight: 1.7 }}>
+                Connectez-vous avec votre compte Supabase pour accéder au dashboard.
+              </p>
+            </div>
+
+            <label style={{ display: "grid", gap: "8px" }}>
+              <span style={{ color: "#334155", fontSize: "14px", fontWeight: 700 }}>Email</span>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                autoComplete="email"
+                required
+                style={{
+                  minHeight: "48px",
+                  padding: "0 14px",
+                  borderRadius: "14px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "15px",
+                }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: "8px" }}>
+              <span style={{ color: "#334155", fontSize: "14px", fontWeight: 700 }}>
+                Mot de passe
+              </span>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                autoComplete="current-password"
+                required
+                style={{
+                  minHeight: "48px",
+                  padding: "0 14px",
+                  borderRadius: "14px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "15px",
+                }}
+              />
+            </label>
+
+            {authError && (
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  background: "#fff1f2",
+                  border: "1px solid #fecdd3",
+                  color: "#be123c",
+                  fontSize: "14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              style={{
+                minHeight: "54px",
+                border: "none",
+                borderRadius: "16px",
+                background: "linear-gradient(135deg, #17324d 0%, #264b6f 100%)",
+                color: "#ffffff",
+                fontSize: "15px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Se connecter
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <div className="app-shell__inner">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "16px",
+            marginBottom: "18px",
+            padding: "4px 2px 0",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
+            Connecté en tant que <strong>{session?.user?.email ?? user.email ?? "utilisateur"}</strong>
+            {profile?.id ? (
+              <>
+                {" "}
+                • Profile ID <strong>{profile.id}</strong>
+              </>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void handleLogout();
+            }}
+            style={{
+              minHeight: "42px",
+              padding: "0 16px",
+              borderRadius: "14px",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              color: "#0f172a",
+              fontSize: "14px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Logout
+          </button>
+        </div>
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "14px 16px",
+            borderRadius: "16px",
+            border: authError ? "1px solid #fecdd3" : "1px solid #dbe3ee",
+            background: authError ? "#fff1f2" : "#f8fafc",
+            color: authError ? "#be123c" : "#334155",
+            display: "grid",
+            gap: "6px",
+          }}
+        >
+          <div style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            Statut profile
+          </div>
+          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+            User ID: <strong>{user.id}</strong>
+          </div>
+          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+            Email: <strong>{profile?.email ?? user.email ?? "Non disponible"}</strong>
+          </div>
+          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+            Profile ID: <strong>{profile?.id ?? "Aucun profile charge"}</strong>
+          </div>
+          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+            Source:{" "}
+            <strong>
+              {profileSyncSource === "id"
+                ? "profile trouve par id"
+                : profileSyncSource === "email"
+                  ? "profile trouve par email"
+                  : profileSyncSource === "created"
+                    ? "profile cree"
+                    : "non disponible"}
+            </strong>
+          </div>
+          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+            Chargement: <strong>{isProfileLoading ? "en cours" : "termine"}</strong>
+          </div>
+          {authError ? (
+            <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+              Erreur profile: <strong>{authError}</strong>
+            </div>
+          ) : null}
+        </div>
+        <StripeCheckoutCard profileId={profile?.id ?? null} />
+
         <DecisionIntro
           analysisMode={analysisMode}
           isHelpOpen={isDecisionHelpOpen}
