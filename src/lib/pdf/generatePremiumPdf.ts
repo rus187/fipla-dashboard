@@ -495,25 +495,77 @@ function buildOperationalOptimisationItems(fields: PdfField[]): OperationalOptim
   });
 }
 
+function getOperationalOptimisationRowHeights(
+  doc: jsPDF,
+  innerWidth: number,
+  items: OperationalOptimisationItem[]
+) {
+  return items.map((item) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.75);
+    const effectLines = splitText(doc, item.effect, innerWidth - 106);
+    return Math.max(76, 38 + effectLines.length * 13);
+  });
+}
+
+function getOperationalOptimisationPanelHeight(
+  doc: jsPDF,
+  width: number,
+  items: OperationalOptimisationItem[]
+) {
+  const paddingX = 20;
+  const innerWidth = width - paddingX * 2;
+  const rowGap = 14;
+  const rowHeights = getOperationalOptimisationRowHeights(doc, innerWidth, items);
+
+  return 52 + rowHeights.reduce((sum, height) => sum + height, 0) + Math.max(0, items.length - 1) * rowGap;
+}
+
+function splitOperationalOptimisationItemsByHeight(
+  doc: jsPDF,
+  width: number,
+  items: OperationalOptimisationItem[],
+  maxHeight: number
+) {
+  const chunks: OperationalOptimisationItem[][] = [];
+  let currentChunk: OperationalOptimisationItem[] = [];
+
+  items.forEach((item) => {
+    const nextChunk = [...currentChunk, item];
+    const nextHeight = getOperationalOptimisationPanelHeight(doc, width, nextChunk) - 52;
+
+    if (currentChunk.length > 0 && nextHeight > maxHeight) {
+      chunks.push(currentChunk);
+      currentChunk = [item];
+      return;
+    }
+
+    currentChunk = nextChunk;
+  });
+
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
 function drawOperationalOptimisationPanel(
   doc: jsPDF,
   x: number,
   y: number,
   width: number,
   title: string,
-  fields: PdfField[]
+  fields: PdfField[] | OperationalOptimisationItem[]
 ) {
-  const items = buildOperationalOptimisationItems(fields);
+  const items =
+    fields.length > 0 && "effect" in fields[0]
+      ? (fields as OperationalOptimisationItem[])
+      : buildOperationalOptimisationItems(fields as PdfField[]);
   const paddingX = 20;
   const innerWidth = width - paddingX * 2;
   const rowGap = 14;
-
-  const rowHeights = items.map((item) => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9.75);
-    const effectLines = splitText(doc, item.effect, innerWidth - 106);
-    return Math.max(76, 38 + effectLines.length * 13);
-  });
+  const rowHeights = getOperationalOptimisationRowHeights(doc, innerWidth, items);
 
   const panelHeight =
     52 + rowHeights.reduce((sum, height) => sum + height, 0) + Math.max(0, items.length - 1) * rowGap;
@@ -979,12 +1031,7 @@ function drawStructuredConclusionBlock(
   });
 
   let sectionY = bodyStartY;
-  sections.forEach((section, index) => {
-    if (index > 0) {
-      setDraw(doc, LINE);
-      doc.line(x + paddingX, sectionY - 10, x + width - paddingX, sectionY - 10);
-    }
-
+  sections.forEach((section) => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(sectionTitleFontSize);
     setText(doc, ACCENT);
@@ -2434,6 +2481,8 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
   const rightWidth = CONTENT_WIDTH - leftWidth - 18;
   const leftX = MARGIN_X;
   const rightX = MARGIN_X + leftWidth + 18;
+  const sectionTopY = 154;
+  const sectionBottomY = PAGE_HEIGHT - MARGIN_Y - 18;
   const estateOne = drawInfoBlock(doc, leftX, 154, leftWidth, "Régime actuel", payload.realEstate.currentRegime, {
     minHeight: 102,
   });
@@ -2453,14 +2502,62 @@ export function generatePremiumPdf(payload: PremiumPdfPayload) {
     minHeight: 80,
   });
   const bulletsHeight = drawBulletPanel(doc, rightX, 154, rightWidth, "Points de lecture", payload.realEstate.bullets);
-  drawOperationalOptimisationPanel(
-    doc,
-    rightX,
-    154 + bulletsHeight + 18,
-    rightWidth,
-    "Optimisations activées",
-    payload.optimisations
-  );
+  const optimisationPanelY = sectionTopY + bulletsHeight + 18;
+  const optimisationItems = buildOperationalOptimisationItems(payload.optimisations);
+  const optimisationPanelHeight = getOperationalOptimisationPanelHeight(doc, rightWidth, optimisationItems);
+
+  if (optimisationPanelY + optimisationPanelHeight <= sectionBottomY) {
+    drawOperationalOptimisationPanel(
+      doc,
+      rightX,
+      optimisationPanelY,
+      rightWidth,
+      "Optimisations activées",
+      optimisationItems
+    );
+  } else {
+    const firstPageAvailableHeight = Math.max(120, sectionBottomY - optimisationPanelY);
+    const optimisationChunks = splitOperationalOptimisationItemsByHeight(
+      doc,
+      rightWidth,
+      optimisationItems,
+      firstPageAvailableHeight
+    );
+    const [firstChunk, ...remainingChunks] = optimisationChunks;
+
+    if (firstChunk && firstChunk.length > 0) {
+      drawOperationalOptimisationPanel(
+        doc,
+        rightX,
+        optimisationPanelY,
+        rightWidth,
+        "Optimisations activées",
+        firstChunk
+      );
+    }
+
+    remainingChunks.forEach((chunk, index) => {
+      doc.addPage();
+      currentPageNumber += 1;
+      addPageTitle(
+        doc,
+        currentPageNumber,
+        "Analyse immobilière et optimisations",
+        index === 0
+          ? "Suite des actions d'optimisation activées dans le dossier."
+          : "Complément des actions d'optimisation activées dans le dossier."
+      );
+
+      drawOperationalOptimisationPanel(
+        doc,
+        MARGIN_X,
+        sectionTopY,
+        CONTENT_WIDTH,
+        index === 0 ? "Optimisations activées (suite)" : "Optimisations activées",
+        chunk
+      );
+    });
+  }
 
   doc.addPage();
   currentPageNumber += 1;

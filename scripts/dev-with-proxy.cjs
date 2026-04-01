@@ -45,6 +45,7 @@ function shutdown(exitCode = 0) {
 }
 
 spawnProcess(nodeCommand, ["src/server/taxwareProxy.js"], "le proxy TaxWare");
+spawnProcess(nodeCommand, ["server/index.js"], "le backend Stripe");
 spawnProcess(
   nodeCommand,
   [viteBin, "--host", "0.0.0.0", "--port", "4173"],

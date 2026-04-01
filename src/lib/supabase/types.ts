@@ -24,11 +24,11 @@ export interface Membership {
 export interface Plan {
   id: string;
   name: string;
-  stripe_price_id?: string;
-  interval: 'month' | 'year';
-  amount_cents: number;
-  currency: string;
-  trial_days?: number;
+  active?: boolean;
+  stripe_product_id?: string | null;
+  stripe_price_id?: string | null;
+  stripe_price_id_monthly?: string | null;
+  stripe_price_id_yearly?: string | null;
   created_at?: string;
 }
 
