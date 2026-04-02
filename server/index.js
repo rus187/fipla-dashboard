@@ -1535,6 +1535,31 @@ app.post("/api/taxware/calculate", async (req, res) => {
   }
 });
 
+app.post("/api/taxware/simulate", async (req, res) => {
+  const payload = req.body;
+  const hasPayload = payload !== null && payload !== undefined;
+
+  console.info("[taxware] simulate request received", {
+    hasPayload,
+    zip: typeof payload?.Zip === "number" ? payload.Zip : null,
+    year: typeof payload?.Year === "number" ? payload.Year : null,
+    partnership: typeof payload?.Partnership === "string" ? payload.Partnership : null,
+    childrenCount: typeof payload?.NumChildren === "number" ? payload.NumChildren : null,
+  });
+
+  try {
+    const data = await calculateTaxware(payload);
+    console.info("[taxware] simulate success");
+    res.json(data);
+  } catch (error) {
+    console.error("[taxware] simulate error", serializeOperationalError(error));
+    res.status(error.status || 500).json({
+      error: error.message || "Erreur serveur",
+      ...(error.details ? { details: error.details } : {}),
+    });
+  }
+});
+
 app.post("/api/stripe/create-checkout-session", async (req, res) => {
   try {
     const { plan_id, success_url, cancel_url, profile_id, organization_id } = req.body;
