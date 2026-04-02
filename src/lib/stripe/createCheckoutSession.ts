@@ -41,12 +41,11 @@ function buildDefaultRedirectUrl(status: "success" | "cancel") {
     currentUrl.hostname = "127.0.0.1";
   }
 
-  currentUrl.searchParams.set("stripe_checkout", status);
+  currentUrl.pathname = status === "success" ? "/checkout/success" : "/checkout/cancel";
+  currentUrl.search = "";
 
   if (status === "success") {
     currentUrl.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
-  } else {
-    currentUrl.searchParams.delete("session_id");
   }
 
   return currentUrl.toString();
@@ -97,7 +96,7 @@ export async function createStripeCheckoutSession(
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Erreur reseau inconnue pendant la creation Stripe.";
+      error instanceof Error ? error.message : "Erreur réseau inconnue pendant la création Stripe.";
     throw new Error(`Impossible de contacter le backend Stripe (${endpoint}). ${message}`);
   }
 
@@ -129,7 +128,7 @@ export async function createStripeCheckoutSession(
     const message =
       messageParts.length > 0
         ? messageParts.join(" ")
-        : `Erreur lors de la creation de la session Stripe. HTTP ${response.status} ${response.statusText} (${endpoint}).`;
+        : `Erreur lors de la création de la session Stripe. HTTP ${response.status} ${response.statusText} (${endpoint}).`;
     throw new Error(message);
   }
 

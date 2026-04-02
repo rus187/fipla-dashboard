@@ -34,14 +34,14 @@ const OFFER_CONTENT: Record<(typeof OFFER_ORDER)[number], CheckoutOfferContent> 
   fipla_private_mini: {
     eyebrow: "Paiement unique",
     title: "Mini",
-    positioning: "La porte d'entree FIPLA",
-    description: "Une entree simple pour lancer un premier dossier sans engagement mensuel.",
+    positioning: "La porte d'entrée FIPLA",
+    description: "Une entrée simple pour lancer un premier dossier sans engagement mensuel.",
     priceLabel: "9 CHF - achat unique",
     paymentLabel: "Paiement unique",
     ctaLabel: "Choisir Mini",
     benefits: [
-      "Acces immediat a l'offre Mini",
-      "Ideal pour un besoin ponctuel",
+      "Accès immédiat à l'offre Mini",
+      "Idéal pour un besoin ponctuel",
       "Aucun abonnement mensuel",
     ],
     footnote: "Parfait pour tester le parcours FIPLA sur un besoin cible.",
@@ -49,25 +49,25 @@ const OFFER_CONTENT: Record<(typeof OFFER_ORDER)[number], CheckoutOfferContent> 
   fipla_private_full: {
     eyebrow: "Abonnement mensuel",
     title: "Full",
-    positioning: "L'offre recommandee",
-    description: "La formule private la plus complete pour travailler dans la duree avec plus de confort.",
+    positioning: "L'offre recommandée",
+    description: "La formule private la plus complète pour travailler dans la durée avec plus de confort.",
     priceLabel: "29 CHF / mois",
     paymentLabel: "Abonnement mensuel",
     ctaLabel: "Choisir Full",
-    highlightLabel: "Le plus equilibre",
+    highlightLabel: "Le plus équilibré",
     benefits: [
-      "Acces complet a l'offre Private Full",
-      "Convient a un usage regulier",
+      "Accès complet à l'offre Private Full",
+      "Convient à un usage régulier",
       "Facturation mensuelle lisible",
       "Montée en puissance simple",
     ],
-    footnote: "Concue pour une utilisation recurrente sans complexite inutile.",
+    footnote: "Conçue pour une utilisation récurrente sans complexité inutile.",
   },
   fipla_pro_solo: {
     eyebrow: "Abonnement mensuel",
     title: "Pro Solo",
-    positioning: "La formule usage metier",
-    description: "La formule orientee conseil pour un usage professionnel plus intensif.",
+    positioning: "La formule usage métier",
+    description: "La formule orientée conseil pour un usage professionnel plus intensif.",
     priceLabel: "59 CHF / mois",
     paymentLabel: "Abonnement mensuel",
     ctaLabel: "Choisir Pro Solo",
@@ -75,14 +75,14 @@ const OFFER_CONTENT: Record<(typeof OFFER_ORDER)[number], CheckoutOfferContent> 
       "Positionnement Pro Solo",
       "Pensé pour un usage expert",
       "Abonnement mensuel robuste",
-      "Acces direct au checkout dedie",
+      "Accès direct au checkout dédié",
     ],
-    footnote: "Recommande pour une pratique plus soutenue et plus orientee business.",
+    footnote: "Recommandé pour une pratique plus soutenue et plus orientée business.",
   },
 };
 
 function getCheckoutErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Impossible de creer la session Stripe.";
+  return error instanceof Error ? error.message : "Impossible de créer la session Stripe.";
 }
 
 function resolveCheckoutOffer(plan: Plan): CheckoutOffer | null {
@@ -180,7 +180,7 @@ export default function StripeCheckoutCard({
     }
 
     if (!profileId) {
-      setCheckoutError("Aucun profile utilisateur disponible pour lancer Checkout.");
+      setCheckoutError("Aucun profil utilisateur disponible pour lancer le paiement.");
       setCheckoutErrorOfferId(offer.id);
       return;
     }
@@ -197,7 +197,7 @@ export default function StripeCheckoutCard({
       });
 
       if (!result.url) {
-        throw new Error("Stripe n'a pas renvoye d'URL de redirection.");
+        throw new Error("Stripe n'a pas renvoyé d'URL de redirection.");
       }
 
       window.location.assign(result.url);
@@ -210,14 +210,14 @@ export default function StripeCheckoutCard({
 
   const hasAvailableOffers = offers.length > 0;
   const reassuranceItems = [
-    "Paiement securise via Stripe",
-    "Activation simple apres validation",
+    "Paiement sécurisé via Stripe",
+    "Activation simple après validation",
     "Parcours fluide sans ressaisie technique",
   ];
 
   const pricingNotes = [
-    "Les plans inactifs restent masques automatiquement.",
-    "Le backend conserve seul la resolution du plan, du mode et du type de paiement.",
+    "Les plans inactifs restent masqués automatiquement.",
+    "Le backend conserve seul la résolution du plan, du mode et du type de paiement.",
   ];
 
   return (
@@ -279,7 +279,7 @@ export default function StripeCheckoutCard({
                 letterSpacing: "-0.03em",
               }}
             >
-              Choisissez l'offre FIPLA adaptee a votre rythme de travail.
+              Choisissez l'offre FIPLA adaptée à votre rythme de travail.
             </h2>
             <p
               style={{
@@ -290,9 +290,9 @@ export default function StripeCheckoutCard({
                 color: "#334155",
               }}
             >
-              Une entree simple pour demarrer, une formule recommandee pour un usage regulier, et
+              Une entrée simple pour démarrer, une formule recommandée pour un usage régulier, et
               une offre Pro Solo pour une pratique plus soutenue. Le parcours reste clair, rapide
-              et securise jusqu'au paiement.
+              et sécurisé jusqu'au paiement.
             </p>
           </div>
 
@@ -310,11 +310,11 @@ export default function StripeCheckoutCard({
               Pourquoi cette page
             </div>
             <div style={{ fontSize: "14px", color: "#334155", lineHeight: 1.7 }}>
-              L'objectif est de vous aider a choisir rapidement la bonne formule, sans exposer de
-              details techniques ni complexifier le checkout.
+              L'objectif est de vous aider à choisir rapidement la bonne formule, sans exposer de
+              détails techniques ni complexifier le checkout.
             </div>
             <div style={{ fontSize: "13px", color: "#64748b", lineHeight: 1.6 }}>
-              Offre recommandee: <strong style={{ color: "#1d4ed8" }}>FIPLA Private Full</strong>
+              Offre recommandée : <strong style={{ color: "#1d4ed8" }}>FIPLA Private Full</strong>
             </div>
           </div>
         </div>
@@ -587,11 +587,11 @@ export default function StripeCheckoutCard({
                 color: "#17324d",
               }}
             >
-              Reassurance
+              Réassurance
             </div>
             <div style={{ fontSize: "14px", lineHeight: 1.7, color: "#334155" }}>
-              Votre paiement est securise et l'activation reste simple. Vous choisissez une offre,
-              puis Stripe prend le relais pour finaliser le parcours de facon fluide.
+              Votre paiement est sécurisé et l'activation reste simple. Vous choisissez une offre,
+              puis Stripe prend le relais pour finaliser le parcours de façon fluide.
             </div>
           </div>
 

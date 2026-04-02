@@ -59,6 +59,99 @@ const normalizeOptionalString = (value) => {
   return trimmedValue.length > 0 ? trimmedValue : null;
 };
 
+const normalizeLoopbackHost = (url) => {
+  if (url.hostname === "localhost") {
+    url.hostname = "127.0.0.1";
+  }
+
+  return url;
+};
+
+const buildDefaultCheckoutRedirectUrl = (req, status) => {
+  const candidates = [
+    normalizeOptionalString(req.get("referer")),
+    normalizeOptionalString(req.get("origin")),
+    getServerBaseUrl(),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    try {
+      const url = normalizeLoopbackHost(new URL(candidate));
+      url.pathname = status === "success" ? "/checkout/success" : "/checkout/cancel";
+      url.search = "";
+
+      if (status === "success") {
+        url.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
+      }
+
+      return url.toString();
+    } catch (_error) {
+      continue;
+    }
+  }
+
+  return null;
+};
+
+async function resolveProfileFromAuthorizationHeader(req) {
+  const authorizationHeader = normalizeOptionalString(req.get("authorization"));
+  const bearerToken = authorizationHeader?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
+  const normalizedToken = normalizeOptionalString(bearerToken);
+
+  if (!normalizedToken) {
+    return { profile: null, error: null };
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser(normalizedToken);
+
+  if (authError || !authData?.user) {
+    return {
+      profile: null,
+      error: authError ?? new Error("Utilisateur introuvable a partir du token d'authentification."),
+    };
+  }
+
+  const authenticatedUserId = normalizeOptionalString(authData.user.id);
+
+  if (authenticatedUserId && isUuid(authenticatedUserId)) {
+    const { data: profileById, error: profileByIdError } = await getProfileById(authenticatedUserId);
+
+    if (profileByIdError) {
+      return {
+        profile: null,
+        error: profileByIdError,
+      };
+    }
+
+    if (profileById) {
+      return {
+        profile: profileById,
+        error: null,
+      };
+    }
+  }
+
+  const authenticatedEmail = normalizeOptionalString(authData.user.email)?.toLowerCase() ?? null;
+
+  if (!authenticatedEmail) {
+    return {
+      profile: null,
+      error: new Error("Aucun profile exploitable n'a pu etre resolu depuis le token."),
+    };
+  }
+
+  const { data: profileByEmail, error: profileByEmailError } = await getProfileByEmail(authenticatedEmail);
+
+  return {
+    profile: profileByEmail ?? null,
+    error: profileByEmailError ?? null,
+  };
+}
+
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -1446,28 +1539,44 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
   try {
     const { plan_id, success_url, cancel_url, profile_id, organization_id } = req.body;
     const normalizedPlanId = normalizeOptionalString(plan_id);
-    const normalizedProfileId = normalizeOptionalString(profile_id);
+    const explicitProfileId = normalizeOptionalString(profile_id);
     const normalizedOrganizationId = normalizeOptionalString(organization_id);
+    const normalizedSuccessUrl =
+      normalizeOptionalString(success_url) ?? buildDefaultCheckoutRedirectUrl(req, "success");
+    const normalizedCancelUrl =
+      normalizeOptionalString(cancel_url) ?? buildDefaultCheckoutRedirectUrl(req, "cancel");
+    const resolvedProfileContext = explicitProfileId
+      ? { profile: null, error: null }
+      : await resolveProfileFromAuthorizationHeader(req);
+    const normalizedProfileId = explicitProfileId ?? normalizeOptionalString(resolvedProfileContext.profile?.id);
 
     console.info("[stripe:checkout] request received", {
       planId: normalizedPlanId,
       profileId: normalizedProfileId,
       requestedOrganizationId: normalizedOrganizationId,
-      successUrl: success_url,
-      cancelUrl: cancel_url,
+      successUrl: normalizedSuccessUrl,
+      cancelUrl: normalizedCancelUrl,
+      authResolvedProfileId: resolvedProfileContext.profile?.id ?? null,
     });
 
-    if (!normalizedPlanId || !success_url || !cancel_url || !normalizedProfileId) {
+    if (resolvedProfileContext.error) {
+      console.error("[stripe:checkout] auth profile resolution failed", {
+        error: serializeOperationalError(resolvedProfileContext.error),
+      });
+      return res.status(401).json({ error: "Authentification requise pour lancer ce checkout" });
+    }
+
+    if (!normalizedPlanId || !normalizedSuccessUrl || !normalizedCancelUrl || !normalizedProfileId) {
       console.error("[stripe:checkout] missing required fields", {
         planId: normalizedPlanId,
         profileId: normalizedProfileId,
         requestedOrganizationId: normalizedOrganizationId,
-        successUrl: success_url,
-        cancelUrl: cancel_url,
+        successUrl: normalizedSuccessUrl,
+        cancelUrl: normalizedCancelUrl,
       });
       return res
         .status(400)
-        .json({ error: "plan_id, profile_id, success_url and cancel_url are required" });
+        .json({ error: "plan_id et un profile authentifie sont requis pour ce checkout" });
     }
 
     if (!isUuid(normalizedPlanId) || !isUuid(normalizedProfileId)) {
@@ -1486,12 +1595,12 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
     }
 
     try {
-      new URL(success_url);
-      new URL(cancel_url);
+      new URL(normalizedSuccessUrl);
+      new URL(normalizedCancelUrl);
     } catch (error) {
       console.error("[stripe:checkout] invalid redirect URL", {
-        successUrl: success_url,
-        cancelUrl: cancel_url,
+        successUrl: normalizedSuccessUrl,
+        cancelUrl: normalizedCancelUrl,
         error: serializeOperationalError(error),
       });
       return res.status(400).json({
@@ -1567,7 +1676,14 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
       paymentType: checkoutPricing.paymentType,
     });
 
-    const { data: profile, error: profileError } = await getProfileById(normalizedProfileId);
+    const preResolvedProfile =
+      resolvedProfileContext.profile && resolvedProfileContext.profile.id === normalizedProfileId
+        ? resolvedProfileContext.profile
+        : null;
+    const { data: profileById, error: profileError } = preResolvedProfile
+      ? { data: preResolvedProfile, error: null }
+      : await getProfileById(normalizedProfileId);
+    const profile = profileById;
 
     if (profileError) {
       console.error("[stripe:checkout] profile lookup failed", {
@@ -1621,8 +1737,8 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
     const sessionPayload = {
       mode: checkoutPricing.checkoutMode,
       line_items: [{ price: selectedPriceId, quantity: 1 }],
-      success_url,
-      cancel_url,
+      success_url: normalizedSuccessUrl,
+      cancel_url: normalizedCancelUrl,
       ...checkoutCustomerContext,
       client_reference_id: normalizedProfileId,
       metadata,

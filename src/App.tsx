@@ -40,6 +40,9 @@ import { buildDynamicAdvisoryPreview } from "./lib/advisory/recommendationEngine
 import { supabaseClient } from "./lib/supabase/client";
 import { ensureCurrentUserProfile } from "./lib/supabase/profiles";
 import type { Profile } from "./lib/supabase/types";
+import CheckoutCancel from "./pages/CheckoutCancel";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
+import PricingPage from "./pages/PricingPage";
 
 declare const process:
   | {
@@ -466,49 +469,49 @@ function getVariantDisplayLabel(variant: ScenarioVariant) {
 
 const sectionHelpTexts = {
   identite: [
-    "Ce bloc sert a decrire la situation personnelle du client.",
-    "Renseignez le prenom, le nom, l age, le NPA, l etat civil et le nombre d enfants.",
-    "La commune et le canton sont completes automatiquement a partir du NPA.",
+    "Ce bloc sert à décrire la situation personnelle du client.",
+    "Renseignez le prénom, le nom, l’âge, le NPA, l’état civil et le nombre d’enfants.",
+    "La commune et le canton sont complétés automatiquement à partir du NPA.",
   ],
   revenus: [
-    "Ce bloc sert a saisir les revenus annuels utilises dans l analyse.",
-    "Renseignez le salaire, l AVS, la LPP et les autres revenus si le client en a.",
-    "Le total des revenus est calcule automatiquement.",
+    "Ce bloc sert à saisir les revenus annuels utilisés dans l’analyse.",
+    "Renseignez le salaire, l’AVS, la LPP et les autres revenus si le client en a.",
+    "Le total des revenus est calculé automatiquement.",
   ],
   fortune: [
-    "Ce bloc sert a decrire le patrimoine du client.",
-    "Renseignez les liquidites, les titres, le 3e pilier, la fortune LPP actuelle et l immobilier.",
-    "Les montants de fortune brute, fortune fiscale et liquidites apres mouvements sont calcules automatiquement.",
+    "Ce bloc sert à décrire le patrimoine du client.",
+    "Renseignez les liquidités, les titres, le 3e pilier, la fortune LPP actuelle et l’immobilier.",
+    "Les montants de fortune brute, de fortune fiscale et de liquidités après mouvements sont calculés automatiquement.",
   ],
   dettes: [
-    "Ce bloc sert a renseigner les engagements financiers du client.",
-    "Saisissez les hypotheques et les autres dettes connues.",
-    "Le total des dettes est calcule automatiquement.",
+    "Ce bloc sert à renseigner les engagements financiers du client.",
+    "Saisissez les hypothèques et les autres dettes connues.",
+    "Le total des dettes est calculé automatiquement.",
   ],
   syntheseFortune: [
     "Ce bloc donne une lecture rapide de la situation patrimoniale.",
-    "Aucune saisie supplementaire n est necessaire ici.",
-    "Le systeme resume automatiquement la fortune brute, la fortune fiscale et la fortune nette.",
+    "Aucune saisie supplémentaire n’est nécessaire ici.",
+    "Le système résume automatiquement la fortune brute, la fortune fiscale et la fortune nette.",
   ],
   charges: [
-    "Ce bloc sert a decrire les depenses annuelles du client.",
+    "Ce bloc sert à décrire les dépenses annuelles du client.",
     "Saisissez les charges courantes comme le logement, les primes maladie, les frais de vie et les autres charges.",
-    "Les impots, le total des charges et la marge annuelle sont completes automatiquement.",
+    "Les impôts, le total des charges et la marge annuelle sont complétés automatiquement.",
   ],
   fiscalite: [
     "Ce bloc part directement du revenu imposable et de la fortune imposable.",
-    "Les deductions fiscales ne sont pas recalculees ici.",
-    "Le professionnel saisit les montants imposables deja determines puis consulte l estimation d impot.",
+    "Les déductions fiscales ne sont pas recalculées ici.",
+    "Le professionnel saisit les montants imposables déjà déterminés puis consulte l’estimation d’impôt.",
   ],
   informationsClient: [
-    "Ce bloc resume toutes les informations de la variante active.",
-    "Il permet de verifier rapidement les donnees saisies avant ou apres une simulation.",
-    "Toutes les valeurs affichees ici sont reprises automatiquement des autres blocs.",
+    "Ce bloc résume toutes les informations de la variante active.",
+    "Il permet de vérifier rapidement les données saisies avant ou après une simulation.",
+    "Toutes les valeurs affichées ici sont reprises automatiquement des autres blocs.",
   ],
   recommandations: [
-    "Ce bloc aide a lire les enseignements du dossier.",
-    "Aucune saisie n est attendue ici.",
-    "Le systeme construit automatiquement des recommandations et une synthese a partir des donnees de la variante active.",
+    "Ce bloc aide à lire les enseignements du dossier.",
+    "Aucune saisie n’est attendue ici.",
+    "Le système construit automatiquement des recommandations et une synthèse à partir des données de la variante active.",
   ],
 } as const;
 
@@ -547,7 +550,7 @@ function getVariantPatrimoineBreakdown(variant: ScenarioVariant) {
     (variant.dossier.fortune.fortuneLppActuelle || 0) + (variant.dossier.fiscalite.rachatLpp || 0);
 
   return [
-    { label: "Liquidites", montant: Math.max(0, liquiditesAjustees) },
+    { label: "Liquidités", montant: Math.max(0, liquiditesAjustees) },
     { label: "Titres", montant: variant.dossier.fortune.titres || 0 },
     { label: "Immobilier", montant: variant.dossier.fortune.immobilier || 0 },
     { label: "3e pilier", montant: troisiemePilier || 0 },
@@ -743,9 +746,9 @@ function buildVariantComparisonSummary(
     recommendedVariant: bestGlobal.label,
     summaryLines: [
       `La variante ${bestFiscal.label} est la plus avantageuse fiscalement.`,
-      `La variante ${bestTreasury.label} preserve le mieux la tresorerie.`,
+      `La variante ${bestTreasury.label} préserve le mieux la trésorerie.`,
       `La variante ${bestPatrimonial.label} conserve le plus de patrimoine.`,
-      `La variante recommandee est ${bestGlobal.label} car elle offre le meilleur equilibre global.`,
+      `La variante recommandée est ${bestGlobal.label} car elle offre le meilleur équilibre global.`,
     ],
   };
 }
@@ -804,6 +807,11 @@ export default function App() {
   const [variants, setVariants] = useState<ScenarioVariant[]>(createInitialVariants);
   const activeVariant = variants[activeVariantIndex];
   const conseillerPassword = import.meta.env.VITE_CONSEILLER_PASSWORD || "";
+  const normalizedPathname =
+    typeof window !== "undefined" ? window.location.pathname.replace(/\/+$/, "") || "/" : "/";
+  const isPricingRoute = normalizedPathname === "/pricing";
+  const isCheckoutSuccessRoute = normalizedPathname === "/checkout/success";
+  const isCheckoutCancelRoute = normalizedPathname === "/checkout/cancel";
   const dossier = activeVariant.dossier;
   const taxResult = activeVariant.taxResult;
   const taxResultSansOptimisation = activeVariant.taxResultSansOptimisation;
@@ -1057,7 +1065,7 @@ export default function App() {
     }
 
     setIsConseillerAccessGranted(false);
-    setConseillerAccessError("Acces refuse");
+    setConseillerAccessError("Accès refusé");
   };
 
   console.log(
@@ -1669,7 +1677,7 @@ export default function App() {
     taxResultAffiche?.normalized?.totalTax ?? impotReferenceTaxware;
   const resultatFiscalBrutTitle = "Base fiscale actuelle";
   const resultatFiscalBrutHelper =
-    "Montants actuels saisis par le fiduciaire, conserves comme reference et jamais recalcules automatiquement";
+    "Montants actuels saisis par le fiduciaire, conservés comme référence et jamais recalculés automatiquement";
   const impotTotalReference =
     impotCorrigeSynthese ??
     taxResultSansOptimisation?.normalized?.totalTax ??
@@ -1878,21 +1886,21 @@ export default function App() {
         0,
     },
     {
-      label: "Impot cantonal",
+      label: "Impôt cantonal",
       montant:
         bestVariantDisplayedTaxResult?.normalized?.cantonalTax ??
         activeVariantDisplayedTaxResult?.normalized?.cantonalTax ??
         0,
     },
     {
-      label: "Impot communal",
+      label: "Impôt communal",
       montant:
         bestVariantDisplayedTaxResult?.normalized?.communalTax ??
         activeVariantDisplayedTaxResult?.normalized?.communalTax ??
         0,
     },
     {
-      label: "Impot fortune",
+      label: "Impôt sur la fortune",
       montant:
         bestVariantDisplayedTaxResult?.normalized?.wealthTax ??
         activeVariantDisplayedTaxResult?.normalized?.wealthTax ??
@@ -2744,7 +2752,7 @@ export default function App() {
     totalRevenusCalcule
   )} de revenus annuels, ${formatMontantCHF(
     fortuneBruteCalcule
-  )} de patrimoine brut et un impot de reference de ${formatMontantCHF(
+  )} de patrimoine brut et un impôt de référence de ${formatMontantCHF(
     dossier.fiscalite.impotsEstimes || 0
   )}.`;
   const syntheseAutomatiquePersonnalisee = `${summaryToneIntro} ${syntheseAutomatique}`;
@@ -2769,7 +2777,7 @@ export default function App() {
       )}.`,
       analyse:
         recommandationFiscalePrincipale?.diagnostic ||
-        "Une lecture ciblee de la fiscalite permet d identifier les leviers concrets d amelioration.",
+        "Une lecture ciblée de la fiscalité permet d’identifier les leviers concrets d’amélioration.",
       transformation: recommandationFiscalePrincipale
         ? toneRecommendationText(
             advisoryToneProfile,
@@ -2778,7 +2786,7 @@ export default function App() {
         : "Activer progressivement les leviers fiscaux les plus pertinents selon la situation personnelle.",
       resultat:
         recommandationFiscalePrincipale?.expectedResult ||
-        `Une meilleure maitrise de la charge fiscale. Impot estime actuel : ${formatMontantCHF(
+        `Une meilleure maîtrise de la charge fiscale. Impôt estimé actuel : ${formatMontantCHF(
           impotEstimeCalcule
         )}.`,
     },
@@ -2786,39 +2794,39 @@ export default function App() {
       titre: "Fortune",
       situation:
         fortuneBruteCalcule > 1000000
-          ? "Le patrimoine global est significatif et merite une structuration attentive."
-          : "Le patrimoine doit etre structure de maniere coherente pour soutenir les objectifs futurs.",
+          ? "Le patrimoine global est significatif et mérite une structuration attentive."
+          : "Le patrimoine doit être structuré de manière cohérente pour soutenir les objectifs futurs.",
       analyse:
         recommandationFortunePrincipale?.diagnostic ||
-        "La structuration patrimoniale doit renforcer la lisibilite, la souplesse et la capacite d evolution.",
+        "La structuration patrimoniale doit renforcer la lisibilité, la souplesse et la capacité d’évolution.",
       transformation: recommandationFortunePrincipale
         ? toneRecommendationText(
             advisoryToneProfile,
             recommandationFortunePrincipale.recommendation
           )
-        : "Organiser le patrimoine de facon progressive afin d en ameliorer la lisibilite et l efficacite.",
+        : "Organiser le patrimoine de façon progressive afin d’en améliorer la lisibilité et l’efficacité.",
       resultat:
         recommandationFortunePrincipale?.expectedResult ||
-        "Un patrimoine plus lisible, plus coherent et mieux aligne avec les objectifs du client.",
+        "Un patrimoine plus lisible, plus cohérent et mieux aligné avec les objectifs du client.",
     },
     {
       titre: "Retraite",
       situation:
         dossier.identite.age > 60
-          ? "La retraite constitue un enjeu central du dossier, avec un besoin accru de visibilite sur les revenus futurs."
-          : "La retraite peut encore être preparée dans une logique d'anticipation et de montée en puissance progressive.",
+          ? "La retraite constitue un enjeu central du dossier, avec un besoin accru de visibilité sur les revenus futurs."
+          : "La retraite peut encore être préparée dans une logique d'anticipation et de montée en puissance progressive.",
       analyse:
         recommandationRetraitePrincipale?.diagnostic ||
-        "Une preparation precoce permet d ameliorer fortement la marge de manœuvre future.",
+        "Une préparation précoce permet d’améliorer fortement la marge de manœuvre future.",
       transformation: recommandationRetraitePrincipale
         ? toneRecommendationText(
             advisoryToneProfile,
             recommandationRetraitePrincipale.recommendation
           )
-        : "Mettre en place une strategie de preparation retraite progressive, structuree et adaptee au profil.",
+        : "Mettre en place une stratégie de préparation retraite progressive, structurée et adaptée au profil.",
       resultat:
         recommandationRetraitePrincipale?.expectedResult ||
-        "Une vision plus claire de l'avenir et une meilleure capacite de decision.",
+        "Une vision plus claire de l'avenir et une meilleure capacité de décision.",
     },
   ];
   const journeyNavigation = [
@@ -3366,7 +3374,7 @@ export default function App() {
         }
 
         const message =
-          error instanceof Error ? error.message : "Impossible de recuperer le profile utilisateur.";
+          error instanceof Error ? error.message : "Impossible de récupérer le profil utilisateur.";
         setAuthError(message);
         setProfile(null);
         setProfileSyncSource(null);
@@ -3459,12 +3467,24 @@ export default function App() {
             <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>
               {loading
                 ? "Chargement de la session utilisateur..."
-                : "Chargement du profile utilisateur..."}
+                : "Chargement du profil utilisateur..."}
             </p>
           </div>
         </div>
       </div>
     );
+  }
+
+  if (isCheckoutSuccessRoute) {
+    return <CheckoutSuccess />;
+  }
+
+  if (isCheckoutCancelRoute) {
+    return <CheckoutCancel />;
+  }
+
+  if (isPricingRoute) {
+    return <PricingPage profileId={profile?.id ?? null} />;
   }
 
   if (!user) {
@@ -3605,7 +3625,7 @@ export default function App() {
             {profile?.id ? (
               <>
                 {" "}
-                • Profile ID <strong>{profile.id}</strong>
+                • ID du profil <strong>{profile.id}</strong>
               </>
             ) : null}
           </div>
@@ -3626,7 +3646,7 @@ export default function App() {
               cursor: "pointer",
             }}
           >
-            Logout
+            Se déconnecter
           </button>
         </div>
         <div
@@ -3642,35 +3662,35 @@ export default function App() {
           }}
         >
           <div style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-            Statut profile
+            Statut du profil
           </div>
           <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            User ID: <strong>{user.id}</strong>
+            ID utilisateur : <strong>{user.id}</strong>
           </div>
           <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
             Email: <strong>{profile?.email ?? user.email ?? "Non disponible"}</strong>
           </div>
           <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            Profile ID: <strong>{profile?.id ?? "Aucun profile charge"}</strong>
+            ID du profil : <strong>{profile?.id ?? "Aucun profil chargé"}</strong>
           </div>
           <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
             Source:{" "}
             <strong>
               {profileSyncSource === "id"
-                ? "profile trouve par id"
+                ? "profil trouvé par ID"
                 : profileSyncSource === "email"
-                  ? "profile trouve par email"
+                  ? "profil trouvé par email"
                   : profileSyncSource === "created"
-                    ? "profile cree"
+                    ? "profil créé"
                     : "non disponible"}
             </strong>
           </div>
           <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            Chargement: <strong>{isProfileLoading ? "en cours" : "termine"}</strong>
+            Chargement : <strong>{isProfileLoading ? "en cours" : "terminé"}</strong>
           </div>
           {authError ? (
             <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-              Erreur profile: <strong>{authError}</strong>
+              Erreur du profil : <strong>{authError}</strong>
             </div>
           ) : null}
         </div>
@@ -4164,14 +4184,14 @@ export default function App() {
                       : "Simulation requise"}
                   </div>
                   <div style={{ marginTop: "6px", color: "#64748b", fontSize: "12px" }}>
-                    {isBest ? "Variante la plus avantageuse fiscalement" : "Impot total de la variante"}
+                    {isBest ? "Variante la plus avantageuse fiscalement" : "Impôt total de la variante"}
                   </div>
                   <div style={{ marginTop: "8px", color: "#475569", fontSize: "13px" }}>
                     {typeof variant.totalTax === "number" && typeof variantTotals[0]?.totalTax === "number"
-                      ? `Ecart vs Base : ${formatMontantCHFArrondi(
+                      ? `Écart vs base : ${formatMontantCHFArrondi(
                           variantTotals[0].totalTax - variant.totalTax
                         )}`
-                      : "Ecart indisponible"}
+                      : "Écart indisponible"}
                   </div>
                 </div>
               );
@@ -4427,8 +4447,8 @@ export default function App() {
                 Comparaison des variantes
               </h2>
               <p style={{ marginTop: 0, marginBottom: "16px", color: "#64748b", lineHeight: 1.7 }}>
-                Le classement compare les variantes sur l impot total, la marge annuelle,
-                l effort de liquidite et la fortune restante, sans recalculer la fiscalite.
+                Le classement compare les variantes sur l'impôt total, la marge annuelle,
+                l'effort de liquidité et la fortune restante, sans recalculer la fiscalité.
               </p>
 
               <div
@@ -4467,12 +4487,12 @@ export default function App() {
                         {scenario.globalScore}/100
                       </div>
                       <div style={{ marginTop: "10px", display: "grid", gap: "6px", color: "#334155" }}>
-                        <div>Impot total : {formatMontantCHFArrondi(scenario.impotTotal)}</div>
+                        <div>Impôt total : {formatMontantCHFArrondi(scenario.impotTotal)}</div>
                         <div>Marge annuelle : {formatMontantCHFArrondi(scenario.margeAnnuelle)}</div>
-                        <div>Effort de liquidite : {formatMontantCHFArrondi(scenario.effortLiquidite)}</div>
+                        <div>Effort de liquidité : {formatMontantCHFArrondi(scenario.effortLiquidite)}</div>
                         <div>Fortune restante : {formatMontantCHFArrondi(scenario.fortuneRestante)}</div>
                         <div>Score fiscal : {scenario.fiscalScore}/100</div>
-                        <div>Score tresorerie : {scenario.treasuryScore}/100</div>
+                        <div>Score trésorerie : {scenario.treasuryScore}/100</div>
                         <div>Score patrimonial : {scenario.patrimonialScore}/100</div>
                       </div>
                     </div>
@@ -4501,12 +4521,12 @@ export default function App() {
                   }}
                 >
                   <div style={{ padding: "12px 14px" }}>Variante</div>
-                  <div style={{ padding: "12px 14px", textAlign: "right" }}>Impot total</div>
+                  <div style={{ padding: "12px 14px", textAlign: "right" }}>Impôt total</div>
                   <div style={{ padding: "12px 14px", textAlign: "right" }}>Marge annuelle</div>
-                  <div style={{ padding: "12px 14px", textAlign: "right" }}>Effort liquidite</div>
+                  <div style={{ padding: "12px 14px", textAlign: "right" }}>Effort de liquidité</div>
                   <div style={{ padding: "12px 14px", textAlign: "right" }}>Fortune restante</div>
                   <div style={{ padding: "12px 14px", textAlign: "right" }}>Fiscal</div>
-                  <div style={{ padding: "12px 14px", textAlign: "right" }}>Tresorerie</div>
+                  <div style={{ padding: "12px 14px", textAlign: "right" }}>Trésorerie</div>
                   <div style={{ padding: "12px 14px", textAlign: "right" }}>Patrimoine</div>
                   <div style={{ padding: "12px 14px", textAlign: "right" }}>Global</div>
                 </div>
@@ -4558,11 +4578,11 @@ export default function App() {
                 }}
               >
                 <h2 style={{ marginTop: 0, marginBottom: "10px", color: "#312e81" }}>
-                  Resume automatique client
+                  Résumé automatique client
                 </h2>
                 <p style={{ marginTop: 0, marginBottom: "16px", color: "#475569", lineHeight: 1.7 }}>
                   Le moteur identifie la meilleure variante fiscale, la meilleure variante
-                  tresorerie, la meilleure variante patrimoniale et la meilleure variante globale.
+                  trésorerie, la meilleure variante patrimoniale et la meilleure variante globale.
                 </p>
 
                 <div
@@ -4578,7 +4598,7 @@ export default function App() {
                     </h3>
                     <div style={{ display: "grid", gap: "8px", color: "#0f172a", lineHeight: 1.7 }}>
                       <div><strong>Fiscale :</strong> {resumeComparatifClient.bestFiscalVariant}</div>
-                      <div><strong>Tresorerie :</strong> {resumeComparatifClient.bestTreasuryVariant}</div>
+                      <div><strong>Trésorerie :</strong> {resumeComparatifClient.bestTreasuryVariant}</div>
                       <div><strong>Patrimoine :</strong> {resumeComparatifClient.bestPatrimonialVariant}</div>
                       <div><strong>Globale :</strong> {resumeComparatifClient.recommendedVariant}</div>
                     </div>
@@ -4597,13 +4617,13 @@ export default function App() {
 
                   <div style={subCardStyle}>
                     <h3 style={{ marginTop: 0, marginBottom: "10px", color: "#1e293b" }}>
-                      Regle de scoring
+                      Règle de scoring
                     </h3>
                     <div style={{ display: "grid", gap: "8px", color: "#334155", lineHeight: 1.6 }}>
-                      <div>Score fiscal : impot total le plus bas = 100</div>
-                      <div>Score tresorerie : marge annuelle elevee + effort de liquidite faible</div>
-                      <div>Score patrimonial : fortune restante la plus elevee = 100</div>
-                      <div>Score global : fiscalite 50%, tresorerie 30%, patrimoine 20%</div>
+                      <div>Score fiscal : impôt total le plus bas = 100</div>
+                      <div>Score trésorerie : marge annuelle élevée + effort de liquidité faible</div>
+                      <div>Score patrimonial : fortune restante la plus élevée = 100</div>
+                      <div>Score global : fiscalité 50 %, trésorerie 30 %, patrimoine 20 %</div>
                     </div>
                   </div>
                 </div>
@@ -4619,7 +4639,8 @@ export default function App() {
           id="informations-generales"
           step="1"
           title="Saisie de la situation"
-          description="Renseignez une situation patrimoniale et fiscale dans un format plus direct, avec une lecture immediate des indicateurs simples. Les calculs fiscaux officiels restent inchanges dans le reste de l'application."
+          description="Renseignez une situation patrimoniale et fiscale dans un format plus direct, avec une lecture immédiate des indicateurs simples. Les calculs fiscaux officiels restent inchangés dans le reste de l'application."
+          
         >
         <SituationEntryScreen
           analysisMode={analysisMode}
@@ -5145,7 +5166,7 @@ export default function App() {
                 style={inputStyle}
               />
               <span style={helperStyle}>
-                Valeur source. Patrimoine affiche apres simulation : {formatMontantCHF(
+                Valeur source. Patrimoine affiché après simulation : {formatMontantCHF(
                   troisiemePilierPatrimonialCalcule
                 )}
               </span>
@@ -5168,7 +5189,7 @@ export default function App() {
                 style={inputStyle}
               />
               <span style={helperStyle}>
-                Information patrimoniale, non imposable. Patrimoine affiche apres rachat : {formatMontantCHF(
+                Information patrimoniale, non imposable. Patrimoine affiché après rachat : {formatMontantCHF(
                   fortuneLppPatrimonialeCalcule
                 )}
               </span>
@@ -5312,7 +5333,7 @@ export default function App() {
             Synthèse fortune
           </h2>
 
-          <CollapsibleHelp title="Aide synthese fortune">
+          <CollapsibleHelp title="Aide synthèse fortune">
             {sectionHelpTexts.syntheseFortune.map((text) => (
               <div key={text}>{text}</div>
             ))}
@@ -5416,14 +5437,14 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              {isConseillerAccessGranted ? "Fermer l'acces conseiller" : "Acces conseiller"}
+              {isConseillerAccessGranted ? "Fermer l'accès conseiller" : "Accès conseiller"}
             </button>
           </div>
 
           {!isConseillerAccessGranted && (
             <div style={{ ...subCardStyle, marginTop: "20px" }}>
               <p style={{ marginTop: 0, marginBottom: "12px", color: "#475569", lineHeight: 1.7 }}>
-                Cette section technique est reservee a l utilisateur autorise.
+                Cette section technique est réservée à l'utilisateur autorisé.
               </p>
 
               {showConseillerPrompt && (
@@ -7513,10 +7534,10 @@ export default function App() {
             >
               <div style={subCardStyle}>
                 <h4 style={{ marginTop: 0, marginBottom: "6px", color: "#1e293b" }}>
-                  Impot avant / apres
+                  Impôt avant / après
                 </h4>
                 <span style={helperStyle}>
-                  Avant = Base de reference. Apres = {chartTargetLabel}
+                  Avant = Base de référence. Après = {chartTargetLabel}
                 </span>
 
                 <div style={{ width: "100%", height: "260px", marginTop: "12px" }}>
@@ -7540,10 +7561,10 @@ export default function App() {
 
               <div style={subCardStyle}>
                 <h4 style={{ marginTop: 0, marginBottom: "6px", color: "#1e293b" }}>
-                  Repartition des impots
+                  Répartition des impôts
                 </h4>
                 <span style={helperStyle}>
-                  Detail fiscal TaxWare de {chartTargetLabel}
+                  Détail fiscal TaxWare de {chartTargetLabel}
                 </span>
 
                 <div style={{ width: "100%", height: "260px", marginTop: "12px" }}>
@@ -7644,10 +7665,10 @@ export default function App() {
               }}
             >
               <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
-                Comparaison fiscale avant / apres optimisation
+                Comparaison fiscale avant / après optimisation
               </h3>
               <span style={helperStyle}>
-                Comparaison basee sur les resultats reels TaxWare de la section
+                Comparaison basée sur les résultats réels TaxWare de la section
               </span>
 
               <div
@@ -7694,7 +7715,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot cantonal</label>
+                      <label style={labelStyle}>Impôt cantonal</label>
                       <input
                         type="text"
                         value={formatMontantTaxware(taxResultSansOptimisation.normalized.cantonalTax)}
@@ -7703,7 +7724,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot communal</label>
+                      <label style={labelStyle}>Impôt communal</label>
                       <input
                         type="text"
                         value={formatMontantTaxware(taxResultSansOptimisation.normalized.communalTax)}
@@ -7712,7 +7733,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot sur la fortune</label>
+                      <label style={labelStyle}>Impôt sur la fortune</label>
                       <input
                         type="text"
                         value={formatMontantTaxware(taxResultSansOptimisation.normalized.wealthTax)}
@@ -7721,7 +7742,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot total</label>
+                      <label style={labelStyle}>Impôt total</label>
                       <input
                         type="text"
                         value={formatMontantTaxware(taxResultSansOptimisation.normalized.totalTax)}
@@ -7734,7 +7755,7 @@ export default function App() {
 
                 <div style={subCardStyle}>
                   <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
-                    Apres optimisation
+                    Après optimisation
                   </h4>
                   <div style={{ display: "grid", gap: "10px" }}>
                     <div>
@@ -7747,7 +7768,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot cantonal</label>
+                      <label style={labelStyle}>Impôt cantonal</label>
                       <input
                         type="text"
                         value={formatMontantTaxware(taxResultAffiche.normalized.cantonalTax)}
@@ -7756,7 +7777,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot communal</label>
+                      <label style={labelStyle}>Impôt communal</label>
                       <input
                         type="text"
                         value={formatMontantTaxware(taxResultAffiche.normalized.communalTax)}
@@ -7765,7 +7786,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot sur la fortune</label>
+                      <label style={labelStyle}>Impôt sur la fortune</label>
                       <input
                         type="text"
                         value={formatMontantTaxware(taxResultAffiche.normalized.wealthTax)}
@@ -7774,7 +7795,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot total</label>
+                      <label style={labelStyle}>Impôt total</label>
                       <input
                         type="text"
                         value={formatMontantTaxware(taxResultAffiche.normalized.totalTax)}
@@ -7803,7 +7824,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot cantonal</label>
+                      <label style={labelStyle}>Impôt cantonal</label>
                       <input
                         type="text"
                         value={formatEcartTaxware(
@@ -7815,7 +7836,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot communal</label>
+                      <label style={labelStyle}>Impôt communal</label>
                       <input
                         type="text"
                         value={formatEcartTaxware(
@@ -7827,7 +7848,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot sur la fortune</label>
+                      <label style={labelStyle}>Impôt sur la fortune</label>
                       <input
                         type="text"
                         value={formatEcartTaxware(
@@ -7839,7 +7860,7 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Impot total</label>
+                      <label style={labelStyle}>Impôt total</label>
                       <input
                         type="text"
                         value={formatEcartTaxware(
@@ -7960,9 +7981,9 @@ export default function App() {
               }}
             >
               <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
-                Impots a payer
+                Impôts à payer
               </h3>
-              <span style={helperStyle}>Montants issus des appels reels TaxWare</span>
+              <span style={helperStyle}>Montants issus des appels réels TaxWare</span>
 
               <div
                 style={{
@@ -8096,7 +8117,7 @@ export default function App() {
               Informations client
             </h2>
 
-            <CollapsibleHelp title="Aide resume client">
+            <CollapsibleHelp title="Aide résumé client">
               {sectionHelpTexts.informationsClient.map((text) => (
                 <div key={text}>{text}</div>
               ))}

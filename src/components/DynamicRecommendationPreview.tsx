@@ -98,7 +98,7 @@ function PreviewBlock(props: {
 export default function DynamicRecommendationPreview(props: DynamicRecommendationPreviewProps) {
   const {
     preview,
-    eyebrow = "Preview dynamique",
+    eyebrow = "Aperçu dynamique",
     title = "Prévisualisation du moteur de recommandations PDF",
     description = "Cette zone affiche les textes conditionnels retenus pour le dossier en cours. Elle ne modifie pas encore le PDF final et permet de vérifier l’ordre, le contenu et la logique d’assemblage avant intégration.",
   } = props;

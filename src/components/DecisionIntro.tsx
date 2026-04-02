@@ -53,7 +53,7 @@ export default function DecisionIntro({
             </p>
           </div>
 
-          <div className="decision-screen__cards" role="list" aria-label="Choix d'analyse">
+          <div className="decision-screen__cards" role="list" aria-label="Choix d’analyse">
             {decisionCards.map((card) => {
               const isSelected = analysisMode === card.id;
 
@@ -73,7 +73,7 @@ export default function DecisionIntro({
                           ? "PROJECTION"
                           : "VISION COMPLÈTE"}
                     </span>
-                    {isSelected ? <span className="decision-card__state">Selectionne</span> : null}
+                    {isSelected ? <span className="decision-card__state">Sélectionné</span> : null}
                   </div>
 
                   <div className="decision-card__title">{card.title}</div>

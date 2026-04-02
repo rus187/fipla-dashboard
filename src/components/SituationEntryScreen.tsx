@@ -16,8 +16,8 @@ type SituationEntryScreenProps = {
 
 const modeLabels: Record<AnalysisMode, string> = {
   current: "Situation actuelle",
-  projected: "Situation projetee",
-  compare: "Comparer des scenarios",
+  projected: "Situation projetée",
+  compare: "Comparer des scénarios",
 };
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
@@ -84,18 +84,19 @@ export default function SituationEntryScreen({
 
   return (
     <div className="situation-screen">
-      <div className="situation-mode-bar">Mode selectionne : {selectedModeLabel}</div>
+      <div className="situation-mode-bar">Mode sélectionné : {selectedModeLabel}</div>
 
       <div className="situation-layout">
         <div className="situation-form-column">
           <section className="situation-card">
             <div className="situation-card__header">
-              <h3 className="situation-card__title">Identite du client</h3>
+              <h3 className="situation-card__title">Identité du client</h3>
+              
             </div>
 
             <div className="situation-fields situation-fields--three">
               <label className="situation-field">
-                <span>Prenom</span>
+                <span>Prénom</span>
                 <input
                   type="text"
                   value={dossier.identite.prenom}
@@ -129,7 +130,7 @@ export default function SituationEntryScreen({
               </label>
 
               <label className="situation-field">
-                <span>Age</span>
+                <span>Âge</span>
                 <input
                   type="number"
                   value={dossier.identite.age}
@@ -183,7 +184,7 @@ export default function SituationEntryScreen({
 
             <div className="situation-fields situation-fields--two">
               <label className="situation-field">
-                <span>Etat civil</span>
+                <span>État civil</span>
                 <select
                   value={dossier.identite.etatCivil}
                   onChange={(event) =>
@@ -209,7 +210,7 @@ export default function SituationEntryScreen({
               </label>
 
               <label className="situation-field">
-                <span>Nombre d'enfants</span>
+                <span>Nombre d’enfants</span>
                 <input
                   type="number"
                   value={dossier.famille.nombreEnfants}
@@ -262,12 +263,12 @@ export default function SituationEntryScreen({
 
             <div className="situation-fields situation-fields--four">
               <label className="situation-field">
-                <span>Liquidites</span>
+                <span>Liquidités</span>
                 <input type="text" value={formatCurrency(dossier.fortune.liquidites || 0)} readOnly />
               </label>
 
               <label className="situation-field">
-                <span>Fortune mobiliere (comptes, epargne, portfolio, titres, etc.)</span>
+                <span>Fortune mobilière (comptes, épargne, portefeuille, titres, etc.)</span>
                 <input type="text" value={formatCurrency(dossier.fortune.titres || 0)} readOnly />
               </label>
 
@@ -290,12 +291,12 @@ export default function SituationEntryScreen({
 
           <section className="situation-card">
             <div className="situation-card__header">
-              <h3 className="situation-card__title">Evolution des liquidites</h3>
+              <h3 className="situation-card__title">Évolution des liquidités</h3>
             </div>
 
             <div className="situation-fields situation-fields--four">
               <label className="situation-field">
-                <span>Liquidites debut d'exercice</span>
+                <span>Liquidités début d'exercice</span>
                 <input type="text" value={formatCurrency(startingLiquidity)} readOnly />
               </label>
 
@@ -310,7 +311,7 @@ export default function SituationEntryScreen({
               </label>
 
               <label className="situation-field">
-                <span>Liquidites fin d'exercice</span>
+                <span>Liquidités fin d'exercice</span>
                 <input type="text" value={formatCurrency(endingLiquidity)} readOnly />
               </label>
             </div>
@@ -328,7 +329,7 @@ export default function SituationEntryScreen({
             <div className="situation-cta__helper">
               {isMinimumDataReady
                 ? launchHelper
-                : "Renseignez au minimum le prenom, l'age, le NPA et une base de revenus ou de fortune."}
+                : "Renseignez au minimum le prénom, l'âge, le NPA et une base de revenus ou de fortune."}
             </div>
           </div>
         </div>
@@ -336,7 +337,7 @@ export default function SituationEntryScreen({
         <aside className="situation-sidebar">
           <div className="situation-sidebar__stack">
             <section className="situation-sidebar-card">
-              <h3 className="situation-sidebar-card__title">Resume rapide</h3>
+              <h3 className="situation-sidebar-card__title">Résumé rapide</h3>
               <SummaryRow label="Revenu total" value={formatCurrency(effectiveIncome)} />
               <SummaryRow label="Charges totales" value={formatCurrency(summaryCharges)} />
               <SummaryRow label="Fortune totale" value={formatCurrency(summaryFortune)} />
