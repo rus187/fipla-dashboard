@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { MobileActiveClientDossier } from "./activeClientDossier";
 import MobileAccordionSection from "./MobileAccordionSection";
 import MobileComparisonCard from "./MobileComparisonCard";
 import MobileIdentityStep from "./MobileIdentityStep";
@@ -48,6 +49,8 @@ type MobileSimulationFlowProps = {
   onBack: () => void;
   onResolveLocation: (zip: string) => { locality: string } | null;
   onRun: (payload: MobileSimulationPayload) => Promise<MobileSimulationResult>;
+  activeDossier: MobileActiveClientDossier;
+  onActiveDossierChange: (partial: Partial<MobileActiveClientDossier>) => void;
 };
 
 const steps = [
@@ -59,30 +62,51 @@ const steps = [
   { step: "Étape 6", label: "Détail" },
 ];
 
-const initialState: MobileSimulationPayload = {
-  prenom: "",
-  nom: "",
-  zip: "",
-  locality: "",
-  etatCivil: "",
-  enfants: 0,
-  revenuImposableIfd: 0,
-  revenuImposableIcc: 0,
-  troisiemePilier: 0,
-  rachatLpp: 0,
-  variationRevenu: 0,
-  fortuneImposable: 0,
-};
+function createInitialState(activeDossier: MobileActiveClientDossier): MobileSimulationPayload {
+  return {
+    prenom: activeDossier.prenom,
+    nom: activeDossier.nom,
+    zip: activeDossier.zip,
+    locality: activeDossier.locality,
+    etatCivil: activeDossier.etatCivil,
+    enfants: activeDossier.enfants,
+    revenuImposableIfd: activeDossier.revenuImposableIfd,
+    revenuImposableIcc: activeDossier.revenuImposableIcc,
+    troisiemePilier: activeDossier.troisiemePilier,
+    rachatLpp: activeDossier.rachatLpp,
+    variationRevenu: 0,
+    fortuneImposable: activeDossier.fortuneImposable,
+  };
+}
 
 export default function MobileSimulationFlow({
   onBack,
   onResolveLocation,
   onRun,
+  activeDossier,
+  onActiveDossierChange,
 }: MobileSimulationFlowProps) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [form, setForm] = useState(initialState);
+  const [form, setForm] = useState<MobileSimulationPayload>(() => createInitialState(activeDossier));
   const [result, setResult] = useState<MobileSimulationResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      prenom: activeDossier.prenom,
+      nom: activeDossier.nom,
+      zip: activeDossier.zip,
+      locality: activeDossier.locality,
+      etatCivil: activeDossier.etatCivil,
+      enfants: activeDossier.enfants,
+      revenuImposableIfd: activeDossier.revenuImposableIfd,
+      revenuImposableIcc: activeDossier.revenuImposableIcc,
+      troisiemePilier: activeDossier.troisiemePilier,
+      rachatLpp: activeDossier.rachatLpp,
+      fortuneImposable: activeDossier.fortuneImposable,
+    }));
+  }, [activeDossier]);
 
   useEffect(() => {
     if (form.zip.trim().length < 4) return;
@@ -91,6 +115,7 @@ export default function MobileSimulationFlow({
     if (!match?.locality || match.locality === form.locality) return;
 
     setForm((current) => ({ ...current, locality: match.locality }));
+    onActiveDossierChange({ zip: form.zip.trim(), locality: match.locality });
   }, [form.zip, form.locality, onResolveLocation]);
 
   const canRun =
@@ -133,7 +158,7 @@ export default function MobileSimulationFlow({
           type="button"
           className="mobile-link-button"
           onClick={() => {
-            setForm(initialState);
+            setForm(createInitialState(activeDossier));
             setResult(null);
             setStepIndex(0);
           }}
@@ -161,7 +186,7 @@ export default function MobileSimulationFlow({
               etatCivil: form.etatCivil,
               enfants: form.enfants,
             }}
-            onChange={(identity) =>
+            onChange={(identity) => {
               setForm((current) => ({
                 ...current,
                 prenom: identity.prenom,
@@ -170,8 +195,16 @@ export default function MobileSimulationFlow({
                 locality: identity.locality,
                 etatCivil: identity.etatCivil,
                 enfants: identity.enfants,
-              }))
-            }
+              }));
+              onActiveDossierChange({
+                prenom: identity.prenom,
+                nom: identity.nom,
+                zip: identity.zip,
+                locality: identity.locality,
+                etatCivil: identity.etatCivil,
+                enfants: identity.enfants,
+              });
+            }}
           />
           <MobilePrimaryAction label="Passer à la base actuelle" onClick={() => setStepIndex(1)} />
         </>
@@ -187,12 +220,14 @@ export default function MobileSimulationFlow({
                 type="number"
                 inputMode="numeric"
                 value={form.revenuImposableIfd}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.target.value || 0);
                   setForm((current) => ({
                     ...current,
-                    revenuImposableIfd: Number(event.target.value || 0),
-                  }))
-                }
+                    revenuImposableIfd: value,
+                  }));
+                  onActiveDossierChange({ revenuImposableIfd: value });
+                }}
               />
             </label>
 
@@ -203,12 +238,14 @@ export default function MobileSimulationFlow({
                 type="number"
                 inputMode="numeric"
                 value={form.revenuImposableIcc}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.target.value || 0);
                   setForm((current) => ({
                     ...current,
-                    revenuImposableIcc: Number(event.target.value || 0),
-                  }))
-                }
+                    revenuImposableIcc: value,
+                  }));
+                  onActiveDossierChange({ revenuImposableIcc: value });
+                }}
               />
             </label>
 
@@ -219,12 +256,14 @@ export default function MobileSimulationFlow({
                 type="number"
                 inputMode="numeric"
                 value={form.fortuneImposable}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.target.value || 0);
                   setForm((current) => ({
                     ...current,
-                    fortuneImposable: Number(event.target.value || 0),
-                  }))
-                }
+                    fortuneImposable: value,
+                  }));
+                  onActiveDossierChange({ fortuneImposable: value });
+                }}
               />
             </label>
           </div>
@@ -247,12 +286,14 @@ export default function MobileSimulationFlow({
                 type="number"
                 inputMode="numeric"
                 value={form.troisiemePilier}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.target.value || 0);
                   setForm((current) => ({
                     ...current,
-                    troisiemePilier: Number(event.target.value || 0),
-                  }))
-                }
+                    troisiemePilier: value,
+                  }));
+                  onActiveDossierChange({ troisiemePilier: value });
+                }}
               />
             </label>
 
@@ -263,12 +304,14 @@ export default function MobileSimulationFlow({
                 type="number"
                 inputMode="numeric"
                 value={form.rachatLpp}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.target.value || 0);
                   setForm((current) => ({
                     ...current,
-                    rachatLpp: Number(event.target.value || 0),
-                  }))
-                }
+                    rachatLpp: value,
+                  }));
+                  onActiveDossierChange({ rachatLpp: value });
+                }}
               />
             </label>
             <label className="mobile-field">

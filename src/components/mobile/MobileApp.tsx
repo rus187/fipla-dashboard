@@ -1,5 +1,10 @@
 import { useState } from "react";
 import "./mobile.css";
+import MobileActiveDossierCard from "./MobileActiveDossierCard";
+import {
+  emptyActiveClientDossier,
+  type MobileActiveClientDossier,
+} from "./activeClientDossier";
 import MobileDomicileFlow, {
   type MobileDomicilePayload,
   type MobileDomicileResult,
@@ -19,6 +24,7 @@ import MobileSimulationFlow, {
   type MobileSimulationResult,
 } from "./MobileSimulationFlow";
 import MobileStatCard from "./MobileStatCard";
+import useActiveClientDossier from "./useActiveClientDossier";
 
 type MobileModule = "home" | "simulation" | "reforme" | "domicile" | "enfant";
 
@@ -44,6 +50,16 @@ export default function MobileApp({
   onRunEnfantTransition,
 }: MobileAppProps) {
   const [module, setModule] = useState<MobileModule>("home");
+  const {
+    activeClientDossier,
+    updateActiveClientDossier,
+    replaceActiveClientDossier,
+    clearActiveClientDossier,
+  } = useActiveClientDossier();
+
+  const handleSaveActiveDossier = (nextValue: MobileActiveClientDossier) => {
+    replaceActiveClientDossier(nextValue);
+  };
 
   return (
     <div className="mobile-shell">
@@ -71,6 +87,19 @@ export default function MobileApp({
               value={userLabel}
               helper="Un accès mobile pensé pour la démonstration et la restitution en rendez-vous."
             />
+
+            <MobileActiveDossierCard
+              dossier={activeClientDossier}
+              onSave={handleSaveActiveDossier}
+              onResetToNew={() => {
+                replaceActiveClientDossier(emptyActiveClientDossier);
+                setModule("home");
+              }}
+              onClear={() => {
+                clearActiveClientDossier();
+                setModule("home");
+              }}
+            />
           </div>
         </section>
 
@@ -82,6 +111,8 @@ export default function MobileApp({
                 onBack={() => setModule("home")}
                 onResolveLocation={onResolveLocation}
                 onRun={onRunSimulation}
+                activeDossier={activeClientDossier}
+                onActiveDossierChange={updateActiveClientDossier}
               />
             ) : null}
             {module === "reforme" ? (
@@ -89,6 +120,8 @@ export default function MobileApp({
                 onBack={() => setModule("home")}
                 onResolveLocation={onResolveLocation}
                 onRun={onRunReforme}
+                activeDossier={activeClientDossier}
+                onActiveDossierChange={updateActiveClientDossier}
               />
             ) : null}
             {module === "domicile" ? (
@@ -96,6 +129,8 @@ export default function MobileApp({
                 onBack={() => setModule("home")}
                 onResolveLocation={onResolveLocation}
                 onRun={onRunDomicile}
+                activeDossier={activeClientDossier}
+                onActiveDossierChange={updateActiveClientDossier}
               />
             ) : null}
             {module === "enfant" ? (
@@ -103,6 +138,8 @@ export default function MobileApp({
                 onBack={() => setModule("home")}
                 onResolveLocation={onResolveLocation}
                 onRun={onRunEnfantTransition}
+                activeDossier={activeClientDossier}
+                onActiveDossierChange={updateActiveClientDossier}
               />
             ) : null}
           </div>

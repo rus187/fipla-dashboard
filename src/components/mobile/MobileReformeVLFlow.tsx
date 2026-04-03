@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { MobileActiveClientDossier } from "./activeClientDossier";
 import MobileAccordionSection from "./MobileAccordionSection";
 import MobileIdentityStep from "./MobileIdentityStep";
 import MobileNavigation from "./MobileNavigation";
@@ -41,6 +42,8 @@ type MobileReformeVLFlowProps = {
   onBack: () => void;
   onResolveLocation: (zip: string) => { locality: string } | null;
   onRun: (payload: MobileReformePayload) => Promise<MobileReformeResult>;
+  activeDossier: MobileActiveClientDossier;
+  onActiveDossierChange: (partial: Partial<MobileActiveClientDossier>) => void;
 };
 
 const steps = [
@@ -52,23 +55,25 @@ const steps = [
   { step: "Étape 6", label: "Détail" },
 ];
 
-const initialState: MobileReformePayload = {
-  prenom: "",
-  nom: "",
-  zip: "",
-  locality: "",
-  etatCivil: "",
-  enfants: 0,
-  revenuImposableIfd: 0,
-  revenuImposableIcc: 0,
-  fortuneImposable: 0,
-  residencePrincipale: "oui",
-  bienRendement: "non",
-  valeurFiscale: 0,
-  revenuLocatif: 0,
-  interetsHypothecaires: 0,
-  chargesLieesAuBien: 0,
-};
+function createInitialState(activeDossier: MobileActiveClientDossier): MobileReformePayload {
+  return {
+    prenom: activeDossier.prenom,
+    nom: activeDossier.nom,
+    zip: activeDossier.zip,
+    locality: activeDossier.locality,
+    etatCivil: activeDossier.etatCivil,
+    enfants: activeDossier.enfants,
+    revenuImposableIfd: activeDossier.revenuImposableIfd,
+    revenuImposableIcc: activeDossier.revenuImposableIcc,
+    fortuneImposable: activeDossier.fortuneImposable,
+    residencePrincipale: "oui",
+    bienRendement: "non",
+    valeurFiscale: 0,
+    revenuLocatif: 0,
+    interetsHypothecaires: 0,
+    chargesLieesAuBien: 0,
+  };
+}
 
 function getVerdictClassName(verdict: MobileReformeResult["verdict"]) {
   if (verdict === "Favorable") {
@@ -86,11 +91,28 @@ export default function MobileReformeVLFlow({
   onBack,
   onResolveLocation,
   onRun,
+  activeDossier,
+  onActiveDossierChange,
 }: MobileReformeVLFlowProps) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [form, setForm] = useState(initialState);
+  const [form, setForm] = useState<MobileReformePayload>(() => createInitialState(activeDossier));
   const [result, setResult] = useState<MobileReformeResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      prenom: activeDossier.prenom,
+      nom: activeDossier.nom,
+      zip: activeDossier.zip,
+      locality: activeDossier.locality,
+      etatCivil: activeDossier.etatCivil,
+      enfants: activeDossier.enfants,
+      revenuImposableIfd: activeDossier.revenuImposableIfd,
+      revenuImposableIcc: activeDossier.revenuImposableIcc,
+      fortuneImposable: activeDossier.fortuneImposable,
+    }));
+  }, [activeDossier]);
 
   useEffect(() => {
     if (form.zip.trim().length < 4) return;
@@ -99,6 +121,7 @@ export default function MobileReformeVLFlow({
     if (!match?.locality || match.locality === form.locality) return;
 
     setForm((current) => ({ ...current, locality: match.locality }));
+    onActiveDossierChange({ zip: form.zip.trim(), locality: match.locality });
   }, [form.zip, form.locality, onResolveLocation]);
 
   const canRun =
@@ -140,7 +163,7 @@ export default function MobileReformeVLFlow({
           type="button"
           className="mobile-link-button"
           onClick={() => {
-            setForm(initialState);
+            setForm(createInitialState(activeDossier));
             setResult(null);
             setStepIndex(0);
           }}
@@ -168,7 +191,7 @@ export default function MobileReformeVLFlow({
               etatCivil: form.etatCivil,
               enfants: form.enfants,
             }}
-            onChange={(identity) =>
+            onChange={(identity) => {
               setForm((current) => ({
                 ...current,
                 prenom: identity.prenom,
@@ -177,8 +200,16 @@ export default function MobileReformeVLFlow({
                 locality: identity.locality,
                 etatCivil: identity.etatCivil,
                 enfants: identity.enfants,
-              }))
-            }
+              }));
+              onActiveDossierChange({
+                prenom: identity.prenom,
+                nom: identity.nom,
+                zip: identity.zip,
+                locality: identity.locality,
+                etatCivil: identity.etatCivil,
+                enfants: identity.enfants,
+              });
+            }}
           />
           <MobilePrimaryAction label="Passer à l’avant réforme" onClick={() => setStepIndex(1)} />
         </>
@@ -378,12 +409,14 @@ export default function MobileReformeVLFlow({
                 type="number"
                 inputMode="numeric"
                 value={form.revenuImposableIfd}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.target.value || 0);
                   setForm((current) => ({
                     ...current,
-                    revenuImposableIfd: Number(event.target.value || 0),
-                  }))
-                }
+                    revenuImposableIfd: value,
+                  }));
+                  onActiveDossierChange({ revenuImposableIfd: value });
+                }}
               />
             </label>
 
@@ -394,12 +427,14 @@ export default function MobileReformeVLFlow({
                 type="number"
                 inputMode="numeric"
                 value={form.revenuImposableIcc}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.target.value || 0);
                   setForm((current) => ({
                     ...current,
-                    revenuImposableIcc: Number(event.target.value || 0),
-                  }))
-                }
+                    revenuImposableIcc: value,
+                  }));
+                  onActiveDossierChange({ revenuImposableIcc: value });
+                }}
               />
             </label>
 
@@ -410,12 +445,14 @@ export default function MobileReformeVLFlow({
                 type="number"
                 inputMode="numeric"
                 value={form.fortuneImposable}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = Number(event.target.value || 0);
                   setForm((current) => ({
                     ...current,
-                    fortuneImposable: Number(event.target.value || 0),
-                  }))
-                }
+                    fortuneImposable: value,
+                  }));
+                  onActiveDossierChange({ fortuneImposable: value });
+                }}
               />
             </label>
           </div>

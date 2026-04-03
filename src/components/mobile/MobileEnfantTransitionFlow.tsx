@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { MobileActiveClientDossier } from "./activeClientDossier";
 import MobileAccordionSection from "./MobileAccordionSection";
 import MobileComparisonCard from "./MobileComparisonCard";
 import MobileIdentityStep from "./MobileIdentityStep";
@@ -52,6 +53,8 @@ type MobileEnfantTransitionFlowProps = {
   onBack: () => void;
   onResolveLocation: (zip: string) => { locality: string } | null;
   onRun: (payload: MobileEnfantTransitionPayload) => Promise<MobileEnfantTransitionResult>;
+  activeDossier: MobileActiveClientDossier;
+  onActiveDossierChange: (partial: Partial<MobileActiveClientDossier>) => void;
 };
 
 const steps = [
@@ -82,21 +85,65 @@ const initialState: MobileEnfantTransitionPayload = {
   enfantsApres: 0,
 };
 
+function createInitialState(activeDossier: MobileActiveClientDossier): MobileEnfantTransitionPayload {
+  return {
+    ...initialState,
+    prenom: activeDossier.prenom,
+    nom: activeDossier.nom,
+    zip: activeDossier.zip,
+    locality: activeDossier.locality,
+    etatCivil: activeDossier.etatCivil,
+    enfants: activeDossier.enfants > 0 ? activeDossier.enfants : 1,
+    revenuImposableIfd: activeDossier.revenuImposableIfd,
+    revenuImposableIcc: activeDossier.revenuImposableIcc,
+    fortuneImposable: activeDossier.fortuneImposable,
+    enfantsApres: activeDossier.enfants > 0 ? Math.max(0, activeDossier.enfants - 1) : 0,
+  };
+}
+
 export default function MobileEnfantTransitionFlow({
   onBack,
   onResolveLocation,
   onRun,
+  activeDossier,
+  onActiveDossierChange,
 }: MobileEnfantTransitionFlowProps) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [form, setForm] = useState(initialState);
+  const [form, setForm] = useState<MobileEnfantTransitionPayload>(() => createInitialState(activeDossier));
   const [result, setResult] = useState<MobileEnfantTransitionResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...(function () {
+        const nextChildren = activeDossier.enfants > 0 ? activeDossier.enfants : current.enfants;
+        const suggestedAfterChildren = Math.max(0, nextChildren - 1);
+        return {
+          ...current,
+          prenom: activeDossier.prenom,
+          nom: activeDossier.nom,
+          zip: activeDossier.zip,
+          locality: activeDossier.locality,
+          etatCivil: activeDossier.etatCivil,
+          enfants: nextChildren,
+          revenuImposableIfd: activeDossier.revenuImposableIfd,
+          revenuImposableIcc: activeDossier.revenuImposableIcc,
+          fortuneImposable: activeDossier.fortuneImposable,
+          enfantsApres:
+            current.enfants !== nextChildren
+              ? Math.min(suggestedAfterChildren, nextChildren)
+              : Math.min(current.enfantsApres, nextChildren),
+        };
+      })(),
+    }));
+  }, [activeDossier]);
 
   useEffect(() => {
     if (form.zip.trim().length < 4) return;
     const match = onResolveLocation(form.zip.trim());
     if (!match?.locality || match.locality === form.locality) return;
     setForm((current) => ({ ...current, locality: match.locality }));
+    onActiveDossierChange({ zip: form.zip.trim(), locality: match.locality });
   }, [form.zip, form.locality, onResolveLocation]);
 
   const hasTaxwareContext =
@@ -162,7 +209,7 @@ export default function MobileEnfantTransitionFlow({
           type="button"
           className="mobile-link-button"
           onClick={() => {
-            setForm(initialState);
+            setForm(createInitialState(activeDossier));
             setResult(null);
             setStepIndex(0);
           }}
@@ -190,7 +237,7 @@ export default function MobileEnfantTransitionFlow({
               etatCivil: form.etatCivil,
               enfants: form.enfants,
             }}
-            onChange={(identity) =>
+            onChange={(identity) => {
               setForm((current) => ({
                 ...current,
                 prenom: identity.prenom,
@@ -200,8 +247,16 @@ export default function MobileEnfantTransitionFlow({
                 etatCivil: identity.etatCivil,
                 enfants: identity.enfants,
                 enfantsApres: Math.min(current.enfantsApres, identity.enfants),
-              }))
-            }
+              }));
+              onActiveDossierChange({
+                prenom: identity.prenom,
+                nom: identity.nom,
+                zip: identity.zip,
+                locality: identity.locality,
+                etatCivil: identity.etatCivil,
+                enfants: identity.enfants,
+              });
+            }}
           />
           <MobilePrimaryAction label="Passer à la situation actuelle" onClick={() => setStepIndex(1)} />
         </>
@@ -212,15 +267,27 @@ export default function MobileEnfantTransitionFlow({
           <div className="mobile-form-grid">
             <label className="mobile-field">
               <span className="mobile-field__label">Revenu imposable IFD</span>
-              <input className="mobile-field__input" type="number" inputMode="numeric" value={form.revenuImposableIfd} onChange={(event) => setForm((current) => ({ ...current, revenuImposableIfd: Number(event.target.value || 0) }))} />
+              <input className="mobile-field__input" type="number" inputMode="numeric" value={form.revenuImposableIfd} onChange={(event) => {
+                const value = Number(event.target.value || 0);
+                setForm((current) => ({ ...current, revenuImposableIfd: value }));
+                onActiveDossierChange({ revenuImposableIfd: value });
+              }} />
             </label>
             <label className="mobile-field">
               <span className="mobile-field__label">Revenu imposable ICC</span>
-              <input className="mobile-field__input" type="number" inputMode="numeric" value={form.revenuImposableIcc} onChange={(event) => setForm((current) => ({ ...current, revenuImposableIcc: Number(event.target.value || 0) }))} />
+              <input className="mobile-field__input" type="number" inputMode="numeric" value={form.revenuImposableIcc} onChange={(event) => {
+                const value = Number(event.target.value || 0);
+                setForm((current) => ({ ...current, revenuImposableIcc: value }));
+                onActiveDossierChange({ revenuImposableIcc: value });
+              }} />
             </label>
             <label className="mobile-field">
               <span className="mobile-field__label">Fortune imposable</span>
-              <input className="mobile-field__input" type="number" inputMode="numeric" value={form.fortuneImposable} onChange={(event) => setForm((current) => ({ ...current, fortuneImposable: Number(event.target.value || 0) }))} />
+              <input className="mobile-field__input" type="number" inputMode="numeric" value={form.fortuneImposable} onChange={(event) => {
+                const value = Number(event.target.value || 0);
+                setForm((current) => ({ ...current, fortuneImposable: value }));
+                onActiveDossierChange({ fortuneImposable: value });
+              }} />
             </label>
             <label className="mobile-field">
               <span className="mobile-field__label">Enfant à charge</span>

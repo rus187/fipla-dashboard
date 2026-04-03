@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { MobileActiveClientDossier } from "./activeClientDossier";
 import MobileAccordionSection from "./MobileAccordionSection";
 import MobileComparisonCard from "./MobileComparisonCard";
 import MobileNavigation from "./MobileNavigation";
@@ -48,6 +49,8 @@ type MobileDomicileFlowProps = {
   onBack: () => void;
   onResolveLocation: (zip: string) => { locality: string } | null;
   onRun: (payload: MobileDomicilePayload) => Promise<MobileDomicileResult>;
+  activeDossier: MobileActiveClientDossier;
+  onActiveDossierChange: (partial: Partial<MobileActiveClientDossier>) => void;
 };
 
 const steps = [
@@ -59,37 +62,59 @@ const steps = [
   { step: "Étape 6", label: "Détail" },
 ];
 
-const initialState: MobileDomicilePayload = {
-  prenom: "",
-  nom: "",
-  etatCivil: "",
-  enfants: 0,
-  currentZip: "",
-  currentLocality: "",
-  newZip: "",
-  newLocality: "",
-  revenuImposableIfd: 0,
-  revenuImposableIcc: 0,
-  troisiemePilier: 0,
-  rachatLpp: 0,
-  fortuneImposable: 0,
-};
+function createInitialState(activeDossier: MobileActiveClientDossier): MobileDomicilePayload {
+  return {
+    prenom: activeDossier.prenom,
+    nom: activeDossier.nom,
+    etatCivil: activeDossier.etatCivil,
+    enfants: activeDossier.enfants,
+    currentZip: activeDossier.zip,
+    currentLocality: activeDossier.locality,
+    newZip: "",
+    newLocality: "",
+    revenuImposableIfd: activeDossier.revenuImposableIfd,
+    revenuImposableIcc: activeDossier.revenuImposableIcc,
+    troisiemePilier: activeDossier.troisiemePilier,
+    rachatLpp: activeDossier.rachatLpp,
+    fortuneImposable: activeDossier.fortuneImposable,
+  };
+}
 
 export default function MobileDomicileFlow({
   onBack,
   onResolveLocation,
   onRun,
+  activeDossier,
+  onActiveDossierChange,
 }: MobileDomicileFlowProps) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [form, setForm] = useState(initialState);
+  const [form, setForm] = useState<MobileDomicilePayload>(() => createInitialState(activeDossier));
   const [result, setResult] = useState<MobileDomicileResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      prenom: activeDossier.prenom,
+      nom: activeDossier.nom,
+      etatCivil: activeDossier.etatCivil,
+      enfants: activeDossier.enfants,
+      currentZip: activeDossier.zip,
+      currentLocality: activeDossier.locality,
+      revenuImposableIfd: activeDossier.revenuImposableIfd,
+      revenuImposableIcc: activeDossier.revenuImposableIcc,
+      troisiemePilier: activeDossier.troisiemePilier,
+      rachatLpp: activeDossier.rachatLpp,
+      fortuneImposable: activeDossier.fortuneImposable,
+    }));
+  }, [activeDossier]);
 
   useEffect(() => {
     if (form.currentZip.trim().length < 4) return;
     const match = onResolveLocation(form.currentZip.trim());
     if (!match?.locality || match.locality === form.currentLocality) return;
     setForm((current) => ({ ...current, currentLocality: match.locality }));
+    onActiveDossierChange({ zip: form.currentZip.trim(), locality: match.locality });
   }, [form.currentZip, form.currentLocality, onResolveLocation]);
 
   useEffect(() => {
@@ -132,7 +157,7 @@ export default function MobileDomicileFlow({
           type="button"
           className="mobile-link-button"
           onClick={() => {
-            setForm(initialState);
+            setForm(createInitialState(activeDossier));
             setResult(null);
             setStepIndex(0);
           }}
@@ -158,7 +183,11 @@ export default function MobileDomicileFlow({
                 className="mobile-field__input"
                 type="text"
                 value={form.prenom}
-                onChange={(event) => setForm((current) => ({ ...current, prenom: event.target.value }))}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setForm((current) => ({ ...current, prenom: value }));
+                  onActiveDossierChange({ prenom: value });
+                }}
               />
             </label>
             <label className="mobile-field">
@@ -167,7 +196,11 @@ export default function MobileDomicileFlow({
                 className="mobile-field__input"
                 type="text"
                 value={form.nom}
-                onChange={(event) => setForm((current) => ({ ...current, nom: event.target.value }))}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setForm((current) => ({ ...current, nom: value }));
+                  onActiveDossierChange({ nom: value });
+                }}
               />
             </label>
             <label className="mobile-field">
@@ -175,7 +208,11 @@ export default function MobileDomicileFlow({
               <select
                 className="mobile-field__select"
                 value={form.etatCivil}
-                onChange={(event) => setForm((current) => ({ ...current, etatCivil: event.target.value }))}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setForm((current) => ({ ...current, etatCivil: value }));
+                  onActiveDossierChange({ etatCivil: value });
+                }}
               >
                 <option value="">Choisir</option>
                 <option value="Célibataire">Célibataire</option>
@@ -192,7 +229,11 @@ export default function MobileDomicileFlow({
                 inputMode="numeric"
                 value={form.enfants}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, enfants: Number(event.target.value || 0) }))
+                  {
+                    const value = Number(event.target.value || 0);
+                    setForm((current) => ({ ...current, enfants: value }));
+                    onActiveDossierChange({ enfants: value });
+                  }
                 }
               />
             </label>
@@ -212,7 +253,11 @@ export default function MobileDomicileFlow({
                 inputMode="numeric"
                 value={form.currentZip}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, currentZip: event.target.value }))
+                  {
+                    const value = event.target.value;
+                    setForm((current) => ({ ...current, currentZip: value }));
+                    onActiveDossierChange({ zip: value });
+                  }
                 }
               />
             </label>
@@ -223,7 +268,11 @@ export default function MobileDomicileFlow({
                 type="text"
                 value={form.currentLocality}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, currentLocality: event.target.value }))
+                  {
+                    const value = event.target.value;
+                    setForm((current) => ({ ...current, currentLocality: value }));
+                    onActiveDossierChange({ locality: value });
+                  }
                 }
               />
             </label>
@@ -286,10 +335,28 @@ export default function MobileDomicileFlow({
                     ]
                   }
                   onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      [key]: Number(event.target.value || 0),
-                    }))
+                    {
+                      const value = Number(event.target.value || 0);
+                      setForm((current) => ({
+                        ...current,
+                        [key]: value,
+                      }));
+                      if (key === "revenuImposableIfd") {
+                        onActiveDossierChange({ revenuImposableIfd: value });
+                      }
+                      if (key === "revenuImposableIcc") {
+                        onActiveDossierChange({ revenuImposableIcc: value });
+                      }
+                      if (key === "troisiemePilier") {
+                        onActiveDossierChange({ troisiemePilier: value });
+                      }
+                      if (key === "rachatLpp") {
+                        onActiveDossierChange({ rachatLpp: value });
+                      }
+                      if (key === "fortuneImposable") {
+                        onActiveDossierChange({ fortuneImposable: value });
+                      }
+                    }
                   }
                 />
               </label>

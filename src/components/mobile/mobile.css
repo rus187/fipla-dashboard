@@ -138,6 +138,7 @@
 .mobile-home-card,
 .mobile-card,
 .mobile-stat-card,
+.mobile-active-dossier,
 .mobile-result-card,
 .mobile-comparison-card,
 .mobile-accordion {
@@ -288,6 +289,7 @@
 }
 
 .mobile-stat-card,
+.mobile-active-dossier,
 .mobile-result-card,
 .mobile-comparison-card,
 .mobile-flow-card {
@@ -392,4 +394,61 @@
   color: #102033;
   font-size: 17px;
   font-weight: 700;
+}
+
+.mobile-active-dossier__header,
+.mobile-active-dossier__content,
+.mobile-active-dossier__actions {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.mobile-active-dossier__header,
+.mobile-active-dossier__actions {
+  gap: 12px;
+}
+
+.mobile-active-dossier__content {
+  gap: 6px;
+}
+
+.mobile-active-dossier__label {
+  color: #5d7388;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.mobile-active-dossier__marker {
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e9f1f7;
+  color: #28455f;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mobile-active-dossier__title {
+  color: #102033;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.mobile-active-dossier__helper {
+  margin: 0;
+  color: #5b6c7d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.mobile-secondary-action--danger {
+  border-color: rgba(138, 61, 61, 0.16);
+  color: #7a3f3f;
+  background: rgba(251, 239, 239, 0.68);
 }
