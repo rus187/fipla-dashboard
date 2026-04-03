@@ -36,6 +36,8 @@ import CollapsibleHelp from "./components/CollapsibleHelp";
 import DecisionIntro, { type AnalysisMode } from "./components/DecisionIntro";
 import SituationEntryScreen from "./components/SituationEntryScreen";
 import StripeCheckoutCard from "./components/StripeCheckoutCard";
+import DesktopActiveDossierCard from "./components/desktop/DesktopActiveDossierCard";
+import DesktopCalculatorHub from "./components/desktop/DesktopCalculatorHub";
 import MobileApp from "./components/mobile/MobileApp";
 import type { MobileDomicilePayload, MobileDomicileResult } from "./components/mobile/MobileDomicileFlow";
 import type {
@@ -85,6 +87,12 @@ type ScenarioVariant = {
   comparisonTaxResults: Record<string, any>;
   isLinkedToVariant1: boolean;
 };
+
+type DesktopCalculatorId =
+  | "simulation-fiscale"
+  | "reforme-vl"
+  | "changement-domicile"
+  | "fin-deduction-enfant";
 
 const MAX_VARIANTS = 7;
 const INTRO_SECTION_ID = "intro";
@@ -904,6 +912,8 @@ export default function App() {
   const [simulationStatusMessage, setSimulationStatusMessage] = useState("");
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode | null>(null);
   const [isDecisionHelpOpen, setIsDecisionHelpOpen] = useState(false);
+  const [activeDesktopCalculator, setActiveDesktopCalculator] =
+    useState<DesktopCalculatorId>("simulation-fiscale");
   const [variants, setVariants] = useState<ScenarioVariant[]>(createInitialVariants);
   const activeVariant = variants[activeVariantIndex];
   const conseillerPassword = import.meta.env.VITE_CONSEILLER_PASSWORD || "";
@@ -1140,6 +1150,120 @@ export default function App() {
     setAnalysisMode(null);
     setIsDecisionHelpOpen(false);
     setVariants(createInitialVariants());
+  };
+
+  const getDesktopCalculatorVariantIndex = (
+    calculatorId: DesktopCalculatorId,
+    currentVariants: ScenarioVariant[] = variants
+  ) => {
+    if (calculatorId === "simulation-fiscale") {
+      return 0;
+    }
+
+    if (calculatorId === "reforme-vl") {
+      return currentVariants.findIndex(
+        (variant, index) =>
+          index > 0 &&
+          (variant.taxRegime === "valeur_locative_reform" ||
+            variant.dossier.immobilier.regimeFiscal === "reforme")
+      );
+    }
+
+    if (calculatorId === "changement-domicile") {
+      return currentVariants.findIndex((variant, index) => {
+        if (index === 0) {
+          return false;
+        }
+
+        const label = `${variant.customLabel} ${variant.label}`.toLowerCase();
+        return label.includes("domicile");
+      });
+    }
+
+    return currentVariants.findIndex((variant, index) => {
+      if (index === 0) {
+        return false;
+      }
+
+      const label = `${variant.customLabel} ${variant.label}`.toLowerCase();
+      return label.includes("enfant");
+    });
+  };
+
+  const getDesktopCalculatorDefaultSection = (calculatorId: DesktopCalculatorId) => {
+    switch (calculatorId) {
+      case "simulation-fiscale":
+        return "fiscalite";
+      case "reforme-vl":
+        return "fiscalite";
+      case "changement-domicile":
+        return "informations-generales";
+      case "fin-deduction-enfant":
+        return "informations-generales";
+      default:
+        return "informations-generales";
+    }
+  };
+
+  const handleDesktopCalculatorOpen = (
+    calculatorId: DesktopCalculatorId,
+    targetSectionId = getDesktopCalculatorDefaultSection(calculatorId)
+  ) => {
+    setActiveDesktopCalculator(calculatorId);
+
+    if (calculatorId === "simulation-fiscale") {
+      setActiveVariantIndex(0);
+      setActiveSectionId(targetSectionId);
+      return;
+    }
+
+    const existingIndex = getDesktopCalculatorVariantIndex(calculatorId);
+    if (existingIndex >= 0) {
+      setActiveVariantIndex(existingIndex);
+      setActiveSectionId(targetSectionId);
+      return;
+    }
+
+    if (variants.length >= MAX_VARIANTS) {
+      setActiveVariantIndex(activeVariantIndex);
+      setActiveSectionId(targetSectionId);
+      return;
+    }
+
+    const baseVariant = variants[0] ?? createEmptyVariant(0);
+    const nextIndex = variants.length;
+    const targetVariant = {
+      ...createEmptyVariant(nextIndex),
+      taxRegime:
+        calculatorId === "reforme-vl" ? ("valeur_locative_reform" as VariantTaxRegime) : baseVariant.taxRegime,
+    };
+
+    let nextVariant = clearVariantSimulationOutputs(
+      cloneVariantStateFromBase(baseVariant, targetVariant, false)
+    );
+
+    nextVariant = {
+      ...nextVariant,
+      id: `variant-${calculatorId}-${Date.now()}-${nextIndex}`,
+      customLabel:
+        calculatorId === "reforme-vl"
+          ? "Réforme VL"
+          : calculatorId === "changement-domicile"
+            ? "Changement de domicile"
+            : "Fin de déduction enfant",
+      isLinkedToVariant1: false,
+    };
+
+    if (calculatorId === "reforme-vl") {
+      nextVariant = clearVariantSimulationOutputs(
+        applyVariantTaxRegime(nextVariant, "valeur_locative_reform")
+      );
+    }
+
+    const nextVariants = normalizeVariantLabels([...variants, nextVariant]);
+    setVariants(nextVariants);
+    setActiveVariantIndex(nextVariants.length - 1);
+    setActiveSectionId(targetSectionId);
   };
 
   const handleConseillerAccessToggle = () => {
@@ -4174,6 +4298,123 @@ export default function App() {
     { id: "resultats", step: "6", label: "Résultats" },
     { id: "recommandation", step: "7", label: "Recommandation" },
   ];
+  const baseVariant = variants[0] ?? activeVariant;
+  const activeClientDossier = baseVariant.dossier;
+  const activeClientDisplayName =
+    `${activeClientDossier.identite.prenom} ${activeClientDossier.identite.nom}`.trim() ||
+    "Client à renseigner";
+  const activeClientLocality =
+    `${activeClientDossier.identite.npa || "NPA à renseigner"} ${(
+      activeClientDossier.identite.communeFiscale ||
+      activeClientDossier.identite.commune ||
+      "Localité à renseigner"
+    ).trim()}`.trim();
+  const desktopActiveDossierFields = [
+    { label: "Prénom", value: activeClientDossier.identite.prenom || "Non renseigné" },
+    { label: "Nom", value: activeClientDossier.identite.nom || "Non renseigné" },
+    { label: "NPA / localité", value: activeClientLocality },
+    { label: "État civil", value: activeClientDossier.identite.etatCivil || "Non renseigné" },
+    {
+      label: "Nombre d’enfants",
+      value: String(activeClientDossier.famille.nombreEnfants || 0),
+    },
+    {
+      label: "Revenu imposable IFD",
+      value: formatMontantCHFArrondi(activeClientDossier.fiscalite.revenuImposableIfd || 0),
+    },
+    {
+      label: "Revenu imposable ICC",
+      value: formatMontantCHFArrondi(activeClientDossier.fiscalite.revenuImposable || 0),
+    },
+    {
+      label: "Fortune imposable",
+      value: formatMontantCHFArrondi(
+        activeClientDossier.fiscalite.fortuneImposableActuelleSaisie || 0
+      ),
+    },
+  ];
+  const reformeVariantIndex = getDesktopCalculatorVariantIndex("reforme-vl");
+  const domicileVariantIndex = getDesktopCalculatorVariantIndex("changement-domicile");
+  const enfantVariantIndex = getDesktopCalculatorVariantIndex("fin-deduction-enfant");
+  const desktopCalculatorCards = [
+    {
+      id: "simulation-fiscale",
+      label: "Calculateur 1",
+      title: "Simulation fiscale",
+      description:
+        "Lecture fiscale générale du dossier actif, avec les mêmes bases IFD, ICC et fortune que le moteur existant.",
+      helper:
+        "Ouvre la base fiscale et les leviers de simulation existants sans recréer un moteur parallèle.",
+      primaryLabel: "Ouvrir la simulation fiscale",
+      status: isDossierReadyForTaxSimulation(baseVariant.dossier) ? "Prêt" : "À compléter",
+      currentVariant: getVariantDisplayLabel(baseVariant),
+      sections: [
+        { id: "informations-generales", label: "Données de base" },
+        { id: "fiscalite", label: "Fiscalité" },
+        { id: "resultats", label: "Résultats" },
+      ],
+    },
+    {
+      id: "reforme-vl",
+      label: "Calculateur 2",
+      title: "Réforme VL",
+      description:
+        "Accès ciblé au scénario réformé pour comparer la fiscalité actuelle avec la suppression de la valeur locative.",
+      helper:
+        "S’appuie sur la variante réformée existante et sur les mêmes ajustements immobiliers déjà calculés par l’application.",
+      primaryLabel: "Ouvrir Réforme VL",
+      status: reformeVariantIndex >= 0 ? "Disponible" : "À créer",
+      currentVariant:
+        reformeVariantIndex >= 0
+          ? getVariantDisplayLabel(variants[reformeVariantIndex])
+          : "Réforme VL",
+      sections: [
+        { id: "revenus", label: "Immobilier" },
+        { id: "fiscalite", label: "Fiscalité" },
+        { id: "resultats", label: "Comparaison" },
+      ],
+    },
+    {
+      id: "changement-domicile",
+      label: "Calculateur 3",
+      title: "Changement de domicile",
+      description:
+        "Duplique le dossier actif dans une variante dédiée pour modifier NPA, commune et bases fiscales sans toucher au socle.",
+      helper:
+        "Conservez le dossier actif comme référence puis ajustez uniquement la variante de domicile.",
+      primaryLabel: "Ouvrir changement de domicile",
+      status: domicileVariantIndex >= 0 ? "Disponible" : "À créer",
+      currentVariant:
+        domicileVariantIndex >= 0
+          ? getVariantDisplayLabel(variants[domicileVariantIndex])
+          : "Changement de domicile",
+      sections: [
+        { id: "informations-generales", label: "Domicile" },
+        { id: "fiscalite", label: "Bases fiscales" },
+        { id: "resultats", label: "Comparaison" },
+      ],
+    },
+    {
+      id: "fin-deduction-enfant",
+      label: "Calculateur 4",
+      title: "Fin de déduction enfant",
+      description:
+        "Prépare une variante dédiée pour mesurer l’impact fiscal d’une baisse du nombre d’enfants à charge.",
+      helper:
+        "La comparaison avant / après reste calculée par TaxWare et s’appuie sur les mêmes bases fiscales de référence.",
+      primaryLabel: "Ouvrir fin de déduction enfant",
+      status: enfantVariantIndex >= 0 ? "Disponible" : "À créer",
+      currentVariant:
+        enfantVariantIndex >= 0
+          ? getVariantDisplayLabel(variants[enfantVariantIndex])
+          : "Fin de déduction enfant",
+      sections: [
+        { id: "informations-generales", label: "Situation familiale" },
+        { id: "fiscalite", label: "Bases fiscales" },
+        { id: "resultats", label: "Comparaison" },
+      ],
+    },
+  ];
   const cockpitCards = [
     {
       label: "Variante active",
@@ -4638,6 +4879,35 @@ export default function App() {
   };
 
   useEffect(() => {
+    const activeLabel = `${activeVariant.customLabel} ${activeVariant.label}`.toLowerCase();
+
+    if (
+      activeVariant.taxRegime === "valeur_locative_reform" ||
+      activeVariant.dossier.immobilier.regimeFiscal === "reforme"
+    ) {
+      setActiveDesktopCalculator("reforme-vl");
+      return;
+    }
+
+    if (activeLabel.includes("domicile")) {
+      setActiveDesktopCalculator("changement-domicile");
+      return;
+    }
+
+    if (activeLabel.includes("enfant")) {
+      setActiveDesktopCalculator("fin-deduction-enfant");
+      return;
+    }
+
+    setActiveDesktopCalculator("simulation-fiscale");
+  }, [
+    activeVariant.customLabel,
+    activeVariant.dossier.immobilier.regimeFiscal,
+    activeVariant.label,
+    activeVariant.taxRegime,
+  ]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const initializeSession = async () => {
@@ -5004,193 +5274,238 @@ export default function App() {
             Se déconnecter
           </button>
         </div>
-        <div
-          style={{
-            marginBottom: "20px",
-            padding: "14px 16px",
-            borderRadius: "16px",
-            border: authError ? "1px solid #fecdd3" : "1px solid #dbe3ee",
-            background: authError ? "#fff1f2" : "#f8fafc",
-            color: authError ? "#be123c" : "#334155",
-            display: "grid",
-            gap: "6px",
-          }}
-        >
-          <div style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-            Statut du profil
-          </div>
-          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            ID utilisateur : <strong>{user.id}</strong>
-          </div>
-          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            Email: <strong>{profile?.email ?? user.email ?? "Non disponible"}</strong>
-          </div>
-          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            ID du profil : <strong>{profile?.id ?? "Aucun profil chargé"}</strong>
-          </div>
-          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            Source:{" "}
-            <strong>
-              {profileSyncSource === "id"
-                ? "profil trouvé par ID"
-                : profileSyncSource === "email"
-                  ? "profil trouvé par email"
-                  : profileSyncSource === "created"
-                    ? "profil créé"
-                    : "non disponible"}
-            </strong>
-          </div>
-          <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            Chargement : <strong>{isProfileLoading ? "en cours" : "terminé"}</strong>
-          </div>
-          {authError ? (
-            <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
-              Erreur du profil : <strong>{authError}</strong>
-            </div>
-          ) : null}
-        </div>
-        <StripeCheckoutCard profileId={profile?.id ?? null} />
-
-        <DecisionIntro
-          analysisMode={analysisMode}
-          isHelpOpen={isDecisionHelpOpen}
-          onContinue={handleContinueFromDecision}
-          onSelectMode={handleAnalysisModeSelection}
-          onToggleHelp={() => setIsDecisionHelpOpen((current) => !current)}
-        />
-
-        <div className="cockpit-grid">
-          {cockpitCards.map((card) => (
-            <div key={card.label} className="cockpit-card">
-              <div className="cockpit-card__label">{card.label}</div>
-              <div className="cockpit-card__value">{card.value}</div>
-              <div className="cockpit-card__helper">{card.helper}</div>
-            </div>
-          ))}
-        </div>
-
-        <section className="workflow-command" aria-label="Pilotage de la simulation">
-          <div className="workflow-command__lead">
-            <div className="workflow-command__eyebrow">Pilotage du workflow</div>
-            <h2 className="workflow-command__title">Saisir, simuler, comparer, décider.</h2>
-            <p className="workflow-command__text">
-              Le parcours reste complet, mais l’action principale est désormais centralisée pour
-              accélérer la lecture du dossier et la mise à jour de toutes les variantes.
-            </p>
-
-            <div className="workflow-command__actions">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleTaxSimulation({ navigateToResults: true });
-                  }}
-                  disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
-                  className="workflow-command__button"
-                title={simulationPrimaryHelper}
-              >
-                {simulationPrimaryButtonLabel}
-              </button>
-              <div className="workflow-command__status">
-                {simulationPrimaryHelper}
-              </div>
-            </div>
+        <section className="desktop-workspace" aria-label="Organisation PC du dossier actif">
+          <div className="desktop-workspace__sidebar">
+            <DesktopActiveDossierCard
+              title={activeClientDisplayName}
+              subtitle="Le dossier de base alimente les quatre calculateurs PC. Les variantes gardent la même logique métier et la même simulation TaxWare."
+              fields={desktopActiveDossierFields}
+              onEdit={() => {
+                setActiveVariantIndex(0);
+                setActiveDesktopCalculator("simulation-fiscale");
+                handleJourneyNavigation("informations-generales");
+              }}
+              onNewDossier={handleResetManualValues}
+              onReset={() => {
+                handleResetVariantsFromVariant1();
+                setActiveVariantIndex(0);
+                setActiveDesktopCalculator("simulation-fiscale");
+                handleJourneyNavigation("informations-generales");
+              }}
+            />
           </div>
 
-          <div className="workflow-command__panel">
-            {workflowDashboardCards.map((card) => (
-              <div key={card.label} className="workflow-command__metric">
-                <div className="workflow-command__metric-label">{card.label}</div>
-                <div className="workflow-command__metric-value">{card.value}</div>
-                <div className="workflow-command__metric-helper">{card.helper}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="workflow-stage-grid">
-            {workflowStages.map((item) => (
-              <div key={item.step} className="workflow-stage-card">
-                <div className="workflow-stage-card__step">{item.step}</div>
-                <div className="workflow-stage-card__title">{item.title}</div>
-                <div className="workflow-stage-card__text">{item.text}</div>
-              </div>
-            ))}
+          <div className="desktop-workspace__main">
+            <DesktopCalculatorHub
+              calculators={desktopCalculatorCards}
+              activeCalculatorId={activeDesktopCalculator}
+              onSelect={(calculatorId) =>
+                setActiveDesktopCalculator(calculatorId as DesktopCalculatorId)
+              }
+              onOpen={(calculatorId) =>
+                handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId)
+              }
+              onOpenResults={(calculatorId) =>
+                handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId, "resultats")
+              }
+              onOpenSection={(calculatorId, sectionId) =>
+                handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId, sectionId)
+              }
+            />
           </div>
         </section>
 
-        {shouldShowTopResultsRibbon && (
-          <section className="results-ribbon" aria-label="Résultats immédiats">
-            <div className="results-ribbon__header">
-              <div>
-                <div className="results-ribbon__eyebrow">Résultats immédiats</div>
-                <h2 className="results-ribbon__title">Les indicateurs clés restent visibles en haut.</h2>
-              </div>
-              <div className="results-ribbon__helper">
-                La simulation renvoie automatiquement vers la lecture des résultats consolidés.
-              </div>
-            </div>
+        <details className="desktop-advanced-panel">
+          <summary className="desktop-advanced-panel__summary">
+            Afficher le pilotage avancé et le workflow historique
+          </summary>
 
-            <div className="results-ribbon__metrics">
-              {topResultsCards.map((card) => (
-                <div key={card.label} className="results-ribbon__metric">
-                  <div className="results-ribbon__metric-label">{card.label}</div>
-                  <div className="results-ribbon__metric-value">{card.value}</div>
-                  <div className="results-ribbon__metric-helper">{card.helper}</div>
+          <div className="desktop-advanced-panel__content">
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "14px 16px",
+                borderRadius: "16px",
+                border: authError ? "1px solid #fecdd3" : "1px solid #dbe3ee",
+                background: authError ? "#fff1f2" : "#f8fafc",
+                color: authError ? "#be123c" : "#334155",
+                display: "grid",
+                gap: "6px",
+              }}
+            >
+              <div style={{ fontSize: "13px", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                Statut du profil
+              </div>
+              <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                ID utilisateur : <strong>{user.id}</strong>
+              </div>
+              <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                Email: <strong>{profile?.email ?? user.email ?? "Non disponible"}</strong>
+              </div>
+              <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                ID du profil : <strong>{profile?.id ?? "Aucun profil chargé"}</strong>
+              </div>
+              <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                Source:{" "}
+                <strong>
+                  {profileSyncSource === "id"
+                    ? "profil trouvé par ID"
+                    : profileSyncSource === "email"
+                      ? "profil trouvé par email"
+                      : profileSyncSource === "created"
+                        ? "profil créé"
+                        : "non disponible"}
+                </strong>
+              </div>
+              <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                Chargement : <strong>{isProfileLoading ? "en cours" : "terminé"}</strong>
+              </div>
+              {authError ? (
+                <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                  Erreur du profil : <strong>{authError}</strong>
+                </div>
+              ) : null}
+            </div>
+            <StripeCheckoutCard profileId={profile?.id ?? null} />
+
+            <DecisionIntro
+              analysisMode={analysisMode}
+              isHelpOpen={isDecisionHelpOpen}
+              onContinue={handleContinueFromDecision}
+              onSelectMode={handleAnalysisModeSelection}
+              onToggleHelp={() => setIsDecisionHelpOpen((current) => !current)}
+            />
+
+            <div className="cockpit-grid">
+              {cockpitCards.map((card) => (
+                <div key={card.label} className="cockpit-card">
+                  <div className="cockpit-card__label">{card.label}</div>
+                  <div className="cockpit-card__value">{card.value}</div>
+                  <div className="cockpit-card__helper">{card.helper}</div>
                 </div>
               ))}
             </div>
 
-            <div className="results-ribbon__variants">
-              {variantTotals.map((variant) => {
-                const isBest = bestVariant?.id === variant.id;
-                const isActive = activeVariant.id === variant.id;
+            <section className="workflow-command" aria-label="Pilotage de la simulation">
+              <div className="workflow-command__lead">
+                <div className="workflow-command__eyebrow">Pilotage du workflow</div>
+                <h2 className="workflow-command__title">Saisir, simuler, comparer, décider.</h2>
+                <p className="workflow-command__text">
+                  Le parcours reste complet, mais l’action principale est désormais centralisée pour
+                  accélérer la lecture du dossier et la mise à jour de toutes les variantes.
+                </p>
 
-                return (
-                  <div
-                    key={`${variant.id}-ribbon`}
-                    className={`results-ribbon__variant${
-                      isBest ? " results-ribbon__variant--best" : ""
-                    }${isActive ? " results-ribbon__variant--active" : ""}`}
+                <div className="workflow-command__actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleTaxSimulation({ navigateToResults: true });
+                    }}
+                    disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
+                    className="workflow-command__button"
+                    title={simulationPrimaryHelper}
                   >
-                    <div className="results-ribbon__variant-topline">
-                      <strong>{variant.label}</strong>
-                      <span>{isBest ? "Meilleure" : isActive ? "Active" : "Variante"}</span>
-                    </div>
-                    <div className="results-ribbon__variant-value">
-                      {typeof variant.totalTax === "number"
-                        ? formatMontantCHFArrondi(variant.totalTax)
-                        : "En attente"}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+                    {simulationPrimaryButtonLabel}
+                  </button>
+                  <div className="workflow-command__status">{simulationPrimaryHelper}</div>
+                </div>
+              </div>
 
-        <nav className="journey-nav" aria-label="Parcours de simulation">
-          <div className="journey-nav__title">
-            Parcours guidé
-            <span className="journey-nav__title-meta">
-              {activeJourneyProgressLabel}
-            </span>
+              <div className="workflow-command__panel">
+                {workflowDashboardCards.map((card) => (
+                  <div key={card.label} className="workflow-command__metric">
+                    <div className="workflow-command__metric-label">{card.label}</div>
+                    <div className="workflow-command__metric-value">{card.value}</div>
+                    <div className="workflow-command__metric-helper">{card.helper}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="workflow-stage-grid">
+                {workflowStages.map((item) => (
+                  <div key={item.step} className="workflow-stage-card">
+                    <div className="workflow-stage-card__step">{item.step}</div>
+                    <div className="workflow-stage-card__title">{item.title}</div>
+                    <div className="workflow-stage-card__text">{item.text}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {shouldShowTopResultsRibbon && (
+              <section className="results-ribbon" aria-label="Résultats immédiats">
+                <div className="results-ribbon__header">
+                  <div>
+                    <div className="results-ribbon__eyebrow">Résultats immédiats</div>
+                    <h2 className="results-ribbon__title">Les indicateurs clés restent visibles en haut.</h2>
+                  </div>
+                  <div className="results-ribbon__helper">
+                    La simulation renvoie automatiquement vers la lecture des résultats consolidés.
+                  </div>
+                </div>
+
+                <div className="results-ribbon__metrics">
+                  {topResultsCards.map((card) => (
+                    <div key={card.label} className="results-ribbon__metric">
+                      <div className="results-ribbon__metric-label">{card.label}</div>
+                      <div className="results-ribbon__metric-value">{card.value}</div>
+                      <div className="results-ribbon__metric-helper">{card.helper}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="results-ribbon__variants">
+                  {variantTotals.map((variant) => {
+                    const isBest = bestVariant?.id === variant.id;
+                    const isActive = activeVariant.id === variant.id;
+
+                    return (
+                      <div
+                        key={`${variant.id}-ribbon`}
+                        className={`results-ribbon__variant${
+                          isBest ? " results-ribbon__variant--best" : ""
+                        }${isActive ? " results-ribbon__variant--active" : ""}`}
+                      >
+                        <div className="results-ribbon__variant-topline">
+                          <strong>{variant.label}</strong>
+                          <span>{isBest ? "Meilleure" : isActive ? "Active" : "Variante"}</span>
+                        </div>
+                        <div className="results-ribbon__variant-value">
+                          {typeof variant.totalTax === "number"
+                            ? formatMontantCHFArrondi(variant.totalTax)
+                            : "En attente"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            <nav className="journey-nav" aria-label="Parcours de simulation">
+              <div className="journey-nav__title">
+                Parcours guidé
+                <span className="journey-nav__title-meta">{activeJourneyProgressLabel}</span>
+              </div>
+              <div className="journey-nav__items">
+                {journeyNavigation.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleJourneyNavigation(item.id)}
+                    className={`journey-nav__link${
+                      item.id === activeSectionId ? " journey-nav__link--active" : ""
+                    }`}
+                    aria-current={item.id === activeSectionId ? "step" : undefined}
+                  >
+                    <span className="journey-nav__step">{item.step}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </nav>
           </div>
-          <div className="journey-nav__items">
-            {journeyNavigation.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleJourneyNavigation(item.id)}
-                className={`journey-nav__link${
-                  item.id === activeSectionId ? " journey-nav__link--active" : ""
-                }`}
-                aria-current={item.id === activeSectionId ? "step" : undefined}
-              >
-                <span className="journey-nav__step">{item.step}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
+        </details>
 
         <GuidedSection
           id="optimisation"
