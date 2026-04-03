@@ -36,6 +36,14 @@ import CollapsibleHelp from "./components/CollapsibleHelp";
 import DecisionIntro, { type AnalysisMode } from "./components/DecisionIntro";
 import SituationEntryScreen from "./components/SituationEntryScreen";
 import StripeCheckoutCard from "./components/StripeCheckoutCard";
+import MobileApp from "./components/mobile/MobileApp";
+import type { MobileDomicilePayload, MobileDomicileResult } from "./components/mobile/MobileDomicileFlow";
+import type {
+  MobileEnfantTransitionPayload,
+  MobileEnfantTransitionResult,
+} from "./components/mobile/MobileEnfantTransitionFlow";
+import type { MobileReformePayload, MobileReformeResult } from "./components/mobile/MobileReformeVLFlow";
+import type { MobileSimulationPayload, MobileSimulationResult } from "./components/mobile/MobileSimulationFlow";
 import { buildDynamicAdvisoryPreview } from "./lib/advisory/recommendationEngine";
 import { supabaseClient } from "./lib/supabase/client";
 import { ensureCurrentUserProfile } from "./lib/supabase/profiles";
@@ -201,6 +209,94 @@ function composeCorrectedTaxwareResult(params: {
     typeof fortuneNormalized.wealthTax === "number"
       ? fortuneNormalized.wealthTax
       : baseNormalized.wealthTax ?? null;
+  const deductions = {
+    occupational: {
+      federal:
+        ifdNormalized?.deductions?.occupational?.federal ??
+        baseNormalized?.deductions?.occupational?.federal ??
+        null,
+      cantonal:
+        cantonNormalized?.deductions?.occupational?.cantonal ??
+        baseNormalized?.deductions?.occupational?.cantonal ??
+        null,
+      wealth:
+        fortuneNormalized?.deductions?.occupational?.wealth ??
+        baseNormalized?.deductions?.occupational?.wealth ??
+        null,
+    },
+    insurance: {
+      federal:
+        ifdNormalized?.deductions?.insurance?.federal ??
+        baseNormalized?.deductions?.insurance?.federal ??
+        null,
+      cantonal:
+        cantonNormalized?.deductions?.insurance?.cantonal ??
+        baseNormalized?.deductions?.insurance?.cantonal ??
+        null,
+      wealth:
+        fortuneNormalized?.deductions?.insurance?.wealth ??
+        baseNormalized?.deductions?.insurance?.wealth ??
+        null,
+    },
+    social: {
+      federal:
+        ifdNormalized?.deductions?.social?.federal ??
+        baseNormalized?.deductions?.social?.federal ??
+        null,
+      cantonal:
+        cantonNormalized?.deductions?.social?.cantonal ??
+        baseNormalized?.deductions?.social?.cantonal ??
+        null,
+      wealth:
+        fortuneNormalized?.deductions?.social?.wealth ??
+        baseNormalized?.deductions?.social?.wealth ??
+        null,
+      details: {
+        children: {
+          federal:
+            ifdNormalized?.deductions?.social?.details?.children?.federal ??
+            baseNormalized?.deductions?.social?.details?.children?.federal ??
+            null,
+          cantonal:
+            cantonNormalized?.deductions?.social?.details?.children?.cantonal ??
+            baseNormalized?.deductions?.social?.details?.children?.cantonal ??
+            null,
+          wealth:
+            fortuneNormalized?.deductions?.social?.details?.children?.wealth ??
+            baseNormalized?.deductions?.social?.details?.children?.wealth ??
+            null,
+        },
+        personal: {
+          federal:
+            ifdNormalized?.deductions?.social?.details?.personal?.federal ??
+            baseNormalized?.deductions?.social?.details?.personal?.federal ??
+            null,
+          cantonal:
+            cantonNormalized?.deductions?.social?.details?.personal?.cantonal ??
+            baseNormalized?.deductions?.social?.details?.personal?.cantonal ??
+            null,
+          wealth:
+            fortuneNormalized?.deductions?.social?.details?.personal?.wealth ??
+            baseNormalized?.deductions?.social?.details?.personal?.wealth ??
+            null,
+        },
+        secondEarner: {
+          federal:
+            ifdNormalized?.deductions?.social?.details?.secondEarner?.federal ??
+            baseNormalized?.deductions?.social?.details?.secondEarner?.federal ??
+            null,
+          cantonal:
+            cantonNormalized?.deductions?.social?.details?.secondEarner?.cantonal ??
+            baseNormalized?.deductions?.social?.details?.secondEarner?.cantonal ??
+            null,
+          wealth:
+            fortuneNormalized?.deductions?.social?.details?.secondEarner?.wealth ??
+            baseNormalized?.deductions?.social?.details?.secondEarner?.wealth ??
+            null,
+        },
+      },
+    },
+  };
 
   return {
     raw: {
@@ -229,6 +325,7 @@ function composeCorrectedTaxwareResult(params: {
       communalTax,
       cantonalCommunalTax,
       wealthTax,
+      deductions,
       totalTax:
         sumFiniteNumbers(federalTax, cantonalCommunalTax, wealthTax) ??
         baseNormalized.totalTax ??
@@ -788,6 +885,9 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
   const [activeVariantIndex, setActiveVariantIndex] = useState(0);
   const [activeSectionId, setActiveSectionId] = useState(INTRO_SECTION_ID);
   const [showConseillerPrompt, setShowConseillerPrompt] = useState(false);
@@ -2591,6 +2691,959 @@ export default function App() {
     }
   };
 
+  const getMobileLocationSuggestion = (zip: string) => {
+    const match = (zipToFiscal as ZipFiscalRow[]).find((item) => item.zip === zip.trim());
+
+    if (!match) {
+      return null;
+    }
+
+    return {
+      locality: match.locality || match.fiscalCommune || "",
+      fiscalCommune: match.fiscalCommune || match.locality || "",
+      canton: match.fiscalCanton || match.localityCanton || "",
+    };
+  };
+
+  const createMobileVariant = (
+    id: string,
+    label: string,
+    dossierForSimulation: DossierClient,
+    taxRegime: VariantTaxRegime = "current"
+  ): ScenarioVariant => ({
+    ...createEmptyVariant(0),
+    id,
+    label,
+    customLabel: label,
+    taxRegime,
+    dossier: applyDossierTaxRegime(cloneDossier(dossierForSimulation), taxRegime),
+  });
+
+  const buildMobileBaseDossier = (params: {
+    prenom: string;
+    nom: string;
+    zip: string;
+    locality: string;
+    etatCivil: string;
+    enfants: number;
+    revenuImposableIfd: number;
+    revenuImposableIcc: number;
+    troisiemePilier: number;
+    rachatLpp: number;
+    variationRevenu?: number;
+    fortuneImposable: number;
+    immobilier?: Partial<DossierClient["immobilier"]>;
+    immobilierFortune?: number;
+  }) => {
+    const location = getMobileLocationSuggestion(params.zip);
+    const locality = params.locality.trim() || location?.locality || "";
+    const fiscalCommune = location?.fiscalCommune || locality;
+    const canton = location?.canton || "";
+    const immobilierFortune = params.immobilierFortune ?? 0;
+    const variationRevenu = params.variationRevenu ?? 0;
+    const baseLiquidites = Math.max(
+      0,
+      params.fortuneImposable + params.troisiemePilier + params.rachatLpp
+    );
+
+    return {
+      ...cloneDossier(emptyDossier),
+      identite: {
+        ...emptyDossier.identite,
+        prenom: params.prenom,
+        nom: params.nom,
+        age: 45,
+        etatCivil: params.etatCivil,
+        npa: params.zip,
+        commune: locality,
+        canton,
+        communeFiscale: fiscalCommune,
+        cantonFiscal: canton,
+        taxwareZip: params.zip,
+        taxwareCity: fiscalCommune,
+      },
+      famille: {
+        ...emptyDossier.famille,
+        aConjoint: params.etatCivil === "Marié",
+        nombreEnfants: params.enfants,
+      },
+      revenus: {
+        ...emptyDossier.revenus,
+        totalRevenus: 0,
+      },
+      immobilier: {
+        ...emptyDossier.immobilier,
+        ...params.immobilier,
+      },
+      fortune: {
+        ...emptyDossier.fortune,
+        liquidites: baseLiquidites,
+        immobilier: Math.max(0, immobilierFortune),
+        fortuneTotale: baseLiquidites + Math.max(0, immobilierFortune),
+      },
+      dettes: {
+        ...emptyDossier.dettes,
+        autresDettes: 0,
+        totalDettes: 0,
+      },
+      fiscalite: {
+        ...emptyDossier.fiscalite,
+        revenuImposableIfd: Math.max(0, params.revenuImposableIfd),
+        revenuImposable: Math.max(0, params.revenuImposableIcc),
+        fortuneImposableActuelleSaisie: Math.max(0, params.fortuneImposable),
+        troisiemePilierSimule: Math.max(0, params.troisiemePilier),
+        rachatLpp: Math.max(0, params.rachatLpp),
+        ajustementManuelRevenu: variationRevenu,
+        objectifFiscalPrincipal: "Réduire les impôts",
+      },
+      objectifs: {
+        ...emptyDossier.objectifs,
+        reduireImpots: true,
+        objectifPrincipal: "Réduire les impôts",
+      },
+    };
+  };
+
+  const getMobileVerdict = (delta: number) => {
+    if (delta > 0) {
+      return "Favorable" as const;
+    }
+
+    if (delta < 0) {
+      return "Défavorable" as const;
+    }
+
+    return "Neutre" as const;
+  };
+
+  const getMobileResultMetrics = (result: any) => [
+    {
+      label: "Impôt total",
+      value: formatMontantCHFArrondi(result?.normalized?.totalTax ?? 0),
+    },
+    {
+      label: "Impôt fédéral direct",
+      value: formatMontantCHFArrondi(result?.normalized?.federalTax ?? 0),
+    },
+    {
+      label: "Impôt cantonal / communal",
+      value: formatMontantCHFArrondi(result?.normalized?.cantonalCommunalTax ?? 0),
+    },
+    {
+      label: "Fortune imposable",
+      value: formatMontantCHFArrondi(result?.normalized?.taxableAssets ?? 0),
+    },
+  ];
+
+  const runMobileSimulation = async (
+    payload: MobileSimulationPayload
+  ): Promise<MobileSimulationResult> => {
+    const dossierForSimulation = buildMobileBaseDossier(payload);
+
+    const simulatedVariant = await runTaxSimulationForVariant(
+      createMobileVariant("mobile-simulation", "Simulation fiscale", dossierForSimulation)
+    );
+    const beforeResult = simulatedVariant.taxResultSansOptimisation ?? getVariantDisplayedTaxResult(simulatedVariant);
+    const afterResult = getVariantDisplayedTaxResult(simulatedVariant);
+    const annualSavings =
+      (beforeResult?.normalized?.totalTax ?? 0) - (afterResult?.normalized?.totalTax ?? 0);
+    const monthlySavings = annualSavings / 12;
+
+    return {
+      current: {
+        label: "Avant optimisation",
+        value: formatMontantCHFArrondi(beforeResult?.normalized?.totalTax ?? 0),
+        helper: "Base fiscale actuelle du dossier.",
+        metrics: getMobileResultMetrics(beforeResult),
+      },
+      next: {
+        label: "Après optimisation",
+        value: formatMontantCHFArrondi(afterResult?.normalized?.totalTax ?? 0),
+        helper: `Lecture optimisée pour ${payload.prenom} ${payload.nom}`.trim(),
+        metrics: getMobileResultMetrics(afterResult),
+      },
+      difference: {
+        label: "Différence",
+        value: formatMontantCHFSigne(annualSavings),
+        helper: "Économie ou surcoût annuel après optimisation.",
+        verdict: getMobileVerdict(annualSavings),
+        metrics: [
+          { label: "Économie fiscale", value: formatMontantCHFSigne(annualSavings) },
+          { label: "Impact annuel", value: formatMontantCHFSigne(annualSavings) },
+          { label: "Impact mensuel", value: formatMontantCHFSigne(monthlySavings) },
+        ],
+      },
+      detailSections: [
+        {
+          title: "Décomposition des effets",
+          rows: [
+            {
+              label: "IFD avant",
+              value: formatMontantCHFArrondi(beforeResult?.normalized?.taxableIncomeFederal ?? 0),
+            },
+            {
+              label: "IFD après",
+              value: formatMontantCHFArrondi(afterResult?.normalized?.taxableIncomeFederal ?? 0),
+            },
+            {
+              label: "ICC avant",
+              value: formatMontantCHFArrondi(beforeResult?.normalized?.taxableIncomeCantonal ?? 0),
+            },
+            {
+              label: "ICC après",
+              value: formatMontantCHFArrondi(afterResult?.normalized?.taxableIncomeCantonal ?? 0),
+            },
+          ],
+        },
+        {
+          title: "Impact du 3e pilier",
+          rows: [
+            { label: "Cotisation saisie", value: formatMontantCHFArrondi(payload.troisiemePilier) },
+            {
+              label: "Effet sur l’IFD",
+              value: formatMontantCHFArrondi(
+                (beforeResult?.normalized?.taxableIncomeFederal ?? 0) -
+                  Math.max(0, payload.revenuImposableIfd - payload.troisiemePilier)
+              ),
+            },
+          ],
+        },
+        {
+          title: "Impact du rachat LPP",
+          rows: [
+            { label: "Rachat saisi", value: formatMontantCHFArrondi(payload.rachatLpp) },
+            { label: "Base IFD après rachat", value: formatMontantCHFArrondi(Math.max(0, payload.revenuImposableIfd - payload.troisiemePilier - payload.rachatLpp)) },
+          ],
+        },
+        {
+          title: "Impact des revenus",
+          rows: [
+            {
+              label: "Variation de revenu",
+              value: formatMontantCHFSigne(payload.variationRevenu),
+            },
+            {
+              label: "Fortune imposable retenue",
+              value: formatMontantCHFArrondi(afterResult?.normalized?.taxableAssets ?? 0),
+            },
+          ],
+        },
+      ],
+    };
+  };
+
+  const runMobileReforme = async (
+    payload: MobileReformePayload
+  ): Promise<MobileReformeResult> => {
+    const valeurLocativeReference =
+      payload.residencePrincipale === "oui" ? Math.max(0, payload.revenuLocatif) : 0;
+    const rendementReference =
+      payload.bienRendement === "oui" ? Math.max(0, payload.revenuLocatif) : 0;
+
+    const dossierForSimulation = buildMobileBaseDossier({
+      prenom: payload.prenom,
+      nom: payload.nom,
+      zip: payload.zip,
+      locality: payload.locality,
+      etatCivil: payload.etatCivil,
+      enfants: payload.enfants,
+      revenuImposableIfd: payload.revenuImposableIfd,
+      revenuImposableIcc: payload.revenuImposableIcc,
+      troisiemePilier: 0,
+      rachatLpp: 0,
+      fortuneImposable: payload.fortuneImposable,
+      immobilier: {
+        proprietaireOccupant: payload.residencePrincipale === "oui",
+        possedeBienRendement: payload.bienRendement === "oui",
+        valeurLocativeHabitationPropre: valeurLocativeReference,
+        interetsHypothecairesHabitationPropre: payload.interetsHypothecaires,
+        fraisEntretienHabitationPropre: payload.chargesLieesAuBien,
+        loyersBiensRendement: rendementReference,
+        interetsHypothecairesBiensRendement: payload.bienRendement === "oui" ? payload.interetsHypothecaires : 0,
+        fraisEntretienBiensRendement: payload.bienRendement === "oui" ? payload.chargesLieesAuBien : 0,
+      },
+    });
+
+    const [currentVariant, projectedVariant] = await Promise.all([
+      runTaxSimulationForVariant(
+        createMobileVariant("mobile-reforme-current", "Situation actuelle", dossierForSimulation, "current")
+      ),
+      runTaxSimulationForVariant(
+        createMobileVariant(
+          "mobile-reforme-projected",
+          "Situation après réforme",
+          dossierForSimulation,
+          "valeur_locative_reform"
+        )
+      ),
+    ]);
+
+    const currentResult = getVariantDisplayedTaxResult(currentVariant);
+    const projectedResult = getVariantDisplayedTaxResult(projectedVariant);
+    const reformProfile = getValeurLocativeReformProfile(projectedVariant.dossier, {
+      includeValeurLocative: true,
+    });
+    const delta =
+      (currentResult?.normalized?.totalTax ?? 0) - (projectedResult?.normalized?.totalTax ?? 0);
+
+    return {
+      currentTitle: formatMontantCHFArrondi(currentResult?.normalized?.totalTax ?? 0),
+      currentHelper: "Lecture du régime immobilier actuel.",
+      currentMetrics: getMobileResultMetrics(currentResult),
+      projectedTitle: formatMontantCHFArrondi(projectedResult?.normalized?.totalTax ?? 0),
+      projectedHelper: "Projection après réforme valeur locative.",
+      projectedMetrics: getMobileResultMetrics(projectedResult),
+      verdict: getMobileVerdict(delta),
+      deltaLabel: "Écart de fiscalité",
+      deltaValue: formatMontantCHFSigne(delta),
+      detailSections: [
+        {
+          title: "Effet habitation propre",
+          rows: [
+            {
+              label: "Valeur locative retirée",
+              value: formatMontantCHFArrondi(reformProfile.valeurLocativeRetiree),
+            },
+            {
+              label: "Charges retirées",
+              value: formatMontantCHFArrondi(reformProfile.fraisEntretienRetires),
+            },
+          ],
+        },
+        {
+          title: "Effet rendement",
+          rows: [
+            {
+              label: "Revenu locatif retenu",
+              value: formatMontantCHFArrondi(payload.revenuLocatif),
+            },
+            {
+              label: "Valeur fiscale",
+              value: formatMontantCHFArrondi(payload.valeurFiscale),
+            },
+          ],
+        },
+        {
+          title: "Effet intérêts",
+          rows: [
+            {
+              label: "Intérêts retirés",
+              value: formatMontantCHFArrondi(reformProfile.interetsPassifsRetires),
+            },
+            {
+              label: "Intérêts conservés",
+              value: formatMontantCHFArrondi(reformProfile.interetsPassifsConserves),
+            },
+          ],
+        },
+        {
+          title: "Impact global",
+          rows: [
+            {
+              label: "Base IFD saisie",
+              value: formatMontantCHFArrondi(payload.revenuImposableIfd),
+            },
+            {
+              label: "Base ICC saisie",
+              value: formatMontantCHFArrondi(payload.revenuImposableIcc),
+            },
+            {
+              label: "Fortune imposable saisie",
+              value: formatMontantCHFArrondi(payload.fortuneImposable),
+            },
+            {
+              label: "Situation actuelle",
+              value: formatMontantCHFArrondi(currentResult?.normalized?.totalTax ?? 0),
+            },
+            {
+              label: "Après réforme",
+              value: formatMontantCHFArrondi(projectedResult?.normalized?.totalTax ?? 0),
+            },
+            { label: "Différence", value: formatMontantCHFSigne(delta) },
+          ],
+        },
+      ],
+    };
+  };
+
+  const runMobileDomicile = async (
+    payload: MobileDomicilePayload
+  ): Promise<MobileDomicileResult> => {
+    const commonParams = {
+      prenom: payload.prenom,
+      nom: payload.nom,
+      etatCivil: payload.etatCivil,
+      enfants: payload.enfants,
+      revenuImposableIfd: payload.revenuImposableIfd,
+      revenuImposableIcc: payload.revenuImposableIcc,
+      troisiemePilier: payload.troisiemePilier,
+      rachatLpp: payload.rachatLpp,
+      fortuneImposable: payload.fortuneImposable,
+    };
+
+    const currentDossier = buildMobileBaseDossier({
+      ...commonParams,
+      zip: payload.currentZip,
+      locality: payload.currentLocality,
+    });
+    const nextDossier = buildMobileBaseDossier({
+      ...commonParams,
+      zip: payload.newZip,
+      locality: payload.newLocality,
+    });
+
+    const [currentVariant, nextVariant] = await Promise.all([
+      runTaxSimulationForVariant(
+        createMobileVariant("mobile-domicile-current", "Domicile actuel", currentDossier)
+      ),
+      runTaxSimulationForVariant(
+        createMobileVariant("mobile-domicile-new", "Nouveau domicile", nextDossier)
+      ),
+    ]);
+
+    const currentResult = getVariantDisplayedTaxResult(currentVariant);
+    const nextResult = getVariantDisplayedTaxResult(nextVariant);
+    const annualDelta =
+      (currentResult?.normalized?.totalTax ?? 0) - (nextResult?.normalized?.totalTax ?? 0);
+    const monthlyDelta = annualDelta / 12;
+    const verdict = getMobileVerdict(annualDelta);
+
+    return {
+      current: {
+        label: "Domicile actuel",
+        value: currentDossier.identite.communeFiscale || currentDossier.identite.commune,
+        helper: "Situation fiscale actuelle.",
+        metrics: getMobileResultMetrics(currentResult),
+      },
+      next: {
+        label: "Nouveau domicile",
+        value: nextDossier.identite.communeFiscale || nextDossier.identite.commune,
+        helper: "Projection pour le domicile cible.",
+        metrics: getMobileResultMetrics(nextResult),
+      },
+      difference: {
+        label: "Différence",
+        value: formatMontantCHFSigne(annualDelta),
+        helper: "Écart annuel estimé entre les deux localités.",
+        verdict,
+        metrics: [
+          {
+            label: "Économie ou surcoût annuel",
+            value: formatMontantCHFSigne(annualDelta),
+          },
+          {
+            label: "Économie ou surcoût mensuel",
+            value: formatMontantCHFSigne(monthlyDelta),
+          },
+          { label: "Verdict synthétique", value: verdict },
+        ],
+      },
+      detailSections: [
+        {
+          title: "Différence d’impôt cantonal / communal",
+          rows: [
+            {
+              label: "Actuel",
+              value: formatMontantCHFArrondi(currentResult?.normalized?.cantonalCommunalTax ?? 0),
+            },
+            {
+              label: "Nouveau",
+              value: formatMontantCHFArrondi(nextResult?.normalized?.cantonalCommunalTax ?? 0),
+            },
+            {
+              label: "Écart",
+              value: formatMontantCHFSigne(
+                (currentResult?.normalized?.cantonalCommunalTax ?? 0) -
+                  (nextResult?.normalized?.cantonalCommunalTax ?? 0)
+              ),
+            },
+          ],
+        },
+        {
+          title: "Différence d’impôt sur la fortune",
+          rows: [
+            {
+              label: "Actuel",
+              value: formatMontantCHFArrondi(currentResult?.normalized?.wealthTax ?? 0),
+            },
+            {
+              label: "Nouveau",
+              value: formatMontantCHFArrondi(nextResult?.normalized?.wealthTax ?? 0),
+            },
+            {
+              label: "Écart",
+              value: formatMontantCHFSigne(
+                (currentResult?.normalized?.wealthTax ?? 0) -
+                  (nextResult?.normalized?.wealthTax ?? 0)
+              ),
+            },
+          ],
+        },
+        {
+          title: "Synthèse décisionnelle",
+          rows: [
+            {
+              label: "Localité actuelle",
+              value: currentDossier.identite.communeFiscale || currentDossier.identite.commune,
+            },
+            {
+              label: "Localité cible",
+              value: nextDossier.identite.communeFiscale || nextDossier.identite.commune,
+            },
+            { label: "Verdict", value: verdict },
+          ],
+        },
+      ],
+    };
+  };
+
+  const runMobileEnfantTransition = async (
+    payload: MobileEnfantTransitionPayload
+  ): Promise<MobileEnfantTransitionResult> => {
+    const buildFederalEnfantRequest = (
+      dossierForSimulation: DossierClient,
+      params: {
+        miscIncome: number;
+        assets: number;
+        targetFederal: number;
+      }
+    ) => {
+      const baseRequest = buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, {
+        miscIncome: params.miscIncome,
+        assets: params.assets,
+      });
+
+      if (!dossierForSimulation.famille.aConjoint) {
+        return baseRequest;
+      }
+
+      const sharedNetWages = Math.max(
+        0,
+        Math.min(60000, Math.round((Math.max(0, params.targetFederal) * 0.35) / 500) * 500)
+      );
+
+      return {
+        ...baseRequest,
+        netWages: sharedNetWages,
+        spouseNetWages: sharedNetWages,
+      };
+    };
+
+    const beforeChildren =
+      payload.enfantACharge === "oui" && payload.deductionEnfantActive === "oui"
+        ? payload.enfants
+        : Math.max(0, payload.enfants);
+    const afterChildren = Math.max(0, Math.min(beforeChildren, payload.enfantsApres));
+
+    const baseParams = {
+      prenom: payload.prenom,
+      nom: payload.nom,
+      etatCivil: payload.etatCivil,
+      revenuImposableIfd: payload.revenuImposableIfd,
+      revenuImposableIcc: payload.revenuImposableIcc,
+      troisiemePilier: 0,
+      rachatLpp: 0,
+      fortuneImposable: payload.fortuneImposable,
+      zip: payload.zip,
+      locality: payload.locality,
+    };
+
+    const beforeDossier = buildMobileBaseDossier({
+      ...baseParams,
+      enfants: beforeChildren,
+    });
+
+    const beforeVariant = await runTaxSimulationForVariant(
+      createMobileVariant("mobile-enfant-before", "Avant changement", beforeDossier)
+    );
+    const beforeBaseResult = getVariantDisplayedTaxResult(beforeVariant);
+    const beforeIfdResult = await resolveTaxwareTarget({
+      label: "mobile-enfant-before-direct-ifd",
+      targetValue: beforeDossier.fiscalite.revenuImposableIfd || 0,
+      metric: (result) => result?.normalized?.taxableIncomeFederal,
+      buildRequest: (miscIncome) =>
+        buildFederalEnfantRequest(beforeDossier, {
+          miscIncome,
+          assets: beforeDossier.fiscalite.fortuneImposableActuelleSaisie || 0,
+          targetFederal: beforeDossier.fiscalite.revenuImposableIfd || 0,
+        }),
+    });
+
+    const beforeEconomicPayloads = beforeVariant.taxResultSansOptimisation?.raw?.debug?.payloads as
+      | Record<string, any>
+      | undefined;
+    const beforeEconomicPayload = beforeEconomicPayloads?.canton as Record<string, any> | undefined;
+
+    let economicBeforeResult: any = null;
+    let economicAfterResult: any = null;
+    let afterIfdBase = Math.max(0, Math.round(payload.revenuImposableIfd));
+    let afterIccBase = Math.max(0, Math.round(payload.revenuImposableIcc));
+    const afterFortuneBase = Math.max(0, Math.round(payload.fortuneImposable));
+
+    if (beforeEconomicPayload && typeof beforeEconomicPayload === "object") {
+      economicBeforeResult = await callTaxware(beforeEconomicPayload as any);
+      assertTaxwareSuccess(economicBeforeResult, "Simulation enfant avant");
+
+      const afterEconomicPayload: Record<string, any> = {
+        ...beforeEconomicPayload,
+        partnership: beforeEconomicPayload.partnership ?? (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
+        childrenCount: afterChildren,
+      };
+
+      delete afterEconomicPayload.Partnership;
+      delete afterEconomicPayload.NumChildren;
+
+      economicAfterResult = await callTaxware(afterEconomicPayload as any);
+      assertTaxwareSuccess(economicAfterResult, "Simulation enfant après");
+      afterIccBase = Math.max(
+        0,
+        Math.round(economicAfterResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
+      );
+    }
+
+    const beforeIfdCalibrationDriver = Math.max(
+      0,
+      Math.round(
+        beforeIfdResult?.raw?.calibration?.driverValue ?? beforeDossier.fiscalite.revenuImposableIfd ?? 0
+      )
+    );
+    const afterIfdProbeDossier = buildMobileBaseDossier({
+      ...baseParams,
+      enfants: afterChildren,
+      revenuImposableIfd: payload.revenuImposableIfd,
+      revenuImposableIcc: afterIccBase,
+      fortuneImposable: afterFortuneBase,
+    });
+    const afterIfdBaseProbe = await callTaxware(
+      buildFederalEnfantRequest(afterIfdProbeDossier, {
+        miscIncome: beforeIfdCalibrationDriver,
+        assets: afterFortuneBase,
+        targetFederal: beforeDossier.fiscalite.revenuImposableIfd || 0,
+      })
+    );
+    assertTaxwareSuccess(afterIfdBaseProbe, "Simulation enfant après base IFD");
+    afterIfdBase = Math.max(
+      0,
+      Math.round(afterIfdBaseProbe?.normalized?.taxableIncomeFederal ?? afterIfdBase)
+    );
+
+    const afterDossier = buildMobileBaseDossier({
+      ...baseParams,
+      enfants: afterChildren,
+      revenuImposableIfd: afterIfdBase,
+      revenuImposableIcc: afterIccBase,
+      fortuneImposable: afterFortuneBase,
+    });
+
+    const beforeResult = composeCorrectedTaxwareResult({
+      baseResult: beforeBaseResult,
+      ifdResult: beforeIfdResult,
+      cantonResult: beforeBaseResult,
+      fortuneResult: beforeBaseResult,
+      debug: {
+        source: "mobile-enfant-before-federal-recalibrated",
+      },
+    });
+    const buildAfterRequest = (params: { miscIncome: number; assets: number }) =>
+      buildDirectBaseTaxwareRequestForDossier(afterDossier, params);
+
+    const afterCantonResult = await resolveTaxwareTarget({
+      label: "mobile-enfant-after-direct-canton",
+      targetValue: afterDossier.fiscalite.revenuImposable || 0,
+      metric: (result) => result?.normalized?.taxableIncomeCantonal,
+      buildRequest: (miscIncome) =>
+        buildAfterRequest({
+          miscIncome,
+          assets: afterFortuneBase,
+        }),
+    });
+
+    const afterIfdResult = await resolveTaxwareTarget({
+      label: "mobile-enfant-after-direct-ifd",
+      targetValue: afterDossier.fiscalite.revenuImposableIfd || 0,
+      metric: (result) => result?.normalized?.taxableIncomeFederal,
+      buildRequest: (miscIncome) =>
+        buildFederalEnfantRequest(afterDossier, {
+          miscIncome,
+          assets: afterFortuneBase,
+          targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
+        }),
+    });
+
+    const afterFortuneResult = await resolveTaxwareTarget({
+      label: "mobile-enfant-after-direct-fortune",
+      targetValue: afterFortuneBase,
+      metric: (result) => result?.normalized?.taxableAssets,
+      buildRequest: (assets) =>
+        buildAfterRequest({
+          miscIncome: afterDossier.fiscalite.revenuImposable || 0,
+          assets,
+        }),
+    });
+
+    const afterResult = composeCorrectedTaxwareResult({
+      baseResult: afterCantonResult,
+      ifdResult: afterIfdResult,
+      cantonResult: afterCantonResult,
+      fortuneResult: afterFortuneResult,
+      debug: {
+        source: "mobile-enfant-after-direct-bases",
+        payloads: {
+          canton: buildAfterRequest({
+            miscIncome:
+              afterCantonResult?.raw?.calibration?.driverValue ??
+              (afterDossier.fiscalite.revenuImposable || 0),
+            assets: afterFortuneBase,
+          }),
+          ifd: buildFederalEnfantRequest(afterDossier, {
+            miscIncome:
+              afterIfdResult?.raw?.calibration?.driverValue ??
+              (afterDossier.fiscalite.revenuImposableIfd || 0),
+            assets: afterFortuneBase,
+            targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
+          }),
+          fortune: buildAfterRequest({
+            miscIncome: afterDossier.fiscalite.revenuImposable || 0,
+            assets:
+              afterFortuneResult?.raw?.calibration?.driverValue ?? afterFortuneBase,
+          }),
+        },
+      },
+    });
+    const annualDelta =
+      (beforeResult?.normalized?.totalTax ?? 0) - (afterResult?.normalized?.totalTax ?? 0);
+    const monthlyDelta = annualDelta / 12;
+    const verdict = getMobileVerdict(annualDelta);
+
+    return {
+      current: {
+        label: "Avant",
+        value: formatMontantCHFArrondi(beforeResult?.normalized?.totalTax ?? 0),
+        helper: "Simulation complète Taxware avant le changement.",
+        metrics: getMobileResultMetrics(beforeResult),
+      },
+      next: {
+        label: "Après",
+        value: formatMontantCHFArrondi(afterResult?.normalized?.totalTax ?? 0),
+        helper: "Simulation complète Taxware après le changement.",
+        metrics: getMobileResultMetrics(afterResult),
+      },
+      difference: {
+        label: "Différence fiscale",
+        value: formatMontantCHFSigne(annualDelta),
+        helper: "Impact annuel estimé du changement.",
+        verdict,
+        metrics: [
+          {
+            label: "Impôt total",
+            value: formatMontantCHFSigne(annualDelta),
+          },
+          {
+            label: "Impact annuel",
+            value: formatMontantCHFSigne(annualDelta),
+          },
+          {
+            label: "Impact mensuel",
+            value: formatMontantCHFSigne(monthlyDelta),
+          },
+        ],
+      },
+      detailSections: [
+        {
+          title: "Simulations Taxware avant / après",
+          rows: [
+            { label: "Enfants avant", value: String(beforeChildren) },
+            { label: "Enfants après", value: String(afterChildren) },
+            {
+              label: "Situation familiale",
+              value: payload.etatCivil,
+            },
+            {
+              label: "Revenu imposable IFD avant retenu",
+              value: formatMontantCHFArrondi(
+                beforeDossier.fiscalite.revenuImposableIfd ?? 0
+              ),
+            },
+            {
+              label: "Revenu imposable IFD après retenu",
+              value: formatMontantCHFArrondi(
+                afterDossier.fiscalite.revenuImposableIfd ?? 0
+              ),
+            },
+            {
+              label: "Revenu imposable ICC avant retenu",
+              value: formatMontantCHFArrondi(
+                beforeDossier.fiscalite.revenuImposable ?? 0
+              ),
+            },
+            {
+              label: "Revenu imposable ICC après retenu",
+              value: formatMontantCHFArrondi(
+                afterDossier.fiscalite.revenuImposable ?? 0
+              ),
+            },
+            {
+              label: "Barème fédéral envoyé",
+              value: "Non transmis explicitement",
+            },
+            {
+              label: "Barème ICC envoyé",
+              value: "Non transmis explicitement",
+            },
+          ],
+        },
+        {
+          title: "Impôt fédéral et cantonal",
+          rows: [
+            {
+              label: "IFD avant",
+              value: formatMontantCHFArrondi(beforeResult?.normalized?.federalTax ?? 0),
+            },
+            {
+              label: "IFD après",
+              value: formatMontantCHFArrondi(afterResult?.normalized?.federalTax ?? 0),
+            },
+            {
+              label: "ICC avant",
+              value: formatMontantCHFArrondi(
+                beforeResult?.normalized?.cantonalCommunalTax ?? 0
+              ),
+            },
+            {
+              label: "ICC après",
+              value: formatMontantCHFArrondi(afterResult?.normalized?.cantonalCommunalTax ?? 0),
+            },
+          ],
+        },
+        {
+          title: "Déductions IFD Taxware",
+          rows: [
+            {
+              label: "Assurances avant",
+              value: formatMontantCHFArrondi(
+                beforeResult?.normalized?.deductions?.insurance?.federal ?? 0
+              ),
+            },
+            {
+              label: "Assurances après",
+              value: formatMontantCHFArrondi(
+                afterResult?.normalized?.deductions?.insurance?.federal ?? 0
+              ),
+            },
+            {
+              label: "Enfants avant",
+              value: formatMontantCHFArrondi(
+                beforeResult?.normalized?.deductions?.social?.details?.children?.federal ?? 0
+              ),
+            },
+            {
+              label: "Enfants après",
+              value: formatMontantCHFArrondi(
+                afterResult?.normalized?.deductions?.social?.details?.children?.federal ?? 0
+              ),
+            },
+            {
+              label: "Déduction personnelle avant",
+              value: formatMontantCHFArrondi(
+                beforeResult?.normalized?.deductions?.social?.details?.personal?.federal ?? 0
+              ),
+            },
+            {
+              label: "Déduction personnelle après",
+              value: formatMontantCHFArrondi(
+                afterResult?.normalized?.deductions?.social?.details?.personal?.federal ?? 0
+              ),
+            },
+            {
+              label: "Second revenu avant",
+              value: formatMontantCHFArrondi(
+                beforeResult?.normalized?.deductions?.social?.details?.secondEarner?.federal ?? 0
+              ),
+            },
+            {
+              label: "Second revenu après",
+              value: formatMontantCHFArrondi(
+                afterResult?.normalized?.deductions?.social?.details?.secondEarner?.federal ?? 0
+              ),
+            },
+            {
+              label: "Total social avant",
+              value: formatMontantCHFArrondi(
+                beforeResult?.normalized?.deductions?.social?.federal ?? 0
+              ),
+            },
+            {
+              label: "Total social après",
+              value: formatMontantCHFArrondi(
+                afterResult?.normalized?.deductions?.social?.federal ?? 0
+              ),
+            },
+          ],
+        },
+        {
+          title: "Paramètres transmis à Taxware",
+          rows: [
+            {
+              label: "Nombre d’enfants avant",
+              value: String(beforeChildren),
+            },
+            {
+              label: "Nombre d’enfants après",
+              value: String(afterChildren),
+            },
+            {
+              label: "Partnership envoyé",
+              value:
+                beforeEconomicPayload?.partnership ??
+                (afterDossier.famille.aConjoint ? "Marriage" : "Single"),
+            },
+            {
+              label: "Revenu imposable IFD transmis avant",
+              value: formatMontantCHFArrondi(payload.revenuImposableIfd),
+            },
+            {
+              label: "Revenu imposable ICC transmis avant",
+              value: formatMontantCHFArrondi(payload.revenuImposableIcc),
+            },
+            {
+              label: "Base IFD recalculée après",
+              value: formatMontantCHFArrondi(afterDossier.fiscalite.revenuImposableIfd || 0),
+            },
+            {
+              label: "Base ICC recalculée après",
+              value: formatMontantCHFArrondi(afterDossier.fiscalite.revenuImposable || 0),
+            },
+            {
+              label: "Fortune imposable",
+              value: formatMontantCHFArrondi(payload.fortuneImposable),
+            },
+            {
+              label: "NumChildren envoyé après",
+              value: String(afterChildren),
+            },
+          ],
+        },
+        {
+          title: "Impact sur impôt",
+          rows: [
+            {
+              label: "Impôt total avant",
+              value: formatMontantCHFArrondi(beforeResult?.normalized?.totalTax ?? 0),
+            },
+            {
+              label: "Impôt total après",
+              value: formatMontantCHFArrondi(afterResult?.normalized?.totalTax ?? 0),
+            },
+            {
+              label: "Différence",
+              value: formatMontantCHFSigne(annualDelta),
+            },
+          ],
+        },
+      ],
+    };
+  };
+
   const runAutoTaxSimulation = useEffectEvent(async (variantId: string) => {
     if (autoSimulationStatusRef.current[variantId]) {
       return;
@@ -2635,6 +3688,23 @@ export default function App() {
     isTaxSimulationReady,
     runAutoTaxSimulation,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const niveauDossier =
     dossier.identite.age > 60 ||
@@ -3603,6 +4673,25 @@ export default function App() {
           </form>
         </div>
       </div>
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <MobileApp
+        userLabel={session?.user?.email ?? user.email ?? "utilisateur"}
+        onLogout={() => {
+          void handleLogout();
+        }}
+        onResolveLocation={(zip) => {
+          const match = getMobileLocationSuggestion(zip);
+          return match ? { locality: match.locality } : null;
+        }}
+        onRunSimulation={runMobileSimulation}
+        onRunReforme={runMobileReforme}
+        onRunDomicile={runMobileDomicile}
+        onRunEnfantTransition={runMobileEnfantTransition}
+      />
     );
   }
 
@@ -8444,72 +9533,78 @@ export default function App() {
         )}
         </div>
 
-        <div className="sticky-sim-footer" role="region" aria-label="Actions principales">
-          <div className="sticky-sim-footer__meta">
-            <div className="sticky-sim-footer__eyebrow">Section affichée</div>
-            <div className="sticky-sim-footer__title">
-              {activeJourneyLabel}
+        {!isMobile ? (
+          <div className="sticky-sim-footer" role="region" aria-label="Actions principales">
+            <div className="sticky-sim-footer__meta">
+              <div className="sticky-sim-footer__eyebrow">Section affichée</div>
+              <div className="sticky-sim-footer__title">{activeJourneyLabel}</div>
+              <div className="sticky-sim-footer__helper">{activeJourneyProgressLabel}</div>
             </div>
-            <div className="sticky-sim-footer__helper">
-              {activeJourneyProgressLabel}
+
+            <div className="sticky-sim-footer__nav">
+              <button
+                type="button"
+                onClick={() =>
+                  handleJourneyNavigation(
+                    journeyNavigation[Math.max(0, activeJourneyStepIndex - 1)].id
+                  )
+                }
+                disabled={activeJourneyStepIndex <= 0}
+                className="sticky-sim-footer__secondary"
+              >
+                Étape précédente
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  isIntroActive
+                    ? handleJourneyNavigation(journeyNavigation[0].id)
+                    : handleJourneyNavigation(
+                        journeyNavigation[
+                          Math.min(journeyNavigation.length - 1, activeJourneyStepIndex + 1)
+                        ].id
+                      )
+                }
+                disabled={
+                  isIntroActive ? !analysisMode : activeJourneyStepIndex >= journeyNavigation.length - 1
+                }
+                className="sticky-sim-footer__secondary"
+              >
+                Étape suivante
+              </button>
+            </div>
+
+            <div className="sticky-sim-footer__action">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleTaxSimulation({ navigateToResults: true });
+                }}
+                disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
+                className="sticky-sim-footer__primary"
+                title={simulationPrimaryHelper}
+              >
+                {simulationPrimaryButtonLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handlePdfExport();
+                }}
+                disabled={!canExportPdf || isExportingPdf}
+                className="sticky-sim-footer__export"
+                title={
+                  canExportPdf
+                    ? "Télécharger le document PDF premium"
+                    : "Lancez d’abord une simulation pour exporter le PDF"
+                }
+              >
+                {isExportingPdf ? "Export PDF en cours..." : "Exporter PDF"}
+              </button>
+              <div className="sticky-sim-footer__status">{simulationPrimaryHelper}</div>
             </div>
           </div>
-
-          <div className="sticky-sim-footer__nav">
-            <button
-              type="button"
-              onClick={() =>
-                handleJourneyNavigation(journeyNavigation[Math.max(0, activeJourneyStepIndex - 1)].id)
-              }
-              disabled={activeJourneyStepIndex <= 0}
-              className="sticky-sim-footer__secondary"
-            >
-              Étape précédente
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                isIntroActive
-                  ? handleJourneyNavigation(journeyNavigation[0].id)
-                  : handleJourneyNavigation(
-                      journeyNavigation[Math.min(journeyNavigation.length - 1, activeJourneyStepIndex + 1)].id
-                    )
-              }
-              disabled={
-                isIntroActive ? !analysisMode : activeJourneyStepIndex >= journeyNavigation.length - 1
-              }
-              className="sticky-sim-footer__secondary"
-            >
-              Étape suivante
-            </button>
-          </div>
-
-          <div className="sticky-sim-footer__action">
-            <button
-              type="button"
-              onClick={() => {
-                void handleTaxSimulation({ navigateToResults: true });
-              }}
-              disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
-              className="sticky-sim-footer__primary"
-              title={simulationPrimaryHelper}
-            >
-              {simulationPrimaryButtonLabel}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void handlePdfExport();
-              }}
-              disabled={!canExportPdf || isExportingPdf}
-              className="sticky-sim-footer__export"
-              title={canExportPdf ? "Télécharger le document PDF premium" : "Lancez d’abord une simulation pour exporter le PDF"}
-            >
-              {isExportingPdf ? "Export PDF en cours..." : "Exporter PDF"}
-            </button>
-            <div className="sticky-sim-footer__status">{simulationPrimaryHelper}</div>
-          </div>
-        </div>
+        ) : null}
       </div>
     </div>
   );
