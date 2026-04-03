@@ -2343,6 +2343,35 @@ export default function App() {
     };
   };
 
+  const buildFederalTaxwareRequestForDossier = (
+    dossierForSimulation: DossierClient,
+    params: {
+      miscIncome: number;
+      assets: number;
+      targetFederal: number;
+    }
+  ) => {
+    const baseRequest = buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, {
+      miscIncome: params.miscIncome,
+      assets: params.assets,
+    });
+
+    if (!dossierForSimulation.famille.aConjoint) {
+      return baseRequest;
+    }
+
+    const sharedNetWages = Math.max(
+      0,
+      Math.min(60000, Math.round((Math.max(0, params.targetFederal) * 0.35) / 500) * 500)
+    );
+
+    return {
+      ...baseRequest,
+      netWages: sharedNetWages,
+      spouseNetWages: sharedNetWages,
+    };
+  };
+
   const assertTaxwareSuccess = (result: any, contextLabel: string) => {
     if (result?.raw?.error) {
       throw new Error(`${contextLabel}: ${JSON.stringify(result.raw)}`);
@@ -2600,6 +2629,212 @@ export default function App() {
     };
   };
 
+  const isDesktopChildrenTransitionCandidate = (
+    referenceVariant: ScenarioVariant,
+    targetVariant: ScenarioVariant
+  ) => {
+    if (referenceVariant.id === targetVariant.id) {
+      return false;
+    }
+
+    const referenceDossier = referenceVariant.dossier;
+    const targetDossier = targetVariant.dossier;
+
+    return (
+      targetDossier.famille.aConjoint === referenceDossier.famille.aConjoint &&
+      targetDossier.famille.nombreEnfants < referenceDossier.famille.nombreEnfants &&
+      getTaxwareLocationForDossier(targetDossier).zip ===
+        getTaxwareLocationForDossier(referenceDossier).zip &&
+      getTaxwareLocationForDossier(targetDossier).city ===
+        getTaxwareLocationForDossier(referenceDossier).city
+    );
+  };
+
+  const runDesktopChildrenTransitionVariant = async (
+    referenceVariant: ScenarioVariant,
+    targetVariant: ScenarioVariant,
+    referenceSimulatedVariant?: ScenarioVariant | null
+  ) => {
+    const beforeDossier = cloneDossier(referenceVariant.dossier);
+    const beforeChildren = Math.max(0, beforeDossier.famille.nombreEnfants || 0);
+    const afterChildren = Math.max(
+      0,
+      Math.min(beforeChildren, targetVariant.dossier.famille.nombreEnfants || 0)
+    );
+    const beforeVariant =
+      referenceSimulatedVariant ?? (await runTaxSimulationForVariant(referenceVariant));
+    const beforeBaseResult =
+      beforeVariant.taxResultSansOptimisation ?? getVariantDisplayedTaxResult(beforeVariant);
+    const beforeIfdResult = await resolveTaxwareTarget({
+      label: `${targetVariant.id}-desktop-enfant-before-direct-ifd`,
+      targetValue: beforeDossier.fiscalite.revenuImposableIfd || 0,
+      metric: (result) => result?.normalized?.taxableIncomeFederal,
+      buildRequest: (miscIncome) =>
+        buildFederalTaxwareRequestForDossier(beforeDossier, {
+          miscIncome,
+          assets: beforeDossier.fiscalite.fortuneImposableActuelleSaisie || 0,
+          targetFederal: beforeDossier.fiscalite.revenuImposableIfd || 0,
+        }),
+    });
+
+    const beforeEconomicPayload = beforeBaseResult?.raw?.debug?.payloads?.canton as
+      | Record<string, any>
+      | undefined;
+
+    let afterIfdBase = Math.max(0, Math.round(beforeDossier.fiscalite.revenuImposableIfd || 0));
+    let afterIccBase = Math.max(0, Math.round(beforeDossier.fiscalite.revenuImposable || 0));
+    const afterFortuneBase = Math.max(
+      0,
+      Math.round(targetVariant.dossier.fiscalite.fortuneImposableActuelleSaisie || 0)
+    );
+
+    if (beforeEconomicPayload && typeof beforeEconomicPayload === "object") {
+      const afterEconomicPayload: Record<string, any> = {
+        ...beforeEconomicPayload,
+        partnership:
+          beforeEconomicPayload.partnership ??
+          (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
+        childrenCount: afterChildren,
+      };
+
+      delete afterEconomicPayload.Partnership;
+      delete afterEconomicPayload.NumChildren;
+
+      const economicAfterResult = await callTaxware(afterEconomicPayload as any);
+      assertTaxwareSuccess(economicAfterResult, "Simulation enfant desktop après");
+      afterIccBase = Math.max(
+        0,
+        Math.round(economicAfterResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
+      );
+    }
+
+    const beforeIfdCalibrationDriver = Math.max(
+      0,
+      Math.round(
+        beforeIfdResult?.raw?.calibration?.driverValue ??
+          beforeDossier.fiscalite.revenuImposableIfd ??
+          0
+      )
+    );
+
+    const afterProbeDossier = cloneDossier(targetVariant.dossier);
+    afterProbeDossier.fiscalite.revenuImposableIfd = beforeDossier.fiscalite.revenuImposableIfd || 0;
+    afterProbeDossier.fiscalite.revenuImposable = afterIccBase;
+    afterProbeDossier.fiscalite.fortuneImposableActuelleSaisie = afterFortuneBase;
+    afterProbeDossier.famille.nombreEnfants = afterChildren;
+
+    const afterIfdBaseProbe = await callTaxware(
+      buildFederalTaxwareRequestForDossier(afterProbeDossier, {
+        miscIncome: beforeIfdCalibrationDriver,
+        assets: afterFortuneBase,
+        targetFederal: beforeDossier.fiscalite.revenuImposableIfd || 0,
+      })
+    );
+    assertTaxwareSuccess(afterIfdBaseProbe, "Simulation enfant desktop après base IFD");
+    afterIfdBase = Math.max(
+      0,
+      Math.round(afterIfdBaseProbe?.normalized?.taxableIncomeFederal ?? afterIfdBase)
+    );
+
+    const afterDossier = cloneDossier(targetVariant.dossier);
+    afterDossier.famille.nombreEnfants = afterChildren;
+    afterDossier.fiscalite.revenuImposableIfd = afterIfdBase;
+    afterDossier.fiscalite.revenuImposable = afterIccBase;
+    afterDossier.fiscalite.fortuneImposableActuelleSaisie = afterFortuneBase;
+
+    const beforeResult = composeCorrectedTaxwareResult({
+      baseResult: beforeBaseResult,
+      ifdResult: beforeIfdResult,
+      cantonResult: beforeBaseResult,
+      fortuneResult: beforeBaseResult,
+      debug: {
+        source: "desktop-enfant-before-federal-recalibrated",
+      },
+    });
+
+    const buildAfterRequest = (params: { miscIncome: number; assets: number }) =>
+      buildDirectBaseTaxwareRequestForDossier(afterDossier, params);
+
+    const afterCantonResult = await resolveTaxwareTarget({
+      label: `${targetVariant.id}-desktop-enfant-after-direct-canton`,
+      targetValue: afterDossier.fiscalite.revenuImposable || 0,
+      metric: (result) => result?.normalized?.taxableIncomeCantonal,
+      buildRequest: (miscIncome) =>
+        buildAfterRequest({
+          miscIncome,
+          assets: afterFortuneBase,
+        }),
+    });
+
+    const afterIfdResult = await resolveTaxwareTarget({
+      label: `${targetVariant.id}-desktop-enfant-after-direct-ifd`,
+      targetValue: afterDossier.fiscalite.revenuImposableIfd || 0,
+      metric: (result) => result?.normalized?.taxableIncomeFederal,
+      buildRequest: (miscIncome) =>
+        buildFederalTaxwareRequestForDossier(afterDossier, {
+          miscIncome,
+          assets: afterFortuneBase,
+          targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
+        }),
+    });
+
+    const afterFortuneResult = await resolveTaxwareTarget({
+      label: `${targetVariant.id}-desktop-enfant-after-direct-fortune`,
+      targetValue: afterFortuneBase,
+      metric: (result) => result?.normalized?.taxableAssets,
+      buildRequest: (assets) =>
+        buildAfterRequest({
+          miscIncome: afterDossier.fiscalite.revenuImposable || 0,
+          assets,
+        }),
+    });
+
+    const afterResult = composeCorrectedTaxwareResult({
+      baseResult: afterCantonResult,
+      ifdResult: afterIfdResult,
+      cantonResult: afterCantonResult,
+      fortuneResult: afterFortuneResult,
+      debug: {
+        source: "desktop-enfant-after-direct-bases",
+        referenceVariantId: referenceVariant.id,
+        payloads: {
+          canton: buildAfterRequest({
+            miscIncome:
+              afterCantonResult?.raw?.calibration?.driverValue ??
+              (afterDossier.fiscalite.revenuImposable || 0),
+            assets: afterFortuneBase,
+          }),
+          ifd: buildFederalTaxwareRequestForDossier(afterDossier, {
+            miscIncome:
+              afterIfdResult?.raw?.calibration?.driverValue ??
+              (afterDossier.fiscalite.revenuImposableIfd || 0),
+            assets: afterFortuneBase,
+            targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
+          }),
+          fortune: buildAfterRequest({
+            miscIncome: afterDossier.fiscalite.revenuImposable || 0,
+            assets:
+              afterFortuneResult?.raw?.calibration?.driverValue ?? afterFortuneBase,
+          }),
+        },
+      },
+    });
+
+    return {
+      ...targetVariant,
+      taxResultSansOptimisation: beforeResult,
+      taxResultAvecDeductionsEstime: afterResult,
+      taxResult: afterResult,
+      taxResultAjustementManuel: afterResult,
+      taxResultCorrectionFiscaleManuelle: null,
+      comparisonTaxResults: {
+        reference: beforeResult,
+        mixed: afterResult,
+        "manual-adjustment": afterResult,
+      },
+    };
+  };
+
   const handleTaxSimulation = async (options?: {
     silentMissingRequirements?: boolean;
     targetVariantIds?: string[];
@@ -2657,9 +2892,40 @@ export default function App() {
         )
       );
 
-      const simulatedVariants = await Promise.all(
-        targetVariants.map((variant) => runTaxSimulationForVariant(variant))
-      );
+      const referenceVariant = variants[0] ?? targetVariants[0];
+      const simulatedVariants: ScenarioVariant[] = [];
+      let referenceSimulatedVariant: ScenarioVariant | null = null;
+
+      for (const variant of targetVariants) {
+        let simulatedVariant: ScenarioVariant;
+
+        if (
+          referenceVariant &&
+          isDesktopChildrenTransitionCandidate(referenceVariant, variant)
+        ) {
+          if (!referenceSimulatedVariant) {
+            referenceSimulatedVariant =
+              referenceVariant.id === variant.id
+                ? null
+                : await runTaxSimulationForVariant(referenceVariant);
+          }
+
+          simulatedVariant = await runDesktopChildrenTransitionVariant(
+            referenceVariant,
+            variant,
+            referenceSimulatedVariant
+          );
+        } else {
+          simulatedVariant = await runTaxSimulationForVariant(variant);
+
+          if (referenceVariant && simulatedVariant.id === referenceVariant.id) {
+            referenceSimulatedVariant = simulatedVariant;
+          }
+        }
+
+        simulatedVariants.push(simulatedVariant);
+      }
+
       const simulatedVariantsById = new Map(
         simulatedVariants.map((variant) => [variant.id, variant] as const)
       );
