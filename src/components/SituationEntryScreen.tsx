@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import type { DossierClient } from "../types";
 import type { AnalysisMode } from "./DecisionIntro";
 
@@ -12,6 +13,8 @@ type SituationEntryScreenProps = {
   onLaunchSimulation: () => void;
   onNpaChange: (value: string) => void;
   formatCurrency: (value: number) => string;
+  onFiscalInputsCompleted?: () => void;
+  identitySectionRef?: RefObject<HTMLElement | null>;
 };
 
 const modeLabels: Record<AnalysisMode, string> = {
@@ -40,6 +43,8 @@ export default function SituationEntryScreen({
   onLaunchSimulation,
   onNpaChange,
   formatCurrency,
+  onFiscalInputsCompleted,
+  identitySectionRef,
 }: SituationEntryScreenProps) {
   const selectedMode =
     analysisMode ?? (dossier.immobilier.regimeFiscal === "reforme" ? "projected" : "current");
@@ -82,13 +87,34 @@ export default function SituationEntryScreen({
 
   const isLaunchDisabled = !isMinimumDataReady || !canLaunchSimulation || isSimulating;
 
+  const updateFiscalField = (
+    field: "revenuImposableIfd" | "revenuImposable" | "fortuneImposableActuelleSaisie",
+    value: string
+  ) => {
+    onDossierChange({
+      ...dossier,
+      fiscalite: {
+        ...dossier.fiscalite,
+        [field]: Math.max(0, Number(value || 0)),
+      },
+    });
+  };
+
+  const handleFiscalInputsCompleted = (value: string) => {
+    if (value.trim().length === 0) {
+      return;
+    }
+
+    onFiscalInputsCompleted?.();
+  };
+
   return (
     <div className="situation-screen">
       <div className="situation-mode-bar">Mode sélectionné : {selectedModeLabel}</div>
 
       <div className="situation-layout">
         <div className="situation-form-column">
-          <section className="situation-card">
+          <section ref={identitySectionRef} className="situation-card">
             <div className="situation-card__header">
               <h3 className="situation-card__title">Identité du client</h3>
               
@@ -225,6 +251,60 @@ export default function SituationEntryScreen({
                   }
                 />
               </label>
+            </div>
+
+            <div className="situation-fiscal-entry">
+              <div className="situation-card__header">
+                <h3 className="situation-card__title">Bases imposables à reporter</h3>
+              </div>
+
+              <div className="situation-fields situation-fields--three">
+                <label className="situation-field">
+                  <span>Revenu imposable IFD</span>
+                  <input
+                    type="number"
+                    value={dossier.fiscalite.revenuImposableIfd || 0}
+                    onChange={(event) =>
+                      updateFiscalField("revenuImposableIfd", event.target.value)
+                    }
+                  />
+                </label>
+
+                <label className="situation-field">
+                  <span>Revenu imposable Canton / Commune</span>
+                  <input
+                    type="number"
+                    value={dossier.fiscalite.revenuImposable || 0}
+                    onChange={(event) => updateFiscalField("revenuImposable", event.target.value)}
+                  />
+                </label>
+
+                <label className="situation-field">
+                  <span>Fortune imposable</span>
+                  <input
+                    type="number"
+                    value={dossier.fiscalite.fortuneImposableActuelleSaisie || 0}
+                    onChange={(event) =>
+                      updateFiscalField("fortuneImposableActuelleSaisie", event.target.value)
+                    }
+                    onBlur={(event) => {
+                      handleFiscalInputsCompleted(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleFiscalInputsCompleted(
+                          (event.target as HTMLInputElement).value
+                        );
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              <p className="situation-fiscal-entry__helper">
+                Veuillez reporter les données taxables inscrites de votre déclaration fiscale.
+              </p>
             </div>
           </section>
 

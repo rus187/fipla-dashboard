@@ -93,28 +93,21 @@ function resolveCheckoutOffer(plan: Plan): CheckoutOffer | null {
     return null;
   }
 
-  const hasMonthlyPrice = typeof plan.stripe_price_id_monthly === "string" && plan.stripe_price_id_monthly.trim() !== "";
-  const hasOneTimePrice = typeof plan.stripe_price_id === "string" && plan.stripe_price_id.trim() !== "";
+  const hasPriceId = typeof plan.stripe_price_id === "string" && plan.stripe_price_id.trim() !== "";
 
-  if (hasMonthlyPrice) {
-    return {
-      id: plan.id,
-      name: plan.name,
-      paymentType: "monthly",
-      content,
-    };
+  if (!hasPriceId) {
+    return null;
   }
 
-  if (hasOneTimePrice) {
-    return {
-      id: plan.id,
-      name: plan.name,
-      paymentType: "one_time",
-      content,
-    };
-  }
-
-  return null;
+  return {
+    id: plan.id,
+    name: plan.name,
+    paymentType:
+      normalizedName === "fipla_private_full" || normalizedName === "fipla_pro_solo"
+        ? "monthly"
+        : "one_time",
+    content,
+  };
 }
 
 export default function StripeCheckoutCard({
@@ -137,7 +130,7 @@ export default function StripeCheckoutCard({
 
       const { data, error } = await supabaseClient
         .from("plans")
-        .select("id, name, active, stripe_price_id, stripe_price_id_monthly, stripe_price_id_yearly")
+        .select("id, name, active, stripe_price_id")
         .in("name", [...OFFER_ORDER])
         .eq("active", true);
 

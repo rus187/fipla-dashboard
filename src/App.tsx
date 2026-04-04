@@ -50,6 +50,9 @@ import { buildDynamicAdvisoryPreview } from "./lib/advisory/recommendationEngine
 import { supabaseClient } from "./lib/supabase/client";
 import { ensureCurrentUserProfile } from "./lib/supabase/profiles";
 import type { Profile } from "./lib/supabase/types";
+import { consumeSimulationCredit } from "./lib/stripe/consumeSimulationCredit";
+import { reconcileCheckoutSession } from "./lib/stripe/reconcileCheckoutSession";
+import { fetchStripeAccessStatus } from "./lib/stripe/fetchAccessStatus";
 import CheckoutCancel from "./pages/CheckoutCancel";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import PricingPage from "./pages/PricingPage";
@@ -96,9 +99,29 @@ type DesktopCalculatorId =
 
 const MAX_VARIANTS = 7;
 const INTRO_SECTION_ID = "intro";
+const FREE_SIMULATION_LIMIT = 2;
+const SIMULATION_USAGE_STORAGE_PREFIX = "fipla-simulations-used";
+const SIMULATION_UNLOCKED_STORAGE_PREFIX = "fipla-simulations-unlocked";
+const DESKTOP_WORKSPACE_STORAGE_PREFIX = "fipla-desktop-workspace";
+const PENDING_CHECKOUT_SESSION_STORAGE_PREFIX = "fipla-pending-checkout-session";
+const GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY = "fipla-pending-checkout-session-global";
 const VARIANT_TAX_REGIME_LABELS: Record<VariantTaxRegime, string> = {
   current: "Situation actuelle",
   valeur_locative_reform: "Réforme valeur locative",
+};
+
+const DESKTOP_CALCULATOR_CUSTOM_LABELS: Record<DesktopCalculatorId, string> = {
+  "simulation-fiscale": "Simulation fiscale",
+  "reforme-vl": "Réforme VL",
+  "changement-domicile": "Changement de domicile",
+  "fin-deduction-enfant": "Fin de déduction enfant",
+};
+
+type DesktopWorkspaceSnapshot = {
+  variants: ScenarioVariant[];
+  activeVariantIndex: number;
+  activeDesktopCalculator: DesktopCalculatorId;
+  hasStartedClientEdit: boolean;
 };
 
 function hasSeparatedFiscalManualCorrections(fiscalite: DossierClient["fiscalite"]) {
@@ -415,6 +438,69 @@ function createInitialVariants(): ScenarioVariant[] {
   return [createEmptyVariant(0)];
 }
 
+function isDesktopCalculatorId(value: unknown): value is DesktopCalculatorId {
+  return (
+    value === "simulation-fiscale" ||
+    value === "reforme-vl" ||
+    value === "changement-domicile" ||
+    value === "fin-deduction-enfant"
+  );
+}
+
+function isStoredScenarioVariant(value: unknown): value is ScenarioVariant {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<ScenarioVariant>;
+  const dossier = candidate.dossier as DossierClient | undefined;
+
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.label === "string" &&
+    typeof candidate.customLabel === "string" &&
+    (candidate.taxRegime === "current" || candidate.taxRegime === "valeur_locative_reform") &&
+    Boolean(dossier) &&
+    typeof dossier === "object" &&
+    typeof dossier.identite === "object" &&
+    typeof dossier.fiscalite === "object"
+  );
+}
+
+function parseDesktopWorkspaceSnapshot(rawValue: string | null): DesktopWorkspaceSnapshot | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<DesktopWorkspaceSnapshot> | null;
+    const storedVariants = Array.isArray(parsed?.variants)
+      ? parsed.variants.filter(isStoredScenarioVariant).map((variant) => cloneValue(variant))
+      : [];
+
+    if (storedVariants.length === 0) {
+      return null;
+    }
+
+    const normalizedVariants = normalizeVariantLabels(storedVariants);
+    const requestedIndex =
+      typeof parsed?.activeVariantIndex === "number" && Number.isFinite(parsed.activeVariantIndex)
+        ? Math.max(0, Math.floor(parsed.activeVariantIndex))
+        : 0;
+
+    return {
+      variants: normalizedVariants,
+      activeVariantIndex: Math.min(requestedIndex, normalizedVariants.length - 1),
+      activeDesktopCalculator: isDesktopCalculatorId(parsed?.activeDesktopCalculator)
+        ? parsed.activeDesktopCalculator
+        : "simulation-fiscale",
+      hasStartedClientEdit: Boolean(parsed?.hasStartedClientEdit),
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
 function getTaxwareLocationForDossier(dossier: DossierClient) {
   return {
     city:
@@ -632,6 +718,21 @@ function getVariantDisplayedTaxResult(variant: ScenarioVariant) {
     variant.taxResultAjustementManuel?.normalized
     ? variant.taxResultAjustementManuel
     : variant.taxResult;
+}
+
+function hasCompleteDisplayedTaxResult(result: any) {
+  const normalized = result?.normalized;
+
+  return (
+    typeof normalized?.federalTax === "number" &&
+    Number.isFinite(normalized.federalTax) &&
+    typeof normalized?.cantonalCommunalTax === "number" &&
+    Number.isFinite(normalized.cantonalCommunalTax) &&
+    typeof normalized?.wealthTax === "number" &&
+    Number.isFinite(normalized.wealthTax) &&
+    typeof normalized?.totalTax === "number" &&
+    Number.isFinite(normalized.totalTax)
+  );
 }
 
 function getVariantTaxTotal(variant: ScenarioVariant) {
@@ -883,7 +984,14 @@ function GuidedSection({ id, step, title, description, children }: GuidedSection
 
 export default function App() {
   const autoSimulationStatusRef = useRef<Record<string, "running" | "done">>({});
+  const pendingDesktopSimulationDisplayRef = useRef<Record<string, number>>({});
   const activeStepViewportRef = useRef<HTMLDivElement | null>(null);
+  const identitySectionRef = useRef<HTMLElement | null>(null);
+  const desktopCalculatorHubRef = useRef<HTMLDivElement | null>(null);
+  const optimisationSectionRef = useRef<HTMLDivElement | null>(null);
+  const lastAuthScrollUserIdRef = useRef<string | null>(null);
+  const pendingPostSimulationScrollRef = useRef<"optimisation" | null>(null);
+  const previousWorkspaceUserIdRef = useRef<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -892,7 +1000,10 @@ export default function App() {
   const [profileSyncSource, setProfileSyncSource] = useState<"id" | "email" | "created" | null>(null);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [authFieldsUnlocked, setAuthFieldsUnlocked] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authNotice, setAuthNotice] = useState("");
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
@@ -910,11 +1021,23 @@ export default function App() {
   const [isSimulatingVariants, setIsSimulatingVariants] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [simulationStatusMessage, setSimulationStatusMessage] = useState("");
+  const [simulationUsageCount, setSimulationUsageCount] = useState(0);
+  const [simulationCredits, setSimulationCredits] = useState(0);
+  const [isSimulationAccessUnlocked, setIsSimulationAccessUnlocked] = useState(false);
+  const [isSimulationAccessLoading, setIsSimulationAccessLoading] = useState(false);
+  const [showUsageLimitModal, setShowUsageLimitModal] = useState(false);
+  const [usageLimitError, setUsageLimitError] = useState("");
+  const [isPreparingCheckout, setIsPreparingCheckout] = useState(false);
+  const [hasStartedClientEdit, setHasStartedClientEdit] = useState(false);
+  const [showClientStartModal, setShowClientStartModal] = useState(false);
+  const [hasConfirmedClientStartModal, setHasConfirmedClientStartModal] = useState(false);
+  const [clientStartModalError, setClientStartModalError] = useState("");
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode | null>(null);
   const [isDecisionHelpOpen, setIsDecisionHelpOpen] = useState(false);
   const [activeDesktopCalculator, setActiveDesktopCalculator] =
     useState<DesktopCalculatorId>("simulation-fiscale");
   const [variants, setVariants] = useState<ScenarioVariant[]>(createInitialVariants);
+  const [isDesktopWorkspaceHydrated, setIsDesktopWorkspaceHydrated] = useState(false);
   const activeVariant = variants[activeVariantIndex];
   const conseillerPassword = import.meta.env.VITE_CONSEILLER_PASSWORD || "";
   const normalizedPathname =
@@ -926,6 +1049,9 @@ export default function App() {
   const taxResult = activeVariant.taxResult;
   const taxResultSansOptimisation = activeVariant.taxResultSansOptimisation;
   const taxResultAjustementManuel = activeVariant.taxResultAjustementManuel;
+  const baseClientIdentity = variants[0]?.dossier.identite ?? emptyDossier.identite;
+  const isDesktopClientCardPending =
+    `${baseClientIdentity.prenom} ${baseClientIdentity.nom}`.trim().length === 0;
 
   const setDossier = (nextDossier: DossierClient) => {
     setVariants((current) => {
@@ -1152,6 +1278,136 @@ export default function App() {
     setVariants(createInitialVariants());
   };
 
+  const simulationUsageStorageKey = user ? `${SIMULATION_USAGE_STORAGE_PREFIX}:${user.id}` : null;
+  const simulationUnlockedStorageKey = user
+    ? `${SIMULATION_UNLOCKED_STORAGE_PREFIX}:${user.id}`
+    : null;
+  const desktopWorkspaceStorageKey = user
+    ? `${DESKTOP_WORKSPACE_STORAGE_PREFIX}:${user.id}`
+    : null;
+  const pendingCheckoutSessionStorageKey = user
+    ? `${PENDING_CHECKOUT_SESSION_STORAGE_PREFIX}:${user.id}`
+    : null;
+  const hasStoredSimulationAccessUnlock =
+    user !== null &&
+    typeof window !== "undefined" &&
+    simulationUnlockedStorageKey !== null &&
+    window.localStorage.getItem(simulationUnlockedStorageKey) === "true";
+  const hasSimulationCreditsAvailable = simulationCredits > 0;
+  const hasEffectiveSimulationAccess =
+    isSimulationAccessUnlocked || hasStoredSimulationAccessUnlock;
+  const isSimulationAccessVerificationBlocking =
+    isSimulationAccessLoading && !hasStoredSimulationAccessUnlock;
+  const hasReachedFreeSimulationLimit =
+    !isSimulationAccessLoading &&
+    !hasEffectiveSimulationAccess &&
+    !hasSimulationCreditsAvailable &&
+    simulationUsageCount >= FREE_SIMULATION_LIMIT;
+
+  const openUsageLimitModal = () => {
+    if (isSimulationAccessLoading || hasEffectiveSimulationAccess || hasSimulationCreditsAvailable) {
+      console.info("[App][billing] Blocage ignore", {
+        reason: isSimulationAccessLoading
+          ? "premium-loading"
+          : hasEffectiveSimulationAccess
+            ? "premium-unlocked"
+            : "simulation-credits-available",
+        simulationUsageCount,
+        simulationCredits,
+        isSimulationAccessUnlocked: hasEffectiveSimulationAccess,
+        isSimulationAccessLoading,
+      });
+      return;
+    }
+
+    console.info("[App][billing] Ouverture pop-up blocage", {
+      simulationUsageCount,
+      simulationCredits,
+      isSimulationAccessUnlocked,
+      isSimulationAccessLoading,
+      hasReachedFreeSimulationLimit:
+        !isSimulationAccessLoading &&
+        !isSimulationAccessUnlocked &&
+        simulationCredits <= 0 &&
+        simulationUsageCount >= FREE_SIMULATION_LIMIT,
+    });
+    setUsageLimitError("");
+    setShowUsageLimitModal(true);
+  };
+
+  const registerSuccessfulSimulationUsage = async () => {
+    if (hasEffectiveSimulationAccess) {
+      return;
+    }
+
+    if (simulationUsageCount < FREE_SIMULATION_LIMIT) {
+      setSimulationUsageCount((current) => Math.min(FREE_SIMULATION_LIMIT, current + 1));
+      return;
+    }
+
+    if (!hasSimulationCreditsAvailable) {
+      return;
+    }
+
+    const previousCredits = simulationCredits;
+    const nextCredits = Math.max(0, previousCredits - 1);
+    setSimulationCredits(nextCredits);
+
+    try {
+      const accessToken = session?.access_token ?? "";
+      const result = await consumeSimulationCredit(accessToken);
+      setSimulationCredits(Math.max(0, result.simulation_credits));
+    } catch (error) {
+      setSimulationCredits(previousCredits);
+      console.error("[App][billing] Consommation du credit Mini impossible", error);
+    }
+  };
+
+  const canStartSimulationAttempt = () => {
+    if (isSimulationAccessLoading) {
+      return hasStoredSimulationAccessUnlock;
+    }
+
+    if (hasEffectiveSimulationAccess) {
+      return true;
+    }
+
+    if (simulationUsageCount < FREE_SIMULATION_LIMIT) {
+      return true;
+    }
+
+    if (hasSimulationCreditsAvailable) {
+      return true;
+    }
+
+    if (simulationUsageCount >= FREE_SIMULATION_LIMIT) {
+      openUsageLimitModal();
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleContinueWithSubscription = async () => {
+    if (isPreparingCheckout) {
+      return;
+    }
+
+    setUsageLimitError("");
+    setIsPreparingCheckout(true);
+
+    try {
+      window.location.assign("/pricing");
+    } catch (error) {
+      setUsageLimitError(
+        error instanceof Error
+          ? error.message
+          : "Impossible d’ouvrir la sélection des offres pour le moment."
+      );
+      setIsPreparingCheckout(false);
+    }
+  };
+
   const getDesktopCalculatorVariantIndex = (
     calculatorId: DesktopCalculatorId,
     currentVariants: ScenarioVariant[] = variants
@@ -1205,6 +1461,122 @@ export default function App() {
     }
   };
 
+  const scrollToIdentitySection = () => {
+    if (typeof window === "undefined" || isMobile) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        const scrollTarget = identitySectionRef.current ?? activeStepViewportRef.current;
+        scrollTarget?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 80);
+    });
+  };
+
+  const handleDesktopActiveDossierEdit = () => {
+    setClientStartModalError("");
+    setShowClientStartModal(false);
+    setHasStartedClientEdit(true);
+    setActiveVariantIndex(0);
+    setActiveDesktopCalculator("simulation-fiscale");
+    handleJourneyNavigation("informations-generales");
+    scrollToIdentitySection();
+  };
+
+  const handleClientStartModalContinue = () => {
+    if (!hasConfirmedClientStartModal) {
+      setClientStartModalError("Veuillez cocher la case");
+      return;
+    }
+
+    handleDesktopActiveDossierEdit();
+  };
+
+  const scrollToDesktopCalculatorHub = () => {
+    if (typeof window === "undefined" || isMobile) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        desktopCalculatorHubRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 80);
+    });
+  };
+
+  const scrollToOptimisationSection = () => {
+    if (typeof window === "undefined" || isMobile) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        optimisationSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 140);
+    });
+  };
+
+  const createDesktopCalculatorVariantFromBase = (
+    calculatorId: DesktopCalculatorId,
+    targetSectionId = getDesktopCalculatorDefaultSection(calculatorId)
+  ) => {
+    setActiveDesktopCalculator(calculatorId);
+
+    if (variants.length >= MAX_VARIANTS) {
+      setActiveSectionId(targetSectionId);
+      return;
+    }
+
+    const baseVariant = variants[0] ?? createEmptyVariant(0);
+    const nextIndex = variants.length;
+    const targetVariant = {
+      ...createEmptyVariant(nextIndex),
+      taxRegime:
+        calculatorId === "reforme-vl"
+          ? ("valeur_locative_reform" as VariantTaxRegime)
+          : baseVariant.taxRegime,
+    };
+
+    let nextVariant = clearVariantSimulationOutputs(
+      cloneVariantStateFromBase(baseVariant, targetVariant, false)
+    );
+
+    nextVariant = {
+      ...nextVariant,
+      id: `variant-${calculatorId}-${Date.now()}-${nextIndex}`,
+      customLabel: DESKTOP_CALCULATOR_CUSTOM_LABELS[calculatorId],
+      isLinkedToVariant1: false,
+    };
+
+    if (calculatorId === "reforme-vl") {
+      nextVariant = clearVariantSimulationOutputs(
+        applyVariantTaxRegime(nextVariant, "valeur_locative_reform")
+      );
+    }
+
+    const nextVariants = normalizeVariantLabels([...variants, nextVariant]);
+    setVariants(nextVariants);
+    setActiveVariantIndex(nextVariants.length - 1);
+    setActiveSectionId(targetSectionId);
+  };
+
+  const handleDesktopCalculatorStart = (
+    calculatorId: DesktopCalculatorId,
+    targetSectionId = getDesktopCalculatorDefaultSection(calculatorId)
+  ) => {
+    createDesktopCalculatorVariantFromBase(calculatorId, targetSectionId);
+  };
+
   const handleDesktopCalculatorOpen = (
     calculatorId: DesktopCalculatorId,
     targetSectionId = getDesktopCalculatorDefaultSection(calculatorId)
@@ -1224,46 +1596,7 @@ export default function App() {
       return;
     }
 
-    if (variants.length >= MAX_VARIANTS) {
-      setActiveVariantIndex(activeVariantIndex);
-      setActiveSectionId(targetSectionId);
-      return;
-    }
-
-    const baseVariant = variants[0] ?? createEmptyVariant(0);
-    const nextIndex = variants.length;
-    const targetVariant = {
-      ...createEmptyVariant(nextIndex),
-      taxRegime:
-        calculatorId === "reforme-vl" ? ("valeur_locative_reform" as VariantTaxRegime) : baseVariant.taxRegime,
-    };
-
-    let nextVariant = clearVariantSimulationOutputs(
-      cloneVariantStateFromBase(baseVariant, targetVariant, false)
-    );
-
-    nextVariant = {
-      ...nextVariant,
-      id: `variant-${calculatorId}-${Date.now()}-${nextIndex}`,
-      customLabel:
-        calculatorId === "reforme-vl"
-          ? "Réforme VL"
-          : calculatorId === "changement-domicile"
-            ? "Changement de domicile"
-            : "Fin de déduction enfant",
-      isLinkedToVariant1: false,
-    };
-
-    if (calculatorId === "reforme-vl") {
-      nextVariant = clearVariantSimulationOutputs(
-        applyVariantTaxRegime(nextVariant, "valeur_locative_reform")
-      );
-    }
-
-    const nextVariants = normalizeVariantLabels([...variants, nextVariant]);
-    setVariants(nextVariants);
-    setActiveVariantIndex(nextVariants.length - 1);
-    setActiveSectionId(targetSectionId);
+    createDesktopCalculatorVariantFromBase(calculatorId, targetSectionId);
   };
 
   const handleConseillerAccessToggle = () => {
@@ -2042,6 +2375,8 @@ export default function App() {
     variants.find((variant) => variant.id === bestVariant?.id) || activeVariant;
   const bestVariantDisplayedTaxResult = getVariantDisplayedTaxResult(bestVariantState);
   const activeVariantDisplayedTaxResult = getVariantDisplayedTaxResult(activeVariant);
+  const hasActiveVariantDisplayedCompleteTaxResult =
+    hasCompleteDisplayedTaxResult(activeVariantDisplayedTaxResult);
   const referenceVariantTotalTaxRaw = getVariantTaxTotal(referenceVariant);
   const referenceVariantTotalTax = getVariantTaxTotal(referenceVariant) ?? 0;
   const bestVariantTotalTax =
@@ -2960,11 +3295,16 @@ export default function App() {
   };
 
   const handleTaxSimulation = async (options?: {
-    silentMissingRequirements?: boolean;
-    targetVariantIds?: string[];
-    navigateToResults?: boolean;
-  }) => {
-    const requestedVariantIds = options?.targetVariantIds;
+      silentMissingRequirements?: boolean;
+      targetVariantIds?: string[];
+      navigateToResults?: boolean;
+      postSimulationScrollTarget?: "optimisation";
+    }) => {
+      if (!canStartSimulationAttempt()) {
+        return false;
+      }
+
+      const requestedVariantIds = options?.targetVariantIds;
     const targetVariants =
       requestedVariantIds && requestedVariantIds.length > 0
         ? variants.filter((variant) => requestedVariantIds.includes(variant.id))
@@ -3060,18 +3400,32 @@ export default function App() {
 
       simulatedVariants.forEach((variant) => {
         autoSimulationStatusRef.current[variant.id] = "done";
+        if (hasCompleteDisplayedTaxResult(getVariantDisplayedTaxResult(variant))) {
+          pendingDesktopSimulationDisplayRef.current[variant.id] = Date.now();
+        }
       });
 
       if (options?.navigateToResults) {
         setActiveSectionId("resultats");
       }
 
-      if (options?.navigateToResults && typeof window !== "undefined") {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
+        if (options?.postSimulationScrollTarget) {
+          pendingPostSimulationScrollRef.current = options.postSimulationScrollTarget;
+        } else {
+          pendingPostSimulationScrollRef.current = null;
+        }
 
-      return true;
+        if (
+          options?.navigateToResults &&
+          !options?.postSimulationScrollTarget &&
+          typeof window !== "undefined"
+        ) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        return true;
     } catch (error) {
+      pendingPostSimulationScrollRef.current = null;
       console.error("Erreur lors de la simulation fiscale TaxWare :", error);
       alert("Erreur lors de la simulation fiscale.");
       return false;
@@ -3228,6 +3582,10 @@ export default function App() {
   const runMobileSimulation = async (
     payload: MobileSimulationPayload
   ): Promise<MobileSimulationResult> => {
+    if (!canStartSimulationAttempt()) {
+      throw new Error("Vous avez utilisé vos 2 simulations gratuites.");
+    }
+
     const dossierForSimulation = buildMobileBaseDossier(payload);
 
     const simulatedVariant = await runTaxSimulationForVariant(
@@ -3238,6 +3596,8 @@ export default function App() {
     const annualSavings =
       (beforeResult?.normalized?.totalTax ?? 0) - (afterResult?.normalized?.totalTax ?? 0);
     const monthlySavings = annualSavings / 12;
+
+    await registerSuccessfulSimulationUsage();
 
     return {
       current: {
@@ -3325,6 +3685,10 @@ export default function App() {
   const runMobileReforme = async (
     payload: MobileReformePayload
   ): Promise<MobileReformeResult> => {
+    if (!canStartSimulationAttempt()) {
+      throw new Error("Vous avez utilisé vos 2 simulations gratuites.");
+    }
+
     const valeurLocativeReference =
       payload.residencePrincipale === "oui" ? Math.max(0, payload.revenuLocatif) : 0;
     const rendementReference =
@@ -3375,6 +3739,8 @@ export default function App() {
     });
     const delta =
       (currentResult?.normalized?.totalTax ?? 0) - (projectedResult?.normalized?.totalTax ?? 0);
+
+    await registerSuccessfulSimulationUsage();
 
     return {
       currentTitle: formatMontantCHFArrondi(currentResult?.normalized?.totalTax ?? 0),
@@ -3459,6 +3825,10 @@ export default function App() {
   const runMobileDomicile = async (
     payload: MobileDomicilePayload
   ): Promise<MobileDomicileResult> => {
+    if (!canStartSimulationAttempt()) {
+      throw new Error("Vous avez utilisé vos 2 simulations gratuites.");
+    }
+
     const commonParams = {
       prenom: payload.prenom,
       nom: payload.nom,
@@ -3497,6 +3867,8 @@ export default function App() {
       (currentResult?.normalized?.totalTax ?? 0) - (nextResult?.normalized?.totalTax ?? 0);
     const monthlyDelta = annualDelta / 12;
     const verdict = getMobileVerdict(annualDelta);
+
+    await registerSuccessfulSimulationUsage();
 
     return {
       current: {
@@ -3590,6 +3962,10 @@ export default function App() {
   const runMobileEnfantTransition = async (
     payload: MobileEnfantTransitionPayload
   ): Promise<MobileEnfantTransitionResult> => {
+    if (!canStartSimulationAttempt()) {
+      throw new Error("Vous avez utilisé vos 2 simulations gratuites.");
+    }
+
     const buildFederalEnfantRequest = (
       dossierForSimulation: DossierClient,
       params: {
@@ -3804,6 +4180,8 @@ export default function App() {
       (beforeResult?.normalized?.totalTax ?? 0) - (afterResult?.normalized?.totalTax ?? 0);
     const monthlyDelta = annualDelta / 12;
     const verdict = getMobileVerdict(annualDelta);
+
+    await registerSuccessfulSimulationUsage();
 
     return {
       current: {
@@ -4080,6 +4458,31 @@ export default function App() {
   ]);
 
   useEffect(() => {
+    if (!user) {
+      pendingDesktopSimulationDisplayRef.current = {};
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (
+      isMobile ||
+      activeSectionId !== "resultats" ||
+      !hasActiveVariantDisplayedCompleteTaxResult ||
+      !pendingDesktopSimulationDisplayRef.current[activeVariant.id]
+    ) {
+      return;
+    }
+
+    delete pendingDesktopSimulationDisplayRef.current[activeVariant.id];
+    void registerSuccessfulSimulationUsage();
+  }, [
+    activeSectionId,
+    activeVariant.id,
+    hasActiveVariantDisplayedCompleteTaxResult,
+    isMobile,
+  ]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
     }
@@ -4299,7 +4702,7 @@ export default function App() {
     { id: "recommandation", step: "7", label: "Recommandation" },
   ];
   const baseVariant = variants[0] ?? activeVariant;
-  const activeClientDossier = baseVariant.dossier;
+  const activeClientDossier = dossier;
   const activeClientDisplayName =
     `${activeClientDossier.identite.prenom} ${activeClientDossier.identite.nom}`.trim() ||
     "Client à renseigner";
@@ -4492,9 +4895,13 @@ export default function App() {
     : "Simuler la fiscalité";
   const simulationPrimaryHelper = isSimulatingVariants
     ? simulationStatusMessage
-    : isGlobalTaxSimulationReady
-      ? "Le calcul relance automatiquement toutes les variantes existantes."
-      : taxSimulationMissingRequirementsMessage;
+    : isSimulationAccessVerificationBlocking
+      ? "Verification de l'acces premium en cours..."
+      : isGlobalTaxSimulationReady
+        ? "Le calcul relance automatiquement toutes les variantes existantes."
+        : taxSimulationMissingRequirementsMessage;
+  const isSimulationActionDisabled =
+    !isGlobalTaxSimulationReady || isSimulatingVariants || isSimulationAccessVerificationBlocking;
   const canExportPdf = simulatedVariantsCount > 0;
   const activeJourneyStep = journeyNavigation.find((item) => item.id === activeSectionId) ?? null;
   const activeJourneyStepIndex = activeJourneyStep
@@ -4878,6 +5285,25 @@ export default function App() {
     }
   };
 
+  const resetDesktopWorkspaceForUserChange = (nextUserId: string | null) => {
+    if (previousWorkspaceUserIdRef.current === nextUserId) {
+      return;
+    }
+
+    previousWorkspaceUserIdRef.current = nextUserId;
+    autoSimulationStatusRef.current = {};
+    pendingDesktopSimulationDisplayRef.current = {};
+    pendingPostSimulationScrollRef.current = null;
+    setActiveVariantIndex(0);
+    setActiveSectionId(INTRO_SECTION_ID);
+    setAnalysisMode(null);
+    setIsDecisionHelpOpen(false);
+    setActiveDesktopCalculator("simulation-fiscale");
+    setHasStartedClientEdit(false);
+    setVariants(createInitialVariants());
+    setIsDesktopWorkspaceHydrated(nextUserId === null);
+  };
+
   useEffect(() => {
     const activeLabel = `${activeVariant.customLabel} ${activeVariant.label}`.toLowerCase();
 
@@ -4922,8 +5348,10 @@ export default function App() {
       }
 
       const nextSession = data.session ?? null;
+      resetDesktopWorkspaceForUserChange(nextSession?.user?.id ?? null);
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      setIsSimulationAccessLoading(nextSession?.user !== null);
       setLoading(false);
     };
 
@@ -4932,8 +5360,10 @@ export default function App() {
     const {
       data: { subscription },
     } = supabaseClient.auth.onAuthStateChange((_event, nextSession) => {
+      resetDesktopWorkspaceForUserChange(nextSession?.user?.id ?? null);
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      setIsSimulationAccessLoading(nextSession?.user !== null);
       setLoading(false);
     });
 
@@ -4942,6 +5372,31 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    resetDesktopWorkspaceForUserChange(user?.id ?? null);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || typeof window === "undefined" || !desktopWorkspaceStorageKey) {
+      return;
+    }
+
+    const storedWorkspace = parseDesktopWorkspaceSnapshot(
+      window.localStorage.getItem(desktopWorkspaceStorageKey)
+    );
+
+    if (!storedWorkspace) {
+      setIsDesktopWorkspaceHydrated(true);
+      return;
+    }
+
+    setVariants(storedWorkspace.variants);
+    setActiveVariantIndex(storedWorkspace.activeVariantIndex);
+    setActiveDesktopCalculator(storedWorkspace.activeDesktopCalculator);
+    setHasStartedClientEdit(storedWorkspace.hasStartedClientEdit);
+    setIsDesktopWorkspaceHydrated(true);
+  }, [desktopWorkspaceStorageKey, user]);
 
   useEffect(() => {
     let isMounted = true;
@@ -5004,6 +5459,299 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const syncSimulationAccess = async () => {
+      if (!user || typeof window === "undefined") {
+        if (isMounted) {
+          setSimulationUsageCount(0);
+          setSimulationCredits(0);
+          setIsSimulationAccessUnlocked(false);
+          setIsSimulationAccessLoading(false);
+          setShowUsageLimitModal(false);
+          setUsageLimitError("");
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setIsSimulationAccessLoading(true);
+        setShowUsageLimitModal(false);
+        setUsageLimitError("");
+      }
+
+      const profileUsage =
+        profile && typeof (profile as unknown as Record<string, unknown>).usage_count === "number"
+          ? Math.max(
+              0,
+              Math.round((profile as unknown as Record<string, unknown>).usage_count as number)
+            )
+          : 0;
+
+      const storedUsage = simulationUsageStorageKey
+        ? Number.parseInt(window.localStorage.getItem(simulationUsageStorageKey) ?? "0", 10)
+        : 0;
+      const storedUnlocked = simulationUnlockedStorageKey
+        ? window.localStorage.getItem(simulationUnlockedStorageKey) === "true"
+        : false;
+
+      if (isMounted) {
+        setSimulationUsageCount(
+          Math.max(
+            0,
+            Number.isFinite(profileUsage) ? profileUsage : 0,
+            Number.isFinite(storedUsage) ? storedUsage : 0
+          )
+        );
+      }
+
+      const accessToken = session?.access_token ?? "";
+      let hasDurablePaidAccess = false;
+      let durableSimulationCredits = 0;
+      let durableReadSucceeded = false;
+      const checkoutSessionIdFromUrl =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("session_id")
+          : null;
+      const pendingCheckoutSessionId =
+        checkoutSessionIdFromUrl ||
+        (pendingCheckoutSessionStorageKey && typeof window !== "undefined"
+          ? window.localStorage.getItem(pendingCheckoutSessionStorageKey)
+          : null) ||
+        (typeof window !== "undefined"
+          ? window.localStorage.getItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY) ||
+            window.sessionStorage.getItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY)
+          : null);
+
+      if (accessToken) {
+        try {
+          if (pendingCheckoutSessionId) {
+            try {
+              const reconciliation = await reconcileCheckoutSession(
+                accessToken,
+                pendingCheckoutSessionId
+              );
+
+              console.info("[App][billing] Session Stripe reconcilee", reconciliation);
+              if (pendingCheckoutSessionStorageKey) {
+                window.localStorage.removeItem(pendingCheckoutSessionStorageKey);
+              }
+              if (typeof window !== "undefined") {
+                window.localStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
+                window.sessionStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
+                const currentUrl = new URL(window.location.href);
+                if (currentUrl.searchParams.has("session_id")) {
+                  currentUrl.searchParams.delete("session_id");
+                  window.history.replaceState({}, "", currentUrl.toString());
+                }
+              }
+            } catch (error) {
+              console.error("[App][billing] Reconciliation checkout Stripe impossible", error);
+            }
+          }
+
+          const accessStatus = await fetchStripeAccessStatus(accessToken);
+          hasDurablePaidAccess = accessStatus.has_paid_access;
+          durableSimulationCredits = Math.max(0, accessStatus.simulation_credits ?? 0);
+          durableReadSucceeded = true;
+
+          console.info("[App][billing] Statut d'accès relu", accessStatus);
+        } catch (error) {
+          console.error("[App][billing] Lecture du statut d'accès impossible", error);
+        }
+      }
+
+      if (!isMounted) {
+        return;
+      }
+
+      const fallbackUnlocked = durableReadSucceeded
+        ? isCheckoutSuccessRoute && storedUnlocked
+        : storedUnlocked;
+      const nextUnlocked = hasDurablePaidAccess || fallbackUnlocked;
+
+      console.info("[App][billing] Synchronisation accès premium", {
+        profileUsage,
+        storedUsage,
+        storedUnlocked,
+        durableReadSucceeded,
+        hasDurablePaidAccess,
+        durableSimulationCredits,
+        pendingCheckoutSessionId,
+        nextUnlocked,
+        isCheckoutSuccessRoute,
+      });
+
+      setSimulationCredits(durableSimulationCredits);
+      setIsSimulationAccessUnlocked(nextUnlocked);
+      setIsSimulationAccessLoading(false);
+
+      if (nextUnlocked) {
+        setShowUsageLimitModal(false);
+        setUsageLimitError("");
+      }
+    };
+
+    void syncSimulationAccess();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    isCheckoutSuccessRoute,
+    pendingCheckoutSessionStorageKey,
+    profile,
+    session,
+    simulationUnlockedStorageKey,
+    simulationUsageStorageKey,
+    user,
+  ]);
+
+  useEffect(() => {
+    if (
+      !user ||
+      typeof window === "undefined" ||
+      !desktopWorkspaceStorageKey ||
+      !isDesktopWorkspaceHydrated
+    ) {
+      return;
+    }
+
+    const workspaceSnapshot: DesktopWorkspaceSnapshot = {
+      variants,
+      activeVariantIndex,
+      activeDesktopCalculator,
+      hasStartedClientEdit,
+    };
+
+    window.localStorage.setItem(
+      desktopWorkspaceStorageKey,
+      JSON.stringify(workspaceSnapshot)
+    );
+  }, [
+    activeDesktopCalculator,
+    activeVariantIndex,
+    desktopWorkspaceStorageKey,
+    hasStartedClientEdit,
+    isDesktopWorkspaceHydrated,
+    user,
+    variants,
+  ]);
+
+  useEffect(() => {
+    if (!user || typeof window === "undefined" || !simulationUsageStorageKey) {
+      return;
+    }
+
+    window.localStorage.setItem(simulationUsageStorageKey, String(simulationUsageCount));
+  }, [simulationUsageCount, simulationUsageStorageKey, user]);
+
+  useEffect(() => {
+    if (!user || typeof window === "undefined" || !simulationUnlockedStorageKey) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      simulationUnlockedStorageKey,
+      isSimulationAccessUnlocked ? "true" : "false"
+    );
+  }, [isSimulationAccessUnlocked, simulationUnlockedStorageKey, user]);
+
+  useEffect(() => {
+    if (!user || !isCheckoutSuccessRoute) {
+      return;
+    }
+
+    setIsSimulationAccessUnlocked(true);
+    setShowUsageLimitModal(false);
+    setUsageLimitError("");
+  }, [isCheckoutSuccessRoute, user]);
+
+  useEffect(() => {
+    if (!isCheckoutSuccessRoute || typeof window === "undefined") {
+      return;
+    }
+
+    const checkoutSessionId = new URLSearchParams(window.location.search).get("session_id");
+
+    if (!checkoutSessionId) {
+      return;
+    }
+
+    window.localStorage.setItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY, checkoutSessionId);
+
+    if (user && pendingCheckoutSessionStorageKey) {
+      window.localStorage.setItem(pendingCheckoutSessionStorageKey, checkoutSessionId);
+    }
+  }, [isCheckoutSuccessRoute, pendingCheckoutSessionStorageKey, user]);
+
+  useEffect(() => {
+    console.info("[App][billing] Etat pop-up blocage", {
+      showUsageLimitModal,
+      simulationUsageCount,
+      simulationCredits,
+      isSimulationAccessUnlocked,
+      isSimulationAccessLoading,
+      hasReachedFreeSimulationLimit,
+    });
+  }, [
+    hasReachedFreeSimulationLimit,
+    isSimulationAccessLoading,
+    isSimulationAccessUnlocked,
+    simulationCredits,
+    showUsageLimitModal,
+    simulationUsageCount,
+  ]);
+
+  useEffect(() => {
+    if (!user) {
+      lastAuthScrollUserIdRef.current = null;
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      (user !== null && isProfileLoading) ||
+      !user ||
+      isMobile ||
+      isPricingRoute ||
+      isCheckoutSuccessRoute ||
+      isCheckoutCancelRoute ||
+      lastAuthScrollUserIdRef.current === user.id
+    ) {
+      return;
+    }
+
+    if (activeSectionId !== "informations-generales") {
+      setActiveSectionId("informations-generales");
+      return;
+    }
+
+    if (!identitySectionRef.current) {
+      return;
+    }
+
+    scrollToIdentitySection();
+    lastAuthScrollUserIdRef.current = user.id;
+  }, [
+    activeSectionId,
+    isCheckoutCancelRoute,
+    isCheckoutSuccessRoute,
+    isMobile,
+    isPricingRoute,
+    isProfileLoading,
+    loading,
+    user,
+  ]);
+
+  useEffect(() => {
+    setAuthFieldsUnlocked(false);
+    setLoginEmail("");
+    setLoginPassword("");
+  }, [authMode]);
+
+  useEffect(() => {
     if (!activeStepViewportRef.current) {
       return;
     }
@@ -5014,9 +5762,48 @@ export default function App() {
     });
   }, [activeSectionId]);
 
+  useEffect(() => {
+    if (isMobile || isSimulatingVariants || pendingPostSimulationScrollRef.current !== "optimisation") {
+      return;
+    }
+
+    pendingPostSimulationScrollRef.current = null;
+    scrollToOptimisationSection();
+  }, [isMobile, isSimulatingVariants, variants]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      !user ||
+      isMobile ||
+      hasStartedClientEdit ||
+      !isDesktopClientCardPending ||
+      isPricingRoute ||
+      isCheckoutSuccessRoute ||
+      isCheckoutCancelRoute
+    ) {
+      setHasConfirmedClientStartModal(false);
+      setClientStartModalError("");
+      setShowClientStartModal(false);
+      return;
+    }
+
+    setShowClientStartModal(true);
+  }, [
+    hasStartedClientEdit,
+    isCheckoutCancelRoute,
+    isCheckoutSuccessRoute,
+    isDesktopClientCardPending,
+    isMobile,
+    isPricingRoute,
+    loading,
+    user,
+  ]);
+
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAuthError("");
+    setAuthNotice("");
     setLoading(true);
 
     const { error } = await supabaseClient.auth.signInWithPassword({
@@ -5033,9 +5820,82 @@ export default function App() {
     setLoginPassword("");
   };
 
+  const handleSignup = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthError("");
+    setAuthNotice("");
+    setLoading(true);
+
+    const { error } = await supabaseClient.auth.signUp({
+      email: loginEmail,
+      password: loginPassword,
+    });
+
+    if (error) {
+      setAuthError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+    setLoginPassword("");
+    setAuthMode("login");
+    setAuthNotice(
+      "Compte créé. Vérifiez votre e-mail si une confirmation est demandée, puis connectez-vous."
+    );
+  };
+
+  const handleForgotPassword = async () => {
+    setAuthError("");
+    setAuthNotice("");
+
+    if (loginEmail.trim() === "") {
+      setAuthError("Renseignez votre e-mail avant de demander la réinitialisation du mot de passe.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(loginEmail.trim());
+
+    if (error) {
+      setAuthError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(false);
+    setAuthNotice("Un e-mail de réinitialisation a été envoyé si ce compte existe.");
+  };
+
   const handleLogout = async () => {
     setAuthError("");
     setLoading(true);
+
+    if (typeof window !== "undefined") {
+      if (simulationUsageStorageKey) {
+        window.localStorage.removeItem(simulationUsageStorageKey);
+      }
+      if (simulationUnlockedStorageKey) {
+        window.localStorage.removeItem(simulationUnlockedStorageKey);
+      }
+      if (desktopWorkspaceStorageKey) {
+        window.localStorage.removeItem(desktopWorkspaceStorageKey);
+      }
+      if (pendingCheckoutSessionStorageKey) {
+        window.localStorage.removeItem(pendingCheckoutSessionStorageKey);
+      }
+      window.localStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
+      window.sessionStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
+    }
+
+    setShowUsageLimitModal(false);
+    setUsageLimitError("");
+    setSimulationUsageCount(0);
+    setSimulationCredits(0);
+    setIsSimulationAccessUnlocked(false);
+    setIsSimulationAccessLoading(false);
+    resetDesktopWorkspaceForUserChange(null);
 
     const { error } = await supabaseClient.auth.signOut();
 
@@ -5044,6 +5904,319 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  const freeSimulationUsageBanner = hasReachedFreeSimulationLimit ? (
+    <div
+      style={{
+        marginBottom: isMobile ? "14px" : "18px",
+        padding: isMobile ? "14px 16px" : "16px 18px",
+        borderRadius: isMobile ? "18px" : "20px",
+        border: "1px solid rgba(245, 158, 11, 0.28)",
+        background:
+          "linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(255, 247, 237, 0.98))",
+        boxShadow: "0 14px 32px rgba(148, 163, 184, 0.12)",
+      }}
+    >
+      <div
+        style={{
+          color: "#92400e",
+          fontSize: "12px",
+          fontWeight: 800,
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          marginBottom: "6px",
+        }}
+      >
+        Limite gratuite atteinte
+      </div>
+      <div style={{ color: "#0f172a", fontSize: isMobile ? "15px" : "16px", fontWeight: 700 }}>
+        Vous avez utilisé 2 simulations gratuites
+      </div>
+      <div style={{ color: "#7c2d12", fontSize: "14px", lineHeight: 1.6, marginTop: "4px" }}>
+        Débloquez les simulations supplémentaires avec l’abonnement, sans modifier votre dossier
+        actuel.
+      </div>
+    </div>
+  ) : null;
+
+  const usageLimitModal = showUsageLimitModal ? (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1200,
+        display: "grid",
+        placeItems: "center",
+        padding: isMobile ? "20px" : "32px",
+        background: "rgba(15, 23, 42, 0.44)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <div
+        style={{
+          width: "min(100%, 520px)",
+          borderRadius: isMobile ? "24px" : "28px",
+          padding: isMobile ? "24px" : "30px",
+          background: "rgba(255, 255, 255, 0.98)",
+          border: "1px solid rgba(148, 163, 184, 0.18)",
+          boxShadow: "0 32px 80px rgba(15, 23, 42, 0.18)",
+        }}
+      >
+        <div
+          style={{
+            color: "#1d4ed8",
+            fontSize: "12px",
+            fontWeight: 800,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            marginBottom: "8px",
+          }}
+        >
+          Accès premium
+        </div>
+        <h2
+          style={{
+            margin: "0 0 10px",
+            color: "#0f172a",
+            fontSize: isMobile ? "28px" : "32px",
+            lineHeight: 1.1,
+          }}
+        >
+          Vos 2 simulations gratuites ont été utilisées
+        </h2>
+        <p style={{ margin: 0, color: "#475569", lineHeight: 1.7, fontSize: "15px" }}>
+          La prochaine simulation nécessite l’abonnement. Votre dossier reste intact et vous
+          retrouvez immédiatement vos données après Stripe.
+        </p>
+
+        <div
+          style={{
+            marginTop: "20px",
+            padding: "16px 18px",
+            borderRadius: "18px",
+            background: "linear-gradient(135deg, rgba(241, 245, 249, 0.92), rgba(248, 250, 252, 0.98))",
+            border: "1px solid rgba(148, 163, 184, 0.16)",
+          }}
+        >
+          <div style={{ color: "#0f172a", fontWeight: 700, marginBottom: "6px" }}>
+            Continuer sans rupture
+          </div>
+          <div style={{ color: "#475569", fontSize: "14px", lineHeight: 1.6 }}>
+            Passez à l’abonnement pour poursuivre les simulations et conserver une expérience
+            fluide en rendez-vous.
+          </div>
+        </div>
+
+        {usageLimitError ? (
+          <div
+            style={{
+              marginTop: "16px",
+              padding: "12px 14px",
+              borderRadius: "14px",
+              background: "rgba(254, 242, 242, 0.96)",
+              border: "1px solid rgba(248, 113, 113, 0.2)",
+              color: "#b91c1c",
+              fontSize: "14px",
+              lineHeight: 1.5,
+            }}
+          >
+            {usageLimitError}
+          </div>
+        ) : null}
+
+        <div
+          style={{
+            marginTop: "22px",
+            display: "flex",
+            gap: "12px",
+            flexDirection: isMobile ? "column" : "row",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              void handleContinueWithSubscription();
+            }}
+            disabled={isPreparingCheckout}
+            style={{
+              minHeight: "52px",
+              flex: 1,
+              border: "none",
+              borderRadius: "16px",
+              background: "linear-gradient(135deg, #0f172a, #1d4ed8)",
+              color: "#ffffff",
+              fontSize: "15px",
+              fontWeight: 800,
+              cursor: isPreparingCheckout ? "wait" : "pointer",
+              opacity: isPreparingCheckout ? 0.72 : 1,
+            }}
+          >
+            {isPreparingCheckout ? "Redirection vers Stripe..." : "Continuer avec l’abonnement"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowUsageLimitModal(false);
+              setUsageLimitError("");
+            }}
+            style={{
+              minHeight: "52px",
+              flex: isMobile ? "initial" : "0 0 160px",
+              borderRadius: "16px",
+              border: "1px solid #cbd5e1",
+              background: "#ffffff",
+              color: "#0f172a",
+              fontSize: "15px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Plus tard
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const clientStartModal = showClientStartModal ? (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="client-start-modal-title"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1190,
+        display: "grid",
+        placeItems: "center",
+        padding: isMobile ? "20px" : "32px",
+        background: "rgba(15, 23, 42, 0.38)",
+        backdropFilter: "blur(8px)",
+      }}
+    >
+      <div
+        style={{
+          width: "min(100%, 540px)",
+          borderRadius: isMobile ? "24px" : "28px",
+          padding: isMobile ? "24px" : "30px",
+          background: "rgba(255, 255, 255, 0.98)",
+          border: "1px solid rgba(148, 163, 184, 0.18)",
+          boxShadow: "0 32px 80px rgba(15, 23, 42, 0.18)",
+        }}
+      >
+        <div
+          style={{
+            color: "#1d4ed8",
+            fontSize: "12px",
+            fontWeight: 800,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            marginBottom: "8px",
+          }}
+        >
+          Démarrage du dossier
+        </div>
+        <h2
+          id="client-start-modal-title"
+          style={{
+            margin: "0 0 10px",
+            color: "#0f172a",
+            fontSize: isMobile ? "28px" : "32px",
+            lineHeight: 1.1,
+          }}
+        >
+          Commencez par renseigner les données client
+        </h2>
+        <p style={{ margin: 0, color: "#475569", lineHeight: 1.7, fontSize: "15px" }}>
+          Pour démarrer, cliquez sur le bouton <strong>Modifier</strong> puis complétez les
+          informations du client.
+        </p>
+
+        <div
+          style={{
+            marginTop: "20px",
+            padding: "16px 18px",
+            borderRadius: "18px",
+            background:
+              "linear-gradient(135deg, rgba(239, 246, 255, 0.92), rgba(248, 250, 252, 0.98))",
+            border: "1px solid rgba(147, 197, 253, 0.28)",
+            color: "#334155",
+            fontSize: "14px",
+            lineHeight: 1.6,
+          }}
+        >
+          Munissez-vous aussi des éléments taxables de la dernière déclaration fiscale et
+          reportez-les dans <strong>Bases imposables à reporter</strong>. Une fois ces données
+          enregistrées, elles serviront de base aux calculateurs PC.
+        </div>
+
+        <label
+          style={{
+            marginTop: "18px",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "10px",
+            color: "#0f172a",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            cursor: "pointer",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={hasConfirmedClientStartModal}
+            onChange={(event) => {
+              setHasConfirmedClientStartModal(event.target.checked);
+              if (event.target.checked) {
+                setClientStartModalError("");
+              }
+            }}
+            style={{
+              marginTop: "2px",
+              width: "16px",
+              height: "16px",
+              accentColor: "#1d4ed8",
+            }}
+          />
+          <span>J&apos;ai compris</span>
+        </label>
+
+        {clientStartModalError ? (
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "12px 14px",
+              borderRadius: "14px",
+              background: "rgba(254, 242, 242, 0.96)",
+              border: "1px solid rgba(248, 113, 113, 0.2)",
+              color: "#b91c1c",
+              fontSize: "14px",
+              lineHeight: 1.5,
+            }}
+          >
+            {clientStartModalError}
+          </div>
+        ) : null}
+
+        <div
+          style={{
+            marginTop: "22px",
+            display: "flex",
+            gap: "12px",
+            justifyContent: "flex-end",
+          }}
+        >
+          <button
+            type="button"
+            className="desktop-primary-button"
+            onClick={handleClientStartModalContinue}
+          >
+            Modifier maintenant
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   if (loading || (user !== null && isProfileLoading)) {
     return (
@@ -5105,7 +6278,8 @@ export default function App() {
           }}
         >
           <form
-            onSubmit={handleLogin}
+            autoComplete="off"
+            onSubmit={authMode === "login" ? handleLogin : handleSignup}
             style={{
               width: "min(100%, 440px)",
               padding: "36px",
@@ -5117,6 +6291,34 @@ export default function App() {
               gap: "18px",
             }}
           >
+            <input
+              type="text"
+              name="auth_fake_email"
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                opacity: 0,
+                pointerEvents: "none",
+                width: 0,
+                height: 0,
+              }}
+            />
+            <input
+              type="password"
+              name="auth_fake_password"
+              autoComplete="current-password"
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                opacity: 0,
+                pointerEvents: "none",
+                width: 0,
+                height: 0,
+              }}
+            />
             <div style={{ display: "grid", gap: "10px" }}>
               <div
                 style={{
@@ -5127,13 +6329,15 @@ export default function App() {
                   textTransform: "uppercase",
                 }}
               >
-                Authentification
+                {authMode === "login" ? "Authentification" : "Création de compte"}
               </div>
               <h1 style={{ margin: 0, color: "#0f172a", fontSize: "32px", lineHeight: 1.1 }}>
-                Connexion
+                {authMode === "login" ? "Connexion" : "Créer un compte"}
               </h1>
               <p style={{ margin: 0, color: "#475569", lineHeight: 1.7 }}>
-                Connectez-vous avec votre compte Supabase pour accéder au dashboard.
+                {authMode === "login"
+                  ? "Connectez-vous avec votre compte Supabase pour accéder au dashboard."
+                  : "Créez votre accès en quelques secondes avec l’authentification Supabase existante."}
               </p>
             </div>
 
@@ -5141,9 +6345,16 @@ export default function App() {
               <span style={{ color: "#334155", fontSize: "14px", fontWeight: 700 }}>Email</span>
               <input
                 type="email"
+                name="fipla_auth_email"
                 value={loginEmail}
                 onChange={(event) => setLoginEmail(event.target.value)}
-                autoComplete="email"
+                onFocus={() => setAuthFieldsUnlocked(true)}
+                autoComplete="off"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="email"
+                readOnly={!authFieldsUnlocked}
                 required
                 style={{
                   minHeight: "48px",
@@ -5161,9 +6372,12 @@ export default function App() {
               </span>
               <input
                 type="password"
+                name="fipla_auth_password"
                 value={loginPassword}
                 onChange={(event) => setLoginPassword(event.target.value)}
-                autoComplete="current-password"
+                onFocus={() => setAuthFieldsUnlocked(true)}
+                autoComplete="new-password"
+                readOnly={!authFieldsUnlocked}
                 required
                 style={{
                   minHeight: "48px",
@@ -5174,6 +6388,22 @@ export default function App() {
                 }}
               />
             </label>
+
+            {authNotice && (
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  fontSize: "14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                {authNotice}
+              </div>
+            )}
 
             {authError && (
               <div
@@ -5204,8 +6434,175 @@ export default function App() {
                 cursor: "pointer",
               }}
             >
-              Se connecter
+              {authMode === "login" ? "Se connecter" : "Créer mon compte"}
             </button>
+
+            {authMode === "login" ? (
+              <div
+                style={{
+                  display: "grid",
+                  gap: "12px",
+                  marginTop: "-2px",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "16px 18px",
+                    borderRadius: "18px",
+                    border: "1px solid rgba(191, 219, 254, 0.9)",
+                    background: "linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(248, 250, 252, 0.98))",
+                    boxShadow: "0 10px 24px rgba(37, 99, 235, 0.08)",
+                    display: "grid",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ display: "grid", gap: "4px" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode("signup");
+                        setAuthError("");
+                        setAuthNotice("");
+                      }}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        color: "#17324d",
+                        fontSize: "15px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        textAlign: "left",
+                        padding: 0,
+                      }}
+                    >
+                      Pas encore de compte ? Créer un compte
+                    </button>
+                    <div
+                      style={{
+                        color: "#2563eb",
+                        fontSize: "14px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      2 simulations gratuites incluses
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                      gap: "8px",
+                    }}
+                  >
+                    {["Accès immédiat", "2 simulations gratuites", "Sans engagement"].map((item) => (
+                      <div
+                        key={item}
+                        style={{
+                          minHeight: "40px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "8px 12px",
+                          borderRadius: "12px",
+                          background: "rgba(255, 255, 255, 0.9)",
+                          border: "1px solid rgba(191, 219, 254, 0.75)",
+                          color: "#36516e",
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          textAlign: "center",
+                        }}
+                      >
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("signup");
+                      setAuthError("");
+                      setAuthNotice("");
+                    }}
+                    style={{
+                      minHeight: "48px",
+                      borderRadius: "14px",
+                      border: "1px solid rgba(37, 99, 235, 0.18)",
+                      background: "#ffffff",
+                      color: "#17324d",
+                      fontSize: "14px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Créer un compte
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                display: "grid",
+                gap: "10px",
+                justifyItems: "center",
+                marginTop: "-4px",
+              }}
+            >
+              {authMode === "login" ? (
+                <div
+                  style={{
+                    color: "#64748b",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    textAlign: "center",
+                  }}
+                >
+                  Inscription rapide avec 2 simulations gratuites
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthError("");
+                    setAuthNotice("");
+                  }}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "#36516e",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                  }}
+                >
+                  Déjà un compte ? Se connecter
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  void handleForgotPassword();
+                }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#64748b",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  textUnderlineOffset: "3px",
+                }}
+              >
+                Mot de passe oublié ?
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -5214,26 +6611,31 @@ export default function App() {
 
   if (isMobile) {
     return (
-      <MobileApp
-        userLabel={session?.user?.email ?? user.email ?? "utilisateur"}
-        onLogout={() => {
-          void handleLogout();
-        }}
-        onResolveLocation={(zip) => {
-          const match = getMobileLocationSuggestion(zip);
-          return match ? { locality: match.locality } : null;
-        }}
-        onRunSimulation={runMobileSimulation}
-        onRunReforme={runMobileReforme}
-        onRunDomicile={runMobileDomicile}
-        onRunEnfantTransition={runMobileEnfantTransition}
-      />
+      <>
+        {freeSimulationUsageBanner}
+        <MobileApp
+          userLabel={session?.user?.email ?? user.email ?? "utilisateur"}
+          onLogout={() => {
+            void handleLogout();
+          }}
+          onResolveLocation={(zip) => {
+            const match = getMobileLocationSuggestion(zip);
+            return match ? { locality: match.locality } : null;
+          }}
+          onRunSimulation={runMobileSimulation}
+          onRunReforme={runMobileReforme}
+          onRunDomicile={runMobileDomicile}
+          onRunEnfantTransition={runMobileEnfantTransition}
+        />
+        {usageLimitModal}
+      </>
     );
   }
 
   return (
     <div className="app-shell">
       <div className="app-shell__inner">
+        {freeSimulationUsageBanner}
         <div
           style={{
             display: "flex",
@@ -5280,38 +6682,42 @@ export default function App() {
               title={activeClientDisplayName}
               subtitle="Le dossier de base alimente les quatre calculateurs PC. Les variantes gardent la même logique métier et la même simulation TaxWare."
               fields={desktopActiveDossierFields}
-              onEdit={() => {
-                setActiveVariantIndex(0);
-                setActiveDesktopCalculator("simulation-fiscale");
-                handleJourneyNavigation("informations-generales");
+              onEdit={handleDesktopActiveDossierEdit}
+              onNewDossier={() => {
+                setHasStartedClientEdit(true);
+                handleResetManualValues();
               }}
-              onNewDossier={handleResetManualValues}
               onReset={() => {
+                setHasStartedClientEdit(true);
                 handleResetVariantsFromVariant1();
                 setActiveVariantIndex(0);
                 setActiveDesktopCalculator("simulation-fiscale");
                 handleJourneyNavigation("informations-generales");
+                scrollToIdentitySection();
               }}
+              showSecondaryActions={hasStartedClientEdit}
             />
           </div>
 
           <div className="desktop-workspace__main">
-            <DesktopCalculatorHub
-              calculators={desktopCalculatorCards}
-              activeCalculatorId={activeDesktopCalculator}
-              onSelect={(calculatorId) =>
-                setActiveDesktopCalculator(calculatorId as DesktopCalculatorId)
-              }
-              onOpen={(calculatorId) =>
-                handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId)
-              }
-              onOpenResults={(calculatorId) =>
-                handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId, "resultats")
-              }
-              onOpenSection={(calculatorId, sectionId) =>
-                handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId, sectionId)
-              }
-            />
+            <div ref={desktopCalculatorHubRef}>
+              <DesktopCalculatorHub
+                calculators={desktopCalculatorCards}
+                activeCalculatorId={activeDesktopCalculator}
+                onSelect={(calculatorId) =>
+                  setActiveDesktopCalculator(calculatorId as DesktopCalculatorId)
+                }
+                onOpen={(calculatorId) =>
+                  handleDesktopCalculatorStart(calculatorId as DesktopCalculatorId)
+                }
+                onOpenResults={(calculatorId) =>
+                  handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId, "resultats")
+                }
+                onOpenSection={(calculatorId, sectionId) =>
+                  handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId, sectionId)
+                }
+              />
+            </div>
           </div>
         </section>
 
@@ -5399,9 +6805,12 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      void handleTaxSimulation({ navigateToResults: true });
+                      void handleTaxSimulation({
+                        navigateToResults: true,
+                        postSimulationScrollTarget: "optimisation",
+                      });
                     }}
-                    disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
+                    disabled={isSimulationActionDisabled}
                     className="workflow-command__button"
                     title={simulationPrimaryHelper}
                   >
@@ -5507,6 +6916,7 @@ export default function App() {
           </div>
         </details>
 
+        <div ref={optimisationSectionRef}>
         <GuidedSection
           id="optimisation"
           step="1"
@@ -6302,6 +7712,7 @@ export default function App() {
           </>
         )}
         </GuidedSection>
+        </div>
 
         <div ref={activeStepViewportRef} className="active-step-viewport">
         {activeSectionId === "informations-generales" && (
@@ -6314,17 +7725,24 @@ export default function App() {
         >
         <SituationEntryScreen
           analysisMode={analysisMode}
-          canLaunchSimulation={isGlobalTaxSimulationReady}
+          canLaunchSimulation={
+            isGlobalTaxSimulationReady && !isSimulationAccessVerificationBlocking
+          }
           dossier={dossier}
+          identitySectionRef={identitySectionRef}
           totalCharges={totalChargesCalcule}
           isSimulating={isSimulatingVariants}
           launchHelper={simulationPrimaryHelper}
           onDossierChange={setDossier}
           onLaunchSimulation={() => {
-            void handleTaxSimulation({ navigateToResults: true });
+            void handleTaxSimulation({
+              navigateToResults: true,
+              postSimulationScrollTarget: "optimisation",
+            });
           }}
           onNpaChange={handleNpaChange}
           formatCurrency={formatMontantCHFArrondi}
+          onFiscalInputsCompleted={scrollToDesktopCalculatorHub}
         />
         </GuidedSection>
         )}
@@ -10159,9 +11577,12 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  void handleTaxSimulation({ navigateToResults: true });
+                  void handleTaxSimulation({
+                    navigateToResults: true,
+                    postSimulationScrollTarget: "optimisation",
+                  });
                 }}
-                disabled={!isGlobalTaxSimulationReady || isSimulatingVariants}
+                disabled={isSimulationActionDisabled}
                 className="sticky-sim-footer__primary"
                 title={simulationPrimaryHelper}
               >
@@ -10186,6 +11607,8 @@ export default function App() {
             </div>
           </div>
         ) : null}
+        {clientStartModal}
+        {usageLimitModal}
       </div>
     </div>
   );

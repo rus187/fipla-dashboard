@@ -6,10 +6,16 @@ export default function CheckoutSuccess() {
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("session_id")
       : null;
+  const ctaHref = sessionId ? `/?session_id=${encodeURIComponent(sessionId)}` : "/";
 
   useEffect(() => {
     if (!sessionId) {
       return;
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("fipla-pending-checkout-session-global", sessionId);
+      window.sessionStorage.setItem("fipla-pending-checkout-session-global", sessionId);
     }
 
     console.info("[Stripe][checkout] success page loaded", {
@@ -34,7 +40,7 @@ export default function CheckoutSuccess() {
               L’activation est prise en compte et votre espace est prêt à être utilisé. Aucun
               détail technique inutile n’est affiché ici pour garder une expérience rassurante.
             </div>
-            <a href="/" className="checkout-status-page__cta">
+            <a href={ctaHref} className="checkout-status-page__cta">
               Accéder à mon espace
             </a>
           </div>

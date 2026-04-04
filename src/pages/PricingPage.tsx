@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPricingCheckoutSession } from "../lib/stripe/createPricingCheckoutSession";
 import { supabaseClient } from "../lib/supabase/client";
+import type { Plan } from "../lib/supabase/types";
 import "./PricingPage.css";
 
 type PricingPageProps = {
@@ -20,6 +21,7 @@ type PricingPlanContent = {
 
 type PricingPlan = PricingPlanContent & {
   id: string;
+  sourcePriceColumn: "stripe_price_id";
 };
 
 const OFFER_ORDER = ["fipla_private_mini", "fipla_private_full", "fipla_pro_solo"] as const;
@@ -53,8 +55,27 @@ const OFFER_CONTENT: Record<(typeof OFFER_ORDER)[number], PricingPlanContent> = 
   },
 };
 
-function getSafeCheckoutMessage() {
-  return "Le paiement ne peut pas être lancé pour le moment. Merci de réessayer dans un instant.";
+function getCheckoutErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Impossible de créer la session Stripe.";
+}
+
+function resolvePricingPlan(plan: Plan): PricingPlan | null {
+  const normalizedName = plan.name as (typeof OFFER_ORDER)[number];
+  const content = OFFER_CONTENT[normalizedName];
+
+  if (!content || !plan.active) {
+    return null;
+  }
+
+  const hasPriceId = typeof plan.stripe_price_id === "string" && plan.stripe_price_id.trim() !== "";
+
+  return hasPriceId
+    ? {
+        id: plan.id,
+        sourcePriceColumn: "stripe_price_id",
+        ...content,
+      }
+    : null;
 }
 
 export default function PricingPage({ profileId }: PricingPageProps) {
@@ -73,7 +94,7 @@ export default function PricingPage({ profileId }: PricingPageProps) {
 
       const { data, error } = await supabaseClient
         .from("plans")
-        .select("id, name, active")
+        .select("id, name, active, stripe_price_id")
         .in("name", [...OFFER_ORDER])
         .eq("active", true);
 
@@ -90,20 +111,15 @@ export default function PricingPage({ profileId }: PricingPageProps) {
 
       const nextPlans = OFFER_ORDER.map((offerName) => {
         const plan = (data ?? []).find((item) => item.name === offerName);
-        const content = OFFER_CONTENT[offerName];
-
-        if (!plan || !content) {
-          return null;
-        }
-
-        return {
-          id: plan.id,
-          ...content,
-        };
+        return plan ? resolvePricingPlan(plan as Plan) : null;
       }).filter((plan): plan is PricingPlan => Boolean(plan));
 
       setPlans(nextPlans);
-      setLoadError(nextPlans.length === OFFER_ORDER.length ? "" : "Certaines offres sont temporairement indisponibles.");
+      setLoadError(
+        nextPlans.length === OFFER_ORDER.length
+          ? ""
+          : "Certaines offres sont temporairement indisponibles ou incomplètement configurées."
+      );
       setIsLoading(false);
     };
 
@@ -124,7 +140,10 @@ export default function PricingPage({ profileId }: PricingPageProps) {
     setCheckoutError("");
 
     try {
-      const result = await createPricingCheckoutSession(plan.id);
+      const result = await createPricingCheckoutSession({
+        planId: plan.id,
+        profileId,
+      });
 
       if (!result.url) {
         throw new Error("Missing Stripe URL");
@@ -134,9 +153,10 @@ export default function PricingPage({ profileId }: PricingPageProps) {
     } catch (error) {
       console.error("[PricingPage] checkout failed", {
         planId: plan.id,
+        sourcePriceColumn: plan.sourcePriceColumn,
         error,
       });
-      setCheckoutError(getSafeCheckoutMessage());
+      setCheckoutError(getCheckoutErrorMessage(error));
       setActivePlanId(null);
     }
   };
