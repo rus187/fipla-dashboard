@@ -4,6 +4,7 @@ const path = require("path");
 const nodeCommand = process.execPath;
 const viteHost = "127.0.0.1";
 const vitePort = "4173";
+const stripeBackendPort = "3000";
 const viteBin = path.join(
   path.dirname(require.resolve("vite/package.json")),
   "bin",
@@ -48,12 +49,12 @@ function killProcessTreeWindows(pid) {
   });
 }
 
-function ensureVitePortAvailable() {
+function ensureNodePortAvailable(port, label) {
   if (process.platform !== "win32") {
     return;
   }
 
-  const listeningPids = getListeningPidsOnPortWindows(vitePort);
+  const listeningPids = getListeningPidsOnPortWindows(port);
 
   if (listeningPids.length === 0) {
     return;
@@ -65,7 +66,9 @@ function ensureVitePortAvailable() {
     const processName = getProcessNameWindows(pid);
 
     if (processName && processName.toLowerCase() === "node.exe") {
-      console.log(`Ancien process Node détecté sur le port ${vitePort} (PID ${pid}), arrêt automatique.`);
+      console.log(
+        `Ancien process Node détecté sur le port ${port} pour ${label} (PID ${pid}), arrêt automatique.`
+      );
       killProcessTreeWindows(pid);
       return;
     }
@@ -73,14 +76,14 @@ function ensureVitePortAvailable() {
     nonNodeOccupants.push({ pid, processName });
   });
 
-  const remainingPids = getListeningPidsOnPortWindows(vitePort);
+  const remainingPids = getListeningPidsOnPortWindows(port);
 
   if (remainingPids.length > 0) {
     const details = nonNodeOccupants
       .map((occupant) => `${occupant.processName || "processus inconnu"} (PID ${occupant.pid})`)
       .join(", ");
     console.error(
-      `Le port ${vitePort} est occupé par ${details || "un autre processus"}. Libère ce port puis relance npm run dev.`
+      `Le port ${port} est occupé pour ${label} par ${details || "un autre processus"}. Libère ce port puis relance npm run dev.`
     );
     process.exit(1);
   }
@@ -120,7 +123,8 @@ function shutdown(exitCode = 0) {
   process.exit(exitCode);
 }
 
-ensureVitePortAvailable();
+ensureNodePortAvailable(stripeBackendPort, "le backend Stripe");
+ensureNodePortAvailable(vitePort, "le serveur Vite");
 
 spawnProcess(nodeCommand, ["src/server/taxwareProxy.js"], "le proxy TaxWare");
 spawnProcess(nodeCommand, ["server/index.js"], "le backend Stripe");

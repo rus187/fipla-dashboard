@@ -24,13 +24,18 @@ import MobileSimulationFlow, {
   type MobileSimulationResult,
 } from "./MobileSimulationFlow";
 import MobileStatCard from "./MobileStatCard";
+import StripeCheckoutCard from "../StripeCheckoutCard";
 import useActiveClientDossier from "./useActiveClientDossier";
 
 type MobileModule = "home" | "simulation" | "reforme" | "domicile" | "enfant";
 
 type MobileAppProps = {
+  userId: string;
   userLabel: string;
+  profileId: string | null;
+  accessToken?: string;
   onLogout: () => void;
+  onBillingChanged?: () => void;
   onResolveLocation: (zip: string) => { locality: string } | null;
   onRunSimulation: (payload: MobileSimulationPayload) => Promise<MobileSimulationResult>;
   onRunReforme: (payload: MobileReformePayload) => Promise<MobileReformeResult>;
@@ -41,8 +46,12 @@ type MobileAppProps = {
 };
 
 export default function MobileApp({
+  userId,
   userLabel,
+  profileId,
+  accessToken = "",
   onLogout,
+  onBillingChanged,
   onResolveLocation,
   onRunSimulation,
   onRunReforme,
@@ -55,7 +64,7 @@ export default function MobileApp({
     updateActiveClientDossier,
     replaceActiveClientDossier,
     clearActiveClientDossier,
-  } = useActiveClientDossier();
+  } = useActiveClientDossier(userId);
 
   const handleSaveActiveDossier = (nextValue: MobileActiveClientDossier) => {
     replaceActiveClientDossier(nextValue);
@@ -86,6 +95,12 @@ export default function MobileApp({
               label="Conseiller connecté"
               value={userLabel}
               helper="Un accès mobile pensé pour la démonstration et la restitution en rendez-vous."
+            />
+
+            <StripeCheckoutCard
+              profileId={profileId}
+              accessToken={accessToken}
+              onBillingChanged={onBillingChanged}
             />
 
             <MobileActiveDossierCard

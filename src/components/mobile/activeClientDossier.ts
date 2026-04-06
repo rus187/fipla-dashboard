@@ -13,6 +13,7 @@ export type MobileActiveClientDossier = {
 };
 
 export const ACTIVE_CLIENT_DOSSIER_STORAGE_KEY = "fipla-mobile-active-client-dossier";
+export const MOBILE_WORKSPACE_STORAGE_PREFIX = "fipla-mobile-workspace";
 
 export const emptyActiveClientDossier: MobileActiveClientDossier = {
   prenom: "",

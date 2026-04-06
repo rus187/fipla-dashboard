@@ -40,7 +40,9 @@ export type ClientImmobilier = {
   fraisEntretienHabitationPropre: number;
   possedeBienRendement: boolean;
   loyersBiensRendement: number;
+  valeurFiscaleBiensRendement: number;
   interetsHypothecairesBiensRendement: number;
+  detteHypothecaireBiensRendement: number;
   fraisEntretienBiensRendement: number;
 };
 

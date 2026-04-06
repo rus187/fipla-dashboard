@@ -19,10 +19,14 @@ export type MobileReformePayload = {
   fortuneImposable: number;
   residencePrincipale: "oui" | "non";
   bienRendement: "oui" | "non";
-  valeurFiscale: number;
-  revenuLocatif: number;
-  interetsHypothecaires: number;
-  chargesLieesAuBien: number;
+  valeurLocativeHabitationPropre: number;
+  interetsHypothecairesHabitationPropre: number;
+  chargesHabitationPropre: number;
+  loyersBiensRendement: number;
+  valeurFiscaleBiensRendement: number;
+  interetsHypothecairesBiensRendement: number;
+  detteHypothecaireBiensRendement: number;
+  chargesBiensRendement: number;
 };
 
 export type MobileReformeResult = {
@@ -68,10 +72,14 @@ function createInitialState(activeDossier: MobileActiveClientDossier): MobileRef
     fortuneImposable: activeDossier.fortuneImposable,
     residencePrincipale: "oui",
     bienRendement: "non",
-    valeurFiscale: 0,
-    revenuLocatif: 0,
-    interetsHypothecaires: 0,
-    chargesLieesAuBien: 0,
+    valeurLocativeHabitationPropre: 0,
+    interetsHypothecairesHabitationPropre: 0,
+    chargesHabitationPropre: 0,
+    loyersBiensRendement: 0,
+    valeurFiscaleBiensRendement: 0,
+    interetsHypothecairesBiensRendement: 0,
+    detteHypothecaireBiensRendement: 0,
+    chargesBiensRendement: 0,
   };
 }
 
@@ -167,10 +175,13 @@ export default function MobileReformeVLFlow({
     form.fortuneImposable >= 0;
   const canRun = hasTaxwareContext && hasTaxwareBases;
 
-  const valeurLocativeAvant = form.residencePrincipale === "oui" ? Math.max(0, form.revenuLocatif) : 0;
+  const valeurLocativeAvant =
+    form.residencePrincipale === "oui" ? Math.max(0, form.valeurLocativeHabitationPropre) : 0;
   const ajustementReforme = Math.max(
     0,
-    form.chargesLieesAuBien + form.interetsHypothecaires - valeurLocativeAvant
+    form.chargesHabitationPropre +
+      form.interetsHypothecairesHabitationPropre -
+      valeurLocativeAvant
   );
   const baseIfdApresReforme = Math.max(0, form.revenuImposableIfd + ajustementReforme);
   const baseIccApresReforme = Math.max(0, form.revenuImposableIcc + ajustementReforme);
@@ -318,7 +329,7 @@ export default function MobileReformeVLFlow({
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    revenuLocatif: Number(event.target.value || 0),
+                    valeurLocativeHabitationPropre: Number(event.target.value || 0),
                   }))
                 }
               />
@@ -342,52 +353,120 @@ export default function MobileReformeVLFlow({
             </label>
 
             <label className="mobile-field">
-              <span className="mobile-field__label">Montant des revenus liés au bien</span>
+              <span className="mobile-field__label">Loyers encaissés biens de rendement</span>
               <input
                 className="mobile-field__input"
                 type="number"
                 inputMode="numeric"
-                value={form.revenuLocatif}
+                value={form.loyersBiensRendement}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    revenuLocatif: Number(event.target.value || 0),
+                    loyersBiensRendement: Number(event.target.value || 0),
                   }))
                 }
               />
             </label>
 
             <label className="mobile-field">
-              <span className="mobile-field__label">Intérêts hypothécaires</span>
+              <span className="mobile-field__label">Intérêts hypothécaires habitation propre</span>
               <input
                 className="mobile-field__input"
                 type="number"
                 inputMode="numeric"
-                value={form.interetsHypothecaires}
+                value={form.interetsHypothecairesHabitationPropre}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    interetsHypothecaires: Number(event.target.value || 0),
+                    interetsHypothecairesHabitationPropre: Number(event.target.value || 0),
                   }))
                 }
               />
             </label>
 
             <label className="mobile-field">
-              <span className="mobile-field__label">Charges liées au bien</span>
+              <span className="mobile-field__label">Charges habitation propre</span>
               <input
                 className="mobile-field__input"
                 type="number"
                 inputMode="numeric"
-                value={form.chargesLieesAuBien}
+                value={form.chargesHabitationPropre}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
-                    chargesLieesAuBien: Number(event.target.value || 0),
+                    chargesHabitationPropre: Number(event.target.value || 0),
                   }))
                 }
               />
             </label>
+
+            {form.bienRendement === "oui" ? (
+              <>
+                <label className="mobile-field">
+                  <span className="mobile-field__label">Valeur fiscale biens de rendement</span>
+                  <input
+                    className="mobile-field__input"
+                    type="number"
+                    inputMode="numeric"
+                    value={form.valeurFiscaleBiensRendement}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        valeurFiscaleBiensRendement: Number(event.target.value || 0),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="mobile-field">
+                  <span className="mobile-field__label">Intérêts hypothécaires biens de rendement</span>
+                  <input
+                    className="mobile-field__input"
+                    type="number"
+                    inputMode="numeric"
+                    value={form.interetsHypothecairesBiensRendement}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        interetsHypothecairesBiensRendement: Number(event.target.value || 0),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="mobile-field">
+                  <span className="mobile-field__label">Dette hypothécaire biens de rendement</span>
+                  <input
+                    className="mobile-field__input"
+                    type="number"
+                    inputMode="numeric"
+                    value={form.detteHypothecaireBiensRendement}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        detteHypothecaireBiensRendement: Number(event.target.value || 0),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="mobile-field">
+                  <span className="mobile-field__label">Frais d’entretien biens de rendement</span>
+                  <input
+                    className="mobile-field__input"
+                    type="number"
+                    inputMode="numeric"
+                    value={form.chargesBiensRendement}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        chargesBiensRendement: Number(event.target.value || 0),
+                      }))
+                    }
+                  />
+                </label>
+              </>
+            ) : null}
           </div>
           <div className="mobile-secondary-row">
             <button type="button" className="mobile-secondary-action" onClick={() => goToStep(0, "before:prev")}>
@@ -421,13 +500,13 @@ export default function MobileReformeVLFlow({
                 <div className="mobile-result-row">
                   <span className="mobile-result-row__name">Intérêts conservés</span>
                   <span className="mobile-result-row__value">
-                    {form.interetsHypothecaires.toLocaleString("fr-CH")} CHF
+                    {form.interetsHypothecairesHabitationPropre.toLocaleString("fr-CH")} CHF
                   </span>
                 </div>
                 <div className="mobile-result-row">
                   <span className="mobile-result-row__name">Charges conservées</span>
                   <span className="mobile-result-row__value">
-                    {form.chargesLieesAuBien.toLocaleString("fr-CH")} CHF
+                    {form.chargesHabitationPropre.toLocaleString("fr-CH")} CHF
                   </span>
                 </div>
                 <div className="mobile-result-row">
@@ -590,7 +669,14 @@ export default function MobileReformeVLFlow({
           ) : null}
 
           <div className="mobile-secondary-row">
-            <button type="button" className="mobile-secondary-action" onClick={() => goToStep(3, "comparison:prev")}>
+            <button
+              type="button"
+              className="mobile-secondary-action"
+              onClick={() => {
+                comparisonRequestedRef.current = false;
+                goToStep(3, "comparison:prev");
+              }}
+            >
               Précédent
             </button>
             {result ? (

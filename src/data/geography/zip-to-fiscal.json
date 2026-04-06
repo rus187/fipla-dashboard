@@ -1648,6 +1648,14 @@
     "fiscalCanton": "VD"
   },
   {
+    "zip": "1200",
+    "locality": "Genève",
+    "localityCanton": "GE",
+    "ofs": 6621,
+    "fiscalCommune": "Genève",
+    "fiscalCanton": "GE"
+  },
+  {
     "zip": "1201",
     "locality": "Genève",
     "localityCanton": "",

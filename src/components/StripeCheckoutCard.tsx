@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
+import { cancelStripeSubscription } from "../lib/stripe/cancelSubscription";
 import { createStripeCheckoutSession } from "../lib/stripe/createCheckoutSession";
+import {
+  fetchStripeAccessStatus,
+  type StripeAccessStatusResponse,
+} from "../lib/stripe/fetchAccessStatus";
 import { supabaseClient } from "../lib/supabase/client";
 import type { Plan } from "../lib/supabase/types";
 
 type StripeCheckoutCardProps = {
   profileId: string | null;
   organizationId?: string | null;
+  accessToken?: string;
+  onBillingChanged?: () => void;
 };
 
 type CheckoutOfferContent = {
@@ -85,6 +92,40 @@ function getCheckoutErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Impossible de créer la session Stripe.";
 }
 
+function getPlanDisplayLabel(plan: string | null) {
+  if (plan === "private_full") {
+    return "Full";
+  }
+
+  if (plan === "pro") {
+    return "Pro";
+  }
+
+  if (plan === "private_mini") {
+    return "Mini";
+  }
+
+  return "Aucun";
+}
+
+function formatAccessDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("fr-CH", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(parsedDate);
+}
+
 function resolveCheckoutOffer(plan: Plan): CheckoutOffer | null {
   const normalizedName = plan.name as (typeof OFFER_ORDER)[number];
   const content = OFFER_CONTENT[normalizedName];
@@ -113,6 +154,8 @@ function resolveCheckoutOffer(plan: Plan): CheckoutOffer | null {
 export default function StripeCheckoutCard({
   profileId,
   organizationId = null,
+  accessToken = "",
+  onBillingChanged,
 }: StripeCheckoutCardProps) {
   const [offers, setOffers] = useState<CheckoutOffer[]>([]);
   const [isLoadingOffers, setIsLoadingOffers] = useState(true);
@@ -120,6 +163,12 @@ export default function StripeCheckoutCard({
   const [checkoutError, setCheckoutError] = useState("");
   const [checkoutErrorOfferId, setCheckoutErrorOfferId] = useState<string | null>(null);
   const [activeOfferId, setActiveOfferId] = useState<string | null>(null);
+  const [accessStatus, setAccessStatus] = useState<StripeAccessStatusResponse | null>(null);
+  const [isLoadingAccessStatus, setIsLoadingAccessStatus] = useState(false);
+  const [accessStatusError, setAccessStatusError] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelNotice, setCancelNotice] = useState("");
+  const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -167,6 +216,55 @@ export default function StripeCheckoutCard({
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAccessStatus = async () => {
+      if (!accessToken) {
+        if (isMounted) {
+          setAccessStatus(null);
+          setAccessStatusError("");
+          setIsLoadingAccessStatus(false);
+        }
+        return;
+      }
+
+      setIsLoadingAccessStatus(true);
+      setAccessStatusError("");
+
+      try {
+        const nextAccessStatus = await fetchStripeAccessStatus(accessToken);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setAccessStatus(nextAccessStatus);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setAccessStatus(null);
+        setAccessStatusError(
+          error instanceof Error
+            ? error.message
+            : "Impossible de lire l'abonnement actuel pour le moment."
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingAccessStatus(false);
+        }
+      }
+    };
+
+    void loadAccessStatus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken]);
+
   const handleCheckout = async (offer: CheckoutOffer) => {
     if (activeOfferId) {
       return;
@@ -202,6 +300,19 @@ export default function StripeCheckoutCard({
   };
 
   const hasAvailableOffers = offers.length > 0;
+  const isRecurringPremiumPlan =
+    accessStatus?.billing_plan === "private_full" || accessStatus?.billing_plan === "pro";
+  const canCancelSubscription =
+    Boolean(accessStatus?.stripe_subscription_id) &&
+    isRecurringPremiumPlan &&
+    accessStatus?.subscription_status !== "canceled" &&
+    accessStatus?.billing_cancel_at_period_end !== true;
+  const isCancellationScheduled =
+    Boolean(accessStatus?.stripe_subscription_id) &&
+    isRecurringPremiumPlan &&
+    accessStatus?.billing_cancel_at_period_end === true;
+  const planDisplayLabel = getPlanDisplayLabel(accessStatus?.billing_plan ?? null);
+  const currentPeriodEndLabel = formatAccessDate(accessStatus?.billing_current_period_end ?? null);
   const reassuranceItems = [
     "Paiement sécurisé via Stripe",
     "Activation simple après validation",
@@ -212,6 +323,41 @@ export default function StripeCheckoutCard({
     "Les plans inactifs restent masqués automatiquement.",
     "Le backend conserve seul la résolution du plan, du mode et du type de paiement.",
   ];
+
+  const handleCancelSubscription = async () => {
+    if (!accessToken || isCancellingSubscription || !canCancelSubscription) {
+      return;
+    }
+
+    const shouldCancel = window.confirm(
+      "La résiliation stoppera le renouvellement automatique à la fin de la période en cours. Continuer ?"
+    );
+
+    if (!shouldCancel) {
+      return;
+    }
+
+    setIsCancellingSubscription(true);
+    setCancelError("");
+    setCancelNotice("");
+
+    try {
+      const nextAccessStatus = await cancelStripeSubscription(accessToken);
+      setAccessStatus(nextAccessStatus);
+      setCancelNotice(
+        nextAccessStatus.billing_cancel_at_period_end
+          ? `Résiliation planifiée${formatAccessDate(nextAccessStatus.billing_current_period_end) ? ` jusqu'au ${formatAccessDate(nextAccessStatus.billing_current_period_end)}` : ""}.`
+          : "Résiliation enregistrée."
+      );
+      onBillingChanged?.();
+    } catch (error) {
+      setCancelError(
+        error instanceof Error ? error.message : "Impossible de résilier l'abonnement."
+      );
+    } finally {
+      setIsCancellingSubscription(false);
+    }
+  };
 
   return (
     <section
@@ -312,6 +458,130 @@ export default function StripeCheckoutCard({
           </div>
         </div>
       </div>
+
+      {isLoadingAccessStatus || accessStatus || accessStatusError || cancelError || cancelNotice ? (
+        <div
+          style={{
+            display: "grid",
+            gap: "14px",
+            padding: "18px",
+            borderRadius: "22px",
+            background: "rgba(255, 255, 255, 0.9)",
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "14px",
+              alignItems: "start",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "grid", gap: "6px" }}>
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: 800,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "#17324d",
+                }}
+              >
+                Gestion de l'abonnement
+              </div>
+              <div style={{ fontSize: "20px", fontWeight: 800, color: "#0f172a" }}>
+                {isLoadingAccessStatus ? "Lecture de l'accès en cours..." : `Plan actuel : ${planDisplayLabel}`}
+              </div>
+              <div style={{ fontSize: "14px", lineHeight: 1.6, color: "#475569" }}>
+                {isCancellationScheduled
+                  ? currentPeriodEndLabel
+                    ? `Le renouvellement automatique est arrêté. L'accès reste actif jusqu'au ${currentPeriodEndLabel}.`
+                    : "Le renouvellement automatique est arrêté et l'accès reste actif jusqu'à la fin de la période en cours."
+                  : canCancelSubscription
+                    ? currentPeriodEndLabel
+                      ? `Abonnement récurrent actif jusqu'au ${currentPeriodEndLabel}, puis renouvelé automatiquement tant qu'il n'est pas résilié.`
+                      : "Abonnement récurrent actif avec renouvellement automatique."
+                    : accessStatus?.billing_plan === "private_mini"
+                      ? "Le plan Mini reste un achat ponctuel et n'affiche donc pas de résiliation d'abonnement."
+                      : "Aucun abonnement récurrent actif détecté sur ce compte."}
+              </div>
+            </div>
+
+            {canCancelSubscription ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void handleCancelSubscription();
+                }}
+                disabled={isCancellingSubscription}
+                style={{
+                  minHeight: "48px",
+                  padding: "0 18px",
+                  borderRadius: "14px",
+                  border: "1px solid rgba(220, 38, 38, 0.18)",
+                  background: isCancellingSubscription ? "#fecaca" : "#fee2e2",
+                  color: "#991b1b",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                  cursor: isCancellingSubscription ? "wait" : "pointer",
+                }}
+              >
+                {isCancellingSubscription ? "Résiliation en cours..." : "Résilier l'abonnement"}
+              </button>
+            ) : null}
+          </div>
+
+          {accessStatusError ? (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: "14px",
+                background: "#fff7ed",
+                border: "1px solid #fed7aa",
+                color: "#c2410c",
+                fontSize: "13px",
+                lineHeight: 1.5,
+              }}
+            >
+              {accessStatusError}
+            </div>
+          ) : null}
+
+          {cancelError ? (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: "14px",
+                background: "#fff1f2",
+                border: "1px solid #fecdd3",
+                color: "#be123c",
+                fontSize: "13px",
+                lineHeight: 1.5,
+              }}
+            >
+              {cancelError}
+            </div>
+          ) : null}
+
+          {cancelNotice ? (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: "14px",
+                background: "#eff6ff",
+                border: "1px solid #bfdbfe",
+                color: "#1d4ed8",
+                fontSize: "13px",
+                lineHeight: 1.5,
+              }}
+            >
+              {cancelNotice}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div
         style={{

@@ -36,7 +36,9 @@ export const emptyDossier: DossierClient = {
     fraisEntretienHabitationPropre: 0,
     possedeBienRendement: false,
     loyersBiensRendement: 0,
+    valeurFiscaleBiensRendement: 0,
     interetsHypothecairesBiensRendement: 0,
+    detteHypothecaireBiensRendement: 0,
     fraisEntretienBiensRendement: 0,
   },
   fortune: {
@@ -127,7 +129,9 @@ export const mockDossier: DossierClient = {
     fraisEntretienHabitationPropre: 3200,
     possedeBienRendement: true,
     loyersBiensRendement: 24000,
+    valeurFiscaleBiensRendement: 0,
     interetsHypothecairesBiensRendement: 6500,
+    detteHypothecaireBiensRendement: 0,
     fraisEntretienBiensRendement: 2100,
   },
   fortune: {

@@ -1372,6 +1372,8 @@ function buildAccessStatusPayload({ profile, organization, subscription, accessS
     organization_id: organization?.id ?? null,
     billing_plan: normalizeOptionalString(organization?.billing_plan) ?? null,
     billing_status: normalizeOptionalString(organization?.billing_status) ?? null,
+    billing_current_period_end: organization?.billing_current_period_end ?? null,
+    billing_cancel_at_period_end: Boolean(organization?.billing_cancel_at_period_end),
     stripe_customer_id: normalizeOptionalString(organization?.stripe_customer_id) ?? null,
     stripe_subscription_id:
       normalizeOptionalString(organization?.stripe_subscription_id) ??
@@ -2731,6 +2733,8 @@ app.get("/api/stripe/access-status", async (req, res) => {
       organization_id: null,
       billing_plan: null,
       billing_status: null,
+      billing_current_period_end: null,
+      billing_cancel_at_period_end: false,
       subscription_status: null,
       stripe_subscription_id: null,
     });
@@ -2759,6 +2763,8 @@ app.get("/api/stripe/access-status", async (req, res) => {
       organization_id: null,
       billing_plan: null,
       billing_status: null,
+      billing_current_period_end: null,
+      billing_cancel_at_period_end: false,
       subscription_status: null,
       stripe_subscription_id: null,
     });
@@ -2799,6 +2805,203 @@ app.get("/api/stripe/access-status", async (req, res) => {
   console.info("[stripe:access-status] resolved", payload);
 
   return res.json(payload);
+});
+
+app.post("/api/stripe/cancel-subscription", async (req, res) => {
+  const resolvedProfileContext = await resolveProfileFromAuthorizationHeader(req);
+
+  if (resolvedProfileContext.error) {
+    return res.status(401).json({
+      error: "Authentification requise pour résilier l'abonnement",
+      details: serializeOperationalError(resolvedProfileContext.error).message,
+    });
+  }
+
+  const profile = resolvedProfileContext.profile;
+
+  if (!profile) {
+    return res.status(404).json({
+      error: "Profil introuvable pour cette résiliation",
+    });
+  }
+
+  const {
+    organization,
+    subscription,
+    error: accessResolutionError,
+  } = await resolveAccessOrganizationForProfile(profile);
+
+  if (accessResolutionError) {
+    return res.status(500).json({
+      error: "Impossible de lire l'organisation pour cette résiliation",
+      details: accessResolutionError.message,
+    });
+  }
+
+  if (!organization) {
+    return res.status(404).json({
+      error: "Aucune organisation rattachee a ce profil",
+    });
+  }
+
+  const normalizedBillingPlan = normalizeOptionalString(organization.billing_plan);
+  const stripeSubscriptionId =
+    normalizeOptionalString(organization.stripe_subscription_id) ??
+    normalizeOptionalString(subscription?.stripe_subscription_id);
+
+  if (!stripeSubscriptionId || !premiumBillingPlans.has(normalizedBillingPlan ?? "")) {
+    return res.status(409).json({
+      error: "Aucun abonnement recurrent actif a resilier",
+      organization_id: organization.id,
+      billing_plan: normalizedBillingPlan,
+    });
+  }
+
+  try {
+    let stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+      expand: ["items.data.price"],
+    });
+
+    if (!stripeSubscription.cancel_at_period_end) {
+      await stripe.subscriptions.update(stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      });
+
+      stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+        expand: ["items.data.price"],
+      });
+    }
+
+    const primaryItem = getSubscriptionPrimaryItem(stripeSubscription);
+    const stripePriceId = getStripePriceId(primaryItem?.price);
+    const billingCycle = normalizeBillingCycle(getStripePriceInterval(primaryItem?.price));
+    const metadata = resolveStripeMetadata({
+      sessionMetadata: null,
+      subscriptionMetadata: stripeSubscription.metadata,
+    });
+    const plan = await resolvePlanForStripeContext({
+      metadata,
+      stripePriceId,
+    });
+    const stripeCustomerId = getStripeCustomerId(stripeSubscription.customer);
+
+    await syncStripeCustomerReferences({
+      profile,
+      organization,
+      stripeCustomerId,
+    });
+
+    const linkedOrganization = await ensureOrganizationOwnedByProfile({
+      profile,
+      organization,
+      source: "cancel-subscription",
+    });
+
+    const { data: existingSubscriptionRow, error: existingSubscriptionError } =
+      await getSubscriptionRowByStripeSubscriptionId(stripeSubscription.id);
+
+    if (existingSubscriptionError) {
+      return res.status(500).json({
+        error: "Impossible de lire l'abonnement local avant mise a jour",
+        details: existingSubscriptionError.message,
+      });
+    }
+
+    if (existingSubscriptionRow) {
+      const updatedRows = await updateStripeSubscriptionSnapshot({
+        subscription: stripeSubscription,
+        plan,
+        stripeCustomerId,
+        stripePriceId,
+        billingCycle,
+        source: "cancel-subscription",
+      });
+
+      if (updatedRows === null) {
+        return res.status(500).json({
+          error: "Impossible de synchroniser l'abonnement apres la résiliation Stripe",
+        });
+      }
+    } else {
+      const upsertedSubscription = await upsertStripeSubscriptionInSupabase({
+        subscription: stripeSubscription,
+        profile,
+        organization: linkedOrganization,
+        plan,
+        stripeCustomerId,
+        stripeCheckoutSessionId: null,
+        stripePriceId,
+        customerEmail: profile.email ?? null,
+        billingCycle,
+        source: "cancel-subscription",
+        checkoutMode: "subscription",
+        checkoutPaymentStatus: null,
+      });
+
+      if (upsertedSubscription === null) {
+        return res.status(500).json({
+          error: "Impossible de creer la trace locale de l'abonnement apres la résiliation Stripe",
+        });
+      }
+    }
+
+    const { data: refreshedOrganization, error: refreshedOrganizationError } =
+      await getOrganizationById(linkedOrganization.id);
+
+    if (refreshedOrganizationError) {
+      return res.status(500).json({
+        error: "Impossible de relire l'organisation apres la résiliation",
+        details: refreshedOrganizationError.message,
+      });
+    }
+
+    const { data: refreshedSubscription, error: refreshedSubscriptionError } =
+      await getLatestSubscriptionByOrganizationId(linkedOrganization.id);
+
+    if (refreshedSubscriptionError) {
+      return res.status(500).json({
+        error: "Impossible de relire l'abonnement apres la résiliation",
+        details: refreshedSubscriptionError.message,
+      });
+    }
+
+    const resolvedOrganization = refreshedOrganization ?? linkedOrganization;
+    const resolvedSubscription = refreshedSubscription ?? subscription;
+    const payload = buildAccessStatusPayload({
+      profile,
+      organization: resolvedOrganization,
+      subscription: resolvedSubscription,
+      accessStatus: hasPaidAccessFromBillingContext({
+        organization: resolvedOrganization,
+        subscription: resolvedSubscription,
+      }),
+    });
+
+    console.info("[stripe:cancel-subscription] success", {
+      profileId: profile.id,
+      organizationId: resolvedOrganization.id,
+      stripeSubscriptionId: stripeSubscription.id,
+      billingPlan: resolvedOrganization.billing_plan ?? null,
+      cancelAtPeriodEnd: resolvedOrganization.billing_cancel_at_period_end ?? null,
+      currentPeriodEnd: resolvedOrganization.billing_current_period_end ?? null,
+    });
+
+    return res.json(payload);
+  } catch (error) {
+    const serializedError = serializeOperationalError(error);
+    console.error("[stripe:cancel-subscription] failed", {
+      profileId: profile.id,
+      organizationId: organization.id,
+      stripeSubscriptionId,
+      error: serializedError,
+    });
+    return res.status(500).json({
+      error: serializedError.message,
+      details: serializedError.details,
+      code: serializedError.code,
+      type: serializedError.type,
+    });
+  }
 });
 
 app.post("/api/stripe/reconcile-checkout-session", async (req, res) => {

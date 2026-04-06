@@ -612,6 +612,34 @@ function getLocalRentalPropertyTaxBase(dossier: DossierClient) {
   return loyers - interets - frais;
 }
 
+function getRentalPropertyTaxableValue(dossier: DossierClient) {
+  if (!dossier.immobilier.possedeBienRendement) {
+    return 0;
+  }
+
+  return dossier.immobilier.valeurFiscaleBiensRendement || 0;
+}
+
+function getRentalPropertyMortgageDebt(dossier: DossierClient) {
+  if (!dossier.immobilier.possedeBienRendement) {
+    return 0;
+  }
+
+  return dossier.immobilier.detteHypothecaireBiensRendement || 0;
+}
+
+function getTotalRealEstateFiscalValue(dossier: DossierClient) {
+  return (dossier.fortune.immobilier || 0) + getRentalPropertyTaxableValue(dossier);
+}
+
+function getTotalMortgageDebt(dossier: DossierClient) {
+  return (dossier.dettes.hypotheques || 0) + getRentalPropertyMortgageDebt(dossier);
+}
+
+function getRentalPropertyNetTaxableAssetsAdjustment(dossier: DossierClient) {
+  return getRentalPropertyTaxableValue(dossier) - getRentalPropertyMortgageDebt(dossier);
+}
+
 function getLocalSimulatedTaxableAssets(dossier: DossierClient) {
   const liquiditesAjustees =
     (dossier.fortune.liquidites || 0) -
@@ -619,8 +647,8 @@ function getLocalSimulatedTaxableAssets(dossier: DossierClient) {
     (dossier.fiscalite.rachatLpp || 0) +
     (dossier.fiscalite.ajustementManuelRevenu || 0);
   const fortuneFiscale =
-    liquiditesAjustees + (dossier.fortune.titres || 0) + (dossier.fortune.immobilier || 0);
-  const totalDettes = (dossier.dettes.hypotheques || 0) + (dossier.dettes.autresDettes || 0);
+    liquiditesAjustees + (dossier.fortune.titres || 0) + getTotalRealEstateFiscalValue(dossier);
+  const totalDettes = getTotalMortgageDebt(dossier) + (dossier.dettes.autresDettes || 0);
 
   return Math.max(
     0,
@@ -758,7 +786,7 @@ function getVariantPatrimoineBreakdown(variant: ScenarioVariant) {
   return [
     { label: "Liquidités", montant: Math.max(0, liquiditesAjustees) },
     { label: "Titres", montant: variant.dossier.fortune.titres || 0 },
-    { label: "Immobilier", montant: variant.dossier.fortune.immobilier || 0 },
+    { label: "Immobilier", montant: getTotalRealEstateFiscalValue(variant.dossier) },
     { label: "3e pilier", montant: troisiemePilier || 0 },
     { label: "LPP", montant: fortuneLpp || 0 },
   ].filter((item) => item.montant > 0);
@@ -823,9 +851,9 @@ function getVariantComparisonMetrics(variant: ScenarioVariant) {
     (dossier.fortune.titres || 0) +
     troisiemePilierPatrimonial +
     fortuneLppPatrimoniale +
-    (dossier.fortune.immobilier || 0);
+    getTotalRealEstateFiscalValue(dossier);
 
-  const totalDettes = (dossier.dettes.hypotheques || 0) + (dossier.dettes.autresDettes || 0);
+  const totalDettes = getTotalMortgageDebt(dossier) + (dossier.dettes.autresDettes || 0);
 
   return {
     impotTotal,
@@ -1025,6 +1053,7 @@ export default function App() {
   const [simulationCredits, setSimulationCredits] = useState(0);
   const [isSimulationAccessUnlocked, setIsSimulationAccessUnlocked] = useState(false);
   const [isSimulationAccessLoading, setIsSimulationAccessLoading] = useState(false);
+  const [billingRefreshNonce, setBillingRefreshNonce] = useState(0);
   const [showUsageLimitModal, setShowUsageLimitModal] = useState(false);
   const [usageLimitError, setUsageLimitError] = useState("");
   const [isPreparingCheckout, setIsPreparingCheckout] = useState(false);
@@ -1734,6 +1763,10 @@ export default function App() {
     ? dossier.immobilier.fraisEntretienBiensRendement || 0
     : 0;
 
+  const valeurFiscaleBiensRendementRetenue = getRentalPropertyTaxableValue(dossier);
+  const fortuneImmobiliereTotaleCalculee = getTotalRealEstateFiscalValue(dossier);
+  const hypothequesTotalesCalculees = getTotalMortgageDebt(dossier);
+
   const liquiditesAjusteesCalcule =
     (dossier.fortune.liquidites || 0) -
     (dossier.fiscalite.troisiemePilierSimule || 0) -
@@ -1753,16 +1786,15 @@ export default function App() {
     (dossier.fortune.titres || 0) +
     troisiemePilierPatrimonialCalcule +
     fortuneLppPatrimonialeCalcule +
-    (dossier.fortune.immobilier || 0);
+    fortuneImmobiliereTotaleCalculee;
 
   const fortuneFiscaleCalcule =
     liquiditesAjusteesCalcule +
     (dossier.fortune.titres || 0) +
-    (dossier.fortune.immobilier || 0);
+    fortuneImmobiliereTotaleCalculee;
 
   const totalDettesCalcule =
-    (dossier.dettes.hypotheques || 0) +
-    (dossier.dettes.autresDettes || 0);
+    hypothequesTotalesCalculees + (dossier.dettes.autresDettes || 0);
 
   const fortuneNetteFiscaleCalcule = Math.max(
     0,
@@ -1798,6 +1830,8 @@ export default function App() {
     dossier.fiscalite.fortuneImposableActuelleSaisie || 0
   );
   const ajustementBienRendementSimulation = getLocalRentalPropertyTaxBase(dossier);
+  const ajustementFortuneBiensRendementSimulation =
+    getRentalPropertyNetTaxableAssetsAdjustment(dossier);
   const fortuneImposableLocaleSimulee = getLocalSimulatedTaxableAssets(dossier);
   const utiliseFortuneLocaleSimulee = hasLocalSimulatedTaxableAssetsInputs(dossier);
 
@@ -1829,7 +1863,12 @@ export default function App() {
   );
   const fortuneImposableSimulee = utiliseFortuneLocaleSimulee
     ? fortuneImposableLocaleSimulee
-    : Math.max(0, fortuneImposableReference + totalAjustementsSimulationFortune);
+    : Math.max(
+        0,
+        fortuneImposableReference +
+          ajustementFortuneBiensRendementSimulation +
+          totalAjustementsSimulationFortune
+      );
 
   const revenuImposableTaxwareIfd =
     typeof taxResultAffiche?.normalized?.taxableIncomeFederal === "number"
@@ -2203,6 +2242,7 @@ export default function App() {
     ...(biensRendementActifs
       ? [
           {
+            taxableValue: valeurFiscaleBiensRendementRetenue,
             rentalIncome: loyersBiensRendementImposables,
             effectiveExpenses: fraisBiensRendementDeductibles,
           },
@@ -2210,7 +2250,9 @@ export default function App() {
       : []),
   ].filter(
     (realEstate) =>
-      Number(realEstate.rentalIncome || 0) > 0 || Number(realEstate.effectiveExpenses || 0) > 0
+      Number(realEstate.taxableValue || 0) > 0 ||
+      Number(realEstate.rentalIncome || 0) > 0 ||
+      Number(realEstate.effectiveExpenses || 0) > 0
   );
 
   const revenusImmobiliersTaxware = realEstatesTaxware.reduce(
@@ -2409,13 +2451,13 @@ export default function App() {
     (referenceDossier.fortune.titres || 0) +
     referenceTroisiemePilierPatrimonialCalcule +
     referenceFortuneLppPatrimonialeCalcule +
-    (referenceDossier.fortune.immobilier || 0);
+    getTotalRealEstateFiscalValue(referenceDossier);
   const referenceFortuneFiscaleCalcule =
     referenceLiquiditesAjusteesCalcule +
     (referenceDossier.fortune.titres || 0) +
-    (referenceDossier.fortune.immobilier || 0);
+    getTotalRealEstateFiscalValue(referenceDossier);
   const referenceTotalDettesCalcule =
-    (referenceDossier.dettes.hypotheques || 0) + (referenceDossier.dettes.autresDettes || 0);
+    getTotalMortgageDebt(referenceDossier) + (referenceDossier.dettes.autresDettes || 0);
   const referenceFortuneNetteFiscaleCalcule = Math.max(
     0,
     referenceFortuneFiscaleCalcule - referenceTotalDettesCalcule
@@ -2916,11 +2958,14 @@ export default function App() {
     const immobilierSimulationDelta = reformProfile.taxableIncomeDelta;
     const ajustementBienRendementSimulation =
       getLocalRentalPropertyTaxBase(dossierForSimulation);
+    const ajustementFortuneBiensRendementSimulation =
+      getRentalPropertyNetTaxableAssetsAdjustment(dossierForSimulation);
     const taxableAssets = hasLocalSimulatedTaxableAssetsInputs(dossierForSimulation)
       ? getLocalSimulatedTaxableAssets(dossierForSimulation)
       : Math.max(
           0,
           (dossierForSimulation.fiscalite.fortuneImposableActuelleSaisie || 0) +
+            ajustementFortuneBiensRendementSimulation +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleFortune || 0)
         );
 
@@ -3478,17 +3523,21 @@ export default function App() {
     fortuneImposable: number;
     immobilier?: Partial<DossierClient["immobilier"]>;
     immobilierFortune?: number;
+    hypotheques?: number;
   }) => {
     const location = getMobileLocationSuggestion(params.zip);
     const locality = params.locality.trim() || location?.locality || "";
     const fiscalCommune = location?.fiscalCommune || locality;
     const canton = location?.canton || "";
     const immobilierFortune = params.immobilierFortune ?? 0;
+    const hypotheques = params.hypotheques ?? 0;
     const variationRevenu = params.variationRevenu ?? 0;
-    const baseLiquidites = Math.max(
-      0,
-      params.fortuneImposable + params.troisiemePilier + params.rachatLpp
-    );
+    const baseLiquidites =
+      params.fortuneImposable +
+      params.troisiemePilier +
+      params.rachatLpp -
+      immobilierFortune +
+      hypotheques;
 
     return {
       ...cloneDossier(emptyDossier),
@@ -3527,8 +3576,9 @@ export default function App() {
       },
       dettes: {
         ...emptyDossier.dettes,
+        hypotheques: Math.max(0, hypotheques),
         autresDettes: 0,
-        totalDettes: 0,
+        totalDettes: Math.max(0, hypotheques),
       },
       fiscalite: {
         ...emptyDossier.fiscalite,
@@ -3690,9 +3740,17 @@ export default function App() {
     }
 
     const valeurLocativeReference =
-      payload.residencePrincipale === "oui" ? Math.max(0, payload.revenuLocatif) : 0;
+      payload.residencePrincipale === "oui"
+        ? Math.max(0, payload.valeurLocativeHabitationPropre)
+        : 0;
     const rendementReference =
-      payload.bienRendement === "oui" ? Math.max(0, payload.revenuLocatif) : 0;
+      payload.bienRendement === "oui" ? Math.max(0, payload.loyersBiensRendement) : 0;
+    const valeurFiscaleRendementReference =
+      payload.bienRendement === "oui" ? Math.max(0, payload.valeurFiscaleBiensRendement) : 0;
+    const detteHypothecaireRendementReference =
+      payload.bienRendement === "oui"
+        ? Math.max(0, payload.detteHypothecaireBiensRendement)
+        : 0;
 
     const dossierForSimulation = buildMobileBaseDossier({
       prenom: payload.prenom,
@@ -3706,15 +3764,26 @@ export default function App() {
       troisiemePilier: 0,
       rachatLpp: 0,
       fortuneImposable: payload.fortuneImposable,
+      immobilierFortune: valeurFiscaleRendementReference,
+      hypotheques: detteHypothecaireRendementReference,
       immobilier: {
         proprietaireOccupant: payload.residencePrincipale === "oui",
         possedeBienRendement: payload.bienRendement === "oui",
         valeurLocativeHabitationPropre: valeurLocativeReference,
-        interetsHypothecairesHabitationPropre: payload.interetsHypothecaires,
-        fraisEntretienHabitationPropre: payload.chargesLieesAuBien,
+        interetsHypothecairesHabitationPropre: Math.max(
+          0,
+          payload.interetsHypothecairesHabitationPropre
+        ),
+        fraisEntretienHabitationPropre: Math.max(0, payload.chargesHabitationPropre),
         loyersBiensRendement: rendementReference,
-        interetsHypothecairesBiensRendement: payload.bienRendement === "oui" ? payload.interetsHypothecaires : 0,
-        fraisEntretienBiensRendement: payload.bienRendement === "oui" ? payload.chargesLieesAuBien : 0,
+        valeurFiscaleBiensRendement: valeurFiscaleRendementReference,
+        interetsHypothecairesBiensRendement:
+          payload.bienRendement === "oui"
+            ? Math.max(0, payload.interetsHypothecairesBiensRendement)
+            : 0,
+        detteHypothecaireBiensRendement: detteHypothecaireRendementReference,
+        fraisEntretienBiensRendement:
+          payload.bienRendement === "oui" ? Math.max(0, payload.chargesBiensRendement) : 0,
       },
     });
 
@@ -3771,11 +3840,15 @@ export default function App() {
           rows: [
             {
               label: "Revenu locatif retenu",
-              value: formatMontantCHFArrondi(payload.revenuLocatif),
+              value: formatMontantCHFArrondi(payload.loyersBiensRendement),
             },
             {
               label: "Valeur fiscale",
-              value: formatMontantCHFArrondi(payload.valeurFiscale),
+              value: formatMontantCHFArrondi(payload.valeurFiscaleBiensRendement),
+            },
+            {
+              label: "Dette hypothécaire",
+              value: formatMontantCHFArrondi(payload.detteHypothecaireBiensRendement),
             },
           ],
         },
@@ -4956,7 +5029,7 @@ export default function App() {
     totalIncome: totalRevenusCalcule,
     totalWealth: fortuneBruteCalcule,
     hasRealEstate: Boolean(
-      (dossier.fortune.immobilier || 0) > 0 || habitationPropreActive || biensRendementActifs
+      getTotalRealEstateFiscalValue(dossier) > 0 || habitationPropreActive || biensRendementActifs
     ),
     realEstateRegime: dossier.immobilier.regimeFiscal,
     taxGainVsBase: bestVariantGainVsBase,
@@ -5053,7 +5126,7 @@ export default function App() {
     },
     {
       label: "Immobilier (Valeur fiscale)",
-      value: proposedDossier.fortune.immobilier || 0,
+      value: getTotalRealEstateFiscalValue(proposedDossier),
       color: "#1f4c7a",
     },
     {
@@ -5105,7 +5178,7 @@ export default function App() {
         { label: "Liquidités", value: formatMontantCHF(referenceDossier.fortune.liquidites) },
         { label: "Fortune mobilière", value: formatMontantCHF(referenceDossier.fortune.titres) },
         { label: "3e pilier", value: formatMontantCHF(referenceTroisiemePilierPatrimonialCalcule) },
-        { label: "Immobilier", value: formatMontantCHF(referenceDossier.fortune.immobilier) },
+        { label: "Immobilier", value: formatMontantCHF(getTotalRealEstateFiscalValue(referenceDossier)) },
         { label: "Fortune brute", value: formatMontantCHF(referenceFortuneBruteCalcule) },
         { label: "Fortune nette fiscale", value: formatMontantCHF(referenceFortuneNetteFiscaleCalcule) },
       ],
@@ -5598,6 +5671,7 @@ export default function App() {
       isMounted = false;
     };
   }, [
+    billingRefreshNonce,
     isCheckoutSuccessRoute,
     pendingCheckoutSessionStorageKey,
     profile,
@@ -6614,9 +6688,16 @@ export default function App() {
       <>
         {freeSimulationUsageBanner}
         <MobileApp
+          key={user.id}
+          userId={user.id}
           userLabel={session?.user?.email ?? user.email ?? "utilisateur"}
+          profileId={profile?.id ?? null}
+          accessToken={session?.access_token ?? ""}
           onLogout={() => {
             void handleLogout();
+          }}
+          onBillingChanged={() => {
+            setBillingRefreshNonce((current) => current + 1);
           }}
           onResolveLocation={(zip) => {
             const match = getMobileLocationSuggestion(zip);
@@ -6772,7 +6853,13 @@ export default function App() {
                 </div>
               ) : null}
             </div>
-            <StripeCheckoutCard profileId={profile?.id ?? null} />
+            <StripeCheckoutCard
+              profileId={profile?.id ?? null}
+              accessToken={session?.access_token ?? ""}
+              onBillingChanged={() => {
+                setBillingRefreshNonce((current) => current + 1);
+              }}
+            />
 
             <DecisionIntro
               analysisMode={analysisMode}
@@ -8116,6 +8203,49 @@ export default function App() {
                       />
                       <span style={helperStyle}>
                         Pris en compte avec le bien de rendement dans le calcul fiscal.
+                      </span>
+                    </div>
+
+                    <div style={immobilierFieldCardStyle}>
+                      <label style={labelStyle}>Valeur fiscale biens de rendement</label>
+                      <input
+                        type="number"
+                        value={dossier.immobilier.valeurFiscaleBiensRendement}
+                        onChange={(e) =>
+                          setDossier({
+                            ...dossier,
+                            immobilier: {
+                              ...dossier.immobilier,
+                              valeurFiscaleBiensRendement: numberValue(e.target.value),
+                            },
+                          })
+                        }
+                        style={inputStyle}
+                      />
+                      <span style={helperStyle}>
+                        Ajoutée à la fortune immobilière utilisée pour la lecture patrimoniale et
+                        fiscale.
+                      </span>
+                    </div>
+
+                    <div style={immobilierFieldCardStyle}>
+                      <label style={labelStyle}>Dette hypothécaire biens de rendement</label>
+                      <input
+                        type="number"
+                        value={dossier.immobilier.detteHypothecaireBiensRendement}
+                        onChange={(e) =>
+                          setDossier({
+                            ...dossier,
+                            immobilier: {
+                              ...dossier.immobilier,
+                              detteHypothecaireBiensRendement: numberValue(e.target.value),
+                            },
+                          })
+                        }
+                        style={inputStyle}
+                      />
+                      <span style={helperStyle}>
+                        Ajoutée aux hypothèques totales sans modifier le traitement des intérêts.
                       </span>
                     </div>
 
@@ -11292,7 +11422,7 @@ export default function App() {
                     ["Titres", formatMontantCHF(dossier.fortune.titres)],
                     ["3e pilier", formatMontantCHF(troisiemePilierPatrimonialCalcule)],
                     ["Fortune LPP actuelle", formatMontantCHF(fortuneLppPatrimonialeCalcule)],
-                    ["Immobilier", formatMontantCHF(dossier.fortune.immobilier)],
+                    ["Immobilier", formatMontantCHF(fortuneImmobiliereTotaleCalculee)],
                     ["Fortune brute", formatMontantCHF(fortuneBruteCalcule)],
                     ["Fortune fiscale", formatMontantCHF(fortuneFiscaleCalcule)],
                     ["Fortune nette fiscale", formatMontantCHF(fortuneNetteFiscaleCalcule)],
@@ -11301,7 +11431,7 @@ export default function App() {
                 {
                   titre: "Dettes",
                   lignes: [
-                    ["Hypothèques", formatMontantCHF(dossier.dettes.hypotheques)],
+                    ["Hypothèques", formatMontantCHF(hypothequesTotalesCalculees)],
                     ["Autres dettes", formatMontantCHF(dossier.dettes.autresDettes)],
                     ["Total dettes", formatMontantCHF(totalDettesCalcule)],
                   ],

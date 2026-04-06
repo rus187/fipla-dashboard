@@ -1,4 +1,4 @@
-type StripeAccessStatusResponse = {
+export type StripeAccessStatusResponse = {
   has_paid_access: boolean;
   source: string | null;
   simulation_credits: number;
@@ -6,6 +6,8 @@ type StripeAccessStatusResponse = {
   organization_id: string | null;
   billing_plan: string | null;
   billing_status: string | null;
+  billing_current_period_end: string | null;
+  billing_cancel_at_period_end: boolean;
   subscription_status: string | null;
   stripe_subscription_id: string | null;
 };

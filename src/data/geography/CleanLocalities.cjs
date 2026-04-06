@@ -29,6 +29,10 @@ if (idxZip === -1 || idxLocality === -1) {
 }
 
 const rows = [];
+const manualRows = [
+  // Taxware reconnaît Genève 1200, mais la source swiss-localities.csv ne l'expose pas.
+  { zip: "1200", locality: "Genève", canton: "GE", ofs: 6621 },
+];
 
 for (let i = 1; i < lines.length; i++) {
   const cols = lines[i].split(";").map((c) => c.trim());
@@ -46,6 +50,31 @@ for (let i = 1; i < lines.length; i++) {
     canton,
     ofs: ofsRaw && !isNaN(Number(ofsRaw)) ? Number(ofsRaw) : null,
   });
+}
+
+for (const manualRow of manualRows) {
+  const exists = rows.some(
+    (row) =>
+      row.zip === manualRow.zip &&
+      row.locality === manualRow.locality &&
+      row.ofs === manualRow.ofs
+  );
+
+  if (exists) continue;
+
+  const insertIndex = rows.findIndex((row) => {
+    if (row.zip !== manualRow.zip) {
+      return row.zip.localeCompare(manualRow.zip, "fr-CH", { numeric: true }) > 0;
+    }
+
+    return (row.locality || "").localeCompare(manualRow.locality, "fr-CH") > 0;
+  });
+
+  if (insertIndex === -1) {
+    rows.push(manualRow);
+  } else {
+    rows.splice(insertIndex, 0, manualRow);
+  }
 }
 
 fs.writeFileSync(outputFile, JSON.stringify(rows, null, 2), "utf8");
