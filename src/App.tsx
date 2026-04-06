@@ -105,6 +105,8 @@ const SIMULATION_UNLOCKED_STORAGE_PREFIX = "fipla-simulations-unlocked";
 const DESKTOP_WORKSPACE_STORAGE_PREFIX = "fipla-desktop-workspace";
 const PENDING_CHECKOUT_SESSION_STORAGE_PREFIX = "fipla-pending-checkout-session";
 const GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY = "fipla-pending-checkout-session-global";
+const DOMICILE_OCCUPATIONAL_EXPENSE_FLOOR = 2000;
+const DOMICILE_SECOND_EARNER_FEDERAL_FLOOR = 6650;
 const VARIANT_TAX_REGIME_LABELS: Record<VariantTaxRegime, string> = {
   current: "Situation actuelle",
   valeur_locative_reform: "Réforme valeur locative",
@@ -1875,7 +1877,24 @@ export default function App() {
       ? taxResultAffiche.normalized.taxableIncomeFederal
       : revenuImposableIfdReference;
 
-  const revenuImposableApresSimulationCalcule = revenuImposableCantonalSimule;
+  const activeVariantCalculatorLabel =
+    `${activeVariant.customLabel} ${activeVariant.label}`.toLowerCase();
+  const isDomicileTaxwareResult =
+    (activeDesktopCalculator === "changement-domicile" ||
+      activeVariantCalculatorLabel.includes("domicile") ||
+      String(taxResultAffiche?.raw?.debug?.source || "").startsWith(
+        "domicile-reference-economic-payloads"
+      )) &&
+    typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number";
+
+  const revenuImposableApresSimulationCalcule =
+    isDomicileTaxwareResult
+      ? taxResultAffiche.normalized.taxableIncomeCantonal
+      : revenuImposableCantonalSimule;
+  const fortuneImposableApresSimulationCalcule =
+    isDomicileTaxwareResult && typeof taxResultAffiche?.normalized?.taxableAssets === "number"
+      ? taxResultAffiche.normalized.taxableAssets
+      : fortuneImposableSimulee;
 
   const revenuImposableIfdApresSimulationCalcule = revenuImposableIfdSimule;
 
@@ -2873,6 +2892,29 @@ export default function App() {
     };
   };
 
+  const buildDomicileComparisonProbeRequest = (
+    dossierForSimulation: DossierClient,
+    params: {
+      miscIncome: number;
+      assets: number;
+    }
+  ) => {
+    const baseRequest = buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, params);
+
+    if (!dossierForSimulation.famille.aConjoint) {
+      return baseRequest;
+    }
+
+    const sharedNetWages =
+      DOMICILE_OCCUPATIONAL_EXPENSE_FLOOR + DOMICILE_SECOND_EARNER_FEDERAL_FLOOR;
+
+    return {
+      ...baseRequest,
+      netWages: sharedNetWages,
+      spouseNetWages: sharedNetWages,
+    };
+  };
+
   const assertTaxwareSuccess = (result: any, contextLabel: string) => {
     if (result?.raw?.error) {
       throw new Error(`${contextLabel}: ${JSON.stringify(result.raw)}`);
@@ -3184,13 +3226,47 @@ export default function App() {
     const beforeEconomicPayload = beforeBaseResult?.raw?.debug?.payloads?.canton as
       | Record<string, any>
       | undefined;
+    const beforeFortunePayload = beforeBaseResult?.raw?.debug?.payloads?.fortune as
+      | Record<string, any>
+      | undefined;
+    const afterGrossAssets = Math.max(
+      0,
+      Math.round(
+        beforeFortunePayload?.assets ??
+          targetVariant.dossier.fiscalite.fortuneImposableActuelleSaisie ??
+          0
+      )
+    );
 
     let afterIfdBase = Math.max(0, Math.round(beforeDossier.fiscalite.revenuImposableIfd || 0));
     let afterIccBase = Math.max(0, Math.round(beforeDossier.fiscalite.revenuImposable || 0));
-    const afterFortuneBase = Math.max(
+    let afterFortuneBase = Math.max(
       0,
       Math.round(targetVariant.dossier.fiscalite.fortuneImposableActuelleSaisie || 0)
     );
+    let afterFortuneResult: any = null;
+    let afterFortunePayload: Record<string, any> | null = null;
+    let afterCantonAssetIncome = 0;
+
+    if (beforeFortunePayload && typeof beforeFortunePayload === "object") {
+      afterFortunePayload = {
+        ...beforeFortunePayload,
+        partnership:
+          beforeFortunePayload.partnership ??
+          (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
+        childrenCount: afterChildren,
+      };
+
+      delete afterFortunePayload.Partnership;
+      delete afterFortunePayload.NumChildren;
+
+      afterFortuneResult = await callTaxware(afterFortunePayload as any);
+      assertTaxwareSuccess(afterFortuneResult, "Simulation enfant desktop après fortune");
+      afterFortuneBase = Math.max(
+        0,
+        Math.round(afterFortuneResult?.normalized?.taxableAssets ?? afterFortuneBase)
+      );
+    }
 
     if (beforeEconomicPayload && typeof beforeEconomicPayload === "object") {
       const afterEconomicPayload: Record<string, any> = {
@@ -3199,6 +3275,7 @@ export default function App() {
           beforeEconomicPayload.partnership ??
           (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
         childrenCount: afterChildren,
+        assets: afterGrossAssets,
       };
 
       delete afterEconomicPayload.Partnership;
@@ -3206,9 +3283,30 @@ export default function App() {
 
       const economicAfterResult = await callTaxware(afterEconomicPayload as any);
       assertTaxwareSuccess(economicAfterResult, "Simulation enfant desktop après");
+      afterCantonAssetIncome = Math.max(
+        0,
+        Math.round(
+          (afterFortuneResult?.normalized?.wealthTax ?? 0) +
+            Number(economicAfterResult?.raw?.TaxesIncome?.CantonFixTax ?? 0) +
+            Math.max(0, beforeChildren - afterChildren) +
+            (beforeDossier.famille.aConjoint ? 1 : 0)
+        )
+      );
+
+      const economicAfterAdjustedPayload: Record<string, any> = {
+        ...afterEconomicPayload,
+        assetIncome: afterCantonAssetIncome,
+      };
+      const economicAfterAdjustedResult = await callTaxware(economicAfterAdjustedPayload as any);
+      assertTaxwareSuccess(
+        economicAfterAdjustedResult,
+        "Simulation enfant desktop après patrimoine"
+      );
       afterIccBase = Math.max(
         0,
-        Math.round(economicAfterResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
+        Math.round(
+          economicAfterAdjustedResult?.normalized?.taxableIncomeCantonal ?? afterIccBase
+        )
       );
     }
 
@@ -3230,7 +3328,7 @@ export default function App() {
     const afterIfdBaseProbe = await callTaxware(
       buildFederalTaxwareRequestForDossier(afterProbeDossier, {
         miscIncome: beforeIfdCalibrationDriver,
-        assets: afterFortuneBase,
+        assets: afterGrossAssets,
         targetFederal: beforeDossier.fiscalite.revenuImposableIfd || 0,
       })
     );
@@ -3256,8 +3354,17 @@ export default function App() {
       },
     });
 
-    const buildAfterRequest = (params: { miscIncome: number; assets: number }) =>
-      buildDirectBaseTaxwareRequestForDossier(afterDossier, params);
+    const buildAfterRequest = (params: {
+      miscIncome: number;
+      assets: number;
+      assetIncome?: number;
+    }) => ({
+      ...buildDirectBaseTaxwareRequestForDossier(afterDossier, {
+        miscIncome: params.miscIncome,
+        assets: params.assets,
+      }),
+      assetIncome: Math.max(0, Math.round(params.assetIncome ?? 0)),
+    });
 
     const afterCantonResult = await resolveTaxwareTarget({
       label: `${targetVariant.id}-desktop-enfant-after-direct-canton`,
@@ -3266,7 +3373,8 @@ export default function App() {
       buildRequest: (miscIncome) =>
         buildAfterRequest({
           miscIncome,
-          assets: afterFortuneBase,
+          assets: afterGrossAssets,
+          assetIncome: afterCantonAssetIncome,
         }),
     });
 
@@ -3277,27 +3385,34 @@ export default function App() {
       buildRequest: (miscIncome) =>
         buildFederalTaxwareRequestForDossier(afterDossier, {
           miscIncome,
-          assets: afterFortuneBase,
+          assets: afterGrossAssets,
           targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
         }),
     });
 
-    const afterFortuneResult = await resolveTaxwareTarget({
-      label: `${targetVariant.id}-desktop-enfant-after-direct-fortune`,
-      targetValue: afterFortuneBase,
-      metric: (result) => result?.normalized?.taxableAssets,
-      buildRequest: (assets) =>
-        buildAfterRequest({
-          miscIncome: afterDossier.fiscalite.revenuImposable || 0,
-          assets,
-        }),
-    });
+    const finalFortuneResult = afterFortuneResult ?? afterCantonResult;
+    const nextIfdBase = Math.max(
+      0,
+      Math.round(afterIfdResult?.normalized?.taxableIncomeFederal ?? afterIfdBase)
+    );
+    const nextIccBase = Math.max(
+      0,
+      Math.round(afterCantonResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
+    );
+    const nextFortuneBase = Math.max(
+      0,
+      Math.round(finalFortuneResult?.normalized?.taxableAssets ?? afterFortuneBase)
+    );
+
+    afterDossier.fiscalite.revenuImposableIfd = nextIfdBase;
+    afterDossier.fiscalite.revenuImposable = nextIccBase;
+    afterDossier.fiscalite.fortuneImposableActuelleSaisie = nextFortuneBase;
 
     const afterResult = composeCorrectedTaxwareResult({
       baseResult: afterCantonResult,
       ifdResult: afterIfdResult,
       cantonResult: afterCantonResult,
-      fortuneResult: afterFortuneResult,
+      fortuneResult: finalFortuneResult,
       debug: {
         source: "desktop-enfant-after-direct-bases",
         referenceVariantId: referenceVariant.id,
@@ -3306,26 +3421,30 @@ export default function App() {
             miscIncome:
               afterCantonResult?.raw?.calibration?.driverValue ??
               (afterDossier.fiscalite.revenuImposable || 0),
-            assets: afterFortuneBase,
+            assets: afterGrossAssets,
+            assetIncome: afterCantonAssetIncome,
           }),
           ifd: buildFederalTaxwareRequestForDossier(afterDossier, {
             miscIncome:
               afterIfdResult?.raw?.calibration?.driverValue ??
               (afterDossier.fiscalite.revenuImposableIfd || 0),
-            assets: afterFortuneBase,
+            assets: afterGrossAssets,
             targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
           }),
-          fortune: buildAfterRequest({
-            miscIncome: afterDossier.fiscalite.revenuImposable || 0,
-            assets:
-              afterFortuneResult?.raw?.calibration?.driverValue ?? afterFortuneBase,
-          }),
+          fortune:
+            afterFortunePayload ??
+            buildAfterRequest({
+              miscIncome: afterDossier.fiscalite.revenuImposable || 0,
+              assets: afterGrossAssets,
+              assetIncome: afterCantonAssetIncome,
+            }),
         },
       },
     });
 
     return {
       ...targetVariant,
+      dossier: afterDossier,
       taxResultSansOptimisation: beforeResult,
       taxResultAvecDeductionsEstime: afterResult,
       taxResult: afterResult,
@@ -3335,6 +3454,157 @@ export default function App() {
         reference: beforeResult,
         mixed: afterResult,
         "manual-adjustment": afterResult,
+      },
+    };
+  };
+
+  const isDesktopDomicileComparisonCandidate = (
+    referenceVariant: ScenarioVariant,
+    targetVariant: ScenarioVariant
+  ) => {
+    if (referenceVariant.id === targetVariant.id) {
+      return false;
+    }
+
+    const referenceDossier = referenceVariant.dossier;
+    const targetDossier = targetVariant.dossier;
+    const referenceLocation = getTaxwareLocationForDossier(referenceDossier);
+    const targetLocation = getTaxwareLocationForDossier(targetDossier);
+
+    return (
+      referenceDossier.famille.aConjoint === targetDossier.famille.aConjoint &&
+      referenceDossier.famille.nombreEnfants === targetDossier.famille.nombreEnfants &&
+      (referenceLocation.zip !== targetLocation.zip || referenceLocation.city !== targetLocation.city)
+    );
+  };
+
+  const runDomicileComparisonVariant = async (
+    referenceVariant: ScenarioVariant,
+    targetVariant: ScenarioVariant,
+    referenceSimulatedVariant?: ScenarioVariant | null
+  ) => {
+    const currentVariant =
+      referenceSimulatedVariant ?? (await runTaxSimulationForVariant(referenceVariant));
+    const currentBaseResult =
+      currentVariant.taxResultSansOptimisation ?? getVariantDisplayedTaxResult(currentVariant);
+    if (
+      typeof currentBaseResult?.normalized?.taxableIncomeFederal !== "number" ||
+      typeof currentBaseResult?.normalized?.taxableAssets !== "number"
+    ) {
+      return runTaxSimulationForVariant(targetVariant);
+    }
+
+    const targetLocation = getTaxwareLocationForDossier(targetVariant.dossier);
+    const nextFederalBase = Math.max(
+      0,
+      Math.round(
+        currentBaseResult?.normalized?.taxableIncomeFederal ??
+          targetVariant.dossier.fiscalite.revenuImposableIfd ??
+          0
+      )
+    );
+    let nextFortuneBase = Math.max(
+      0,
+      Math.round(
+        currentBaseResult?.normalized?.taxableAssets ??
+          targetVariant.dossier.fiscalite.fortuneImposableActuelleSaisie ??
+          0
+      )
+    );
+    const referenceFortunePayload = currentBaseResult?.raw?.debug?.payloads?.fortune as
+      | Record<string, any>
+      | undefined;
+    let nextFortunePayload: Record<string, any> | null = null;
+    let nextFortuneResult: any = null;
+
+    if (referenceFortunePayload && typeof referenceFortunePayload === "object") {
+      nextFortunePayload = {
+        ...referenceFortunePayload,
+        zip: targetLocation.zip,
+        city: targetLocation.city,
+        partnership:
+          referenceFortunePayload.partnership ??
+          (targetVariant.dossier.famille.aConjoint ? "Marriage" : "Single"),
+        childrenCount: targetVariant.dossier.famille.nombreEnfants,
+      };
+
+      delete nextFortunePayload.Partnership;
+      delete nextFortunePayload.NumChildren;
+
+      nextFortuneResult = await callTaxware(nextFortunePayload as any);
+      assertTaxwareSuccess(nextFortuneResult, "Simulation domicile fortune cible");
+      nextFortuneBase = Math.max(
+        0,
+        Math.round(nextFortuneResult?.normalized?.taxableAssets ?? nextFortuneBase)
+      );
+    }
+
+    const nextSharedResult = await resolveTaxwareTarget({
+      label: `${targetVariant.id}-domicile-shared-federal`,
+      targetValue: nextFederalBase,
+      metric: (result) => result?.normalized?.taxableIncomeFederal,
+      buildRequest: (miscIncome) =>
+        buildDomicileComparisonProbeRequest(targetVariant.dossier, {
+          miscIncome,
+          assets: nextFortuneBase,
+        }),
+    });
+
+    const nextCantonalBase = Math.max(
+      0,
+      Math.round(
+        nextSharedResult?.normalized?.taxableIncomeCantonal ??
+          targetVariant.dossier.fiscalite.revenuImposable ??
+          0
+      )
+    );
+
+    const recalculatedTargetDossier = cloneDossier(targetVariant.dossier);
+    recalculatedTargetDossier.fiscalite.revenuImposableIfd = nextFederalBase;
+    recalculatedTargetDossier.fiscalite.revenuImposable = nextCantonalBase;
+    recalculatedTargetDossier.fiscalite.fortuneImposableActuelleSaisie = nextFortuneBase;
+
+    const nextResult = composeCorrectedTaxwareResult({
+      baseResult: nextSharedResult,
+      ifdResult: nextSharedResult,
+      cantonResult: nextSharedResult,
+      fortuneResult: nextFortuneResult ?? nextSharedResult,
+      debug: {
+        source: "domicile-shared-federal-probe",
+        referenceVariantId: referenceVariant.id,
+        recalculatedBases: {
+          taxableIncomeFederal: nextFederalBase,
+          taxableIncomeCantonal: nextCantonalBase,
+          taxableAssets: nextFortuneBase,
+        },
+        payloads: {
+          shared: buildDomicileComparisonProbeRequest(recalculatedTargetDossier, {
+            miscIncome:
+              nextSharedResult?.raw?.calibration?.driverValue ?? nextFederalBase,
+            assets: nextFortuneBase,
+          }),
+          fortune:
+            nextFortunePayload ??
+            buildDomicileComparisonProbeRequest(recalculatedTargetDossier, {
+              miscIncome: nextCantonalBase,
+              assets: nextFortuneBase,
+            }),
+        },
+      },
+    });
+
+    return {
+      ...targetVariant,
+      dossier: recalculatedTargetDossier,
+      taxResultSansOptimisation: currentBaseResult,
+      taxResultAvecDeductionsEstime: nextResult,
+      taxResult: nextResult,
+      taxResultAjustementManuel: nextResult,
+      taxResultCorrectionFiscaleManuelle: null,
+      comparisonTaxResults: {
+        reference: currentBaseResult,
+        mixed: nextResult,
+        "manual-adjustment": nextResult,
       },
     };
   };
@@ -3420,6 +3690,23 @@ export default function App() {
           }
 
           simulatedVariant = await runDesktopChildrenTransitionVariant(
+            referenceVariant,
+            variant,
+            referenceSimulatedVariant
+          );
+        } else if (
+          activeDesktopCalculator === "changement-domicile" &&
+          referenceVariant &&
+          isDesktopDomicileComparisonCandidate(referenceVariant, variant)
+        ) {
+          if (!referenceSimulatedVariant) {
+            referenceSimulatedVariant =
+              referenceVariant.id === variant.id
+                ? null
+                : await runTaxSimulationForVariant(referenceVariant);
+          }
+
+          simulatedVariant = await runDomicileComparisonVariant(
             referenceVariant,
             variant,
             referenceSimulatedVariant
@@ -3925,14 +4212,28 @@ export default function App() {
       locality: payload.newLocality,
     });
 
-    const [currentVariant, nextVariant] = await Promise.all([
-      runTaxSimulationForVariant(
-        createMobileVariant("mobile-domicile-current", "Domicile actuel", currentDossier)
-      ),
-      runTaxSimulationForVariant(
-        createMobileVariant("mobile-domicile-new", "Nouveau domicile", nextDossier)
-      ),
-    ]);
+    const currentVariantDefinition = createMobileVariant(
+      "mobile-domicile-current",
+      "Domicile actuel",
+      currentDossier
+    );
+    const nextVariantDefinition = createMobileVariant(
+      "mobile-domicile-new",
+      "Nouveau domicile",
+      nextDossier
+    );
+
+    const currentVariant = await runTaxSimulationForVariant(currentVariantDefinition);
+    const nextVariant = isDesktopDomicileComparisonCandidate(
+      currentVariantDefinition,
+      nextVariantDefinition
+    )
+      ? await runDomicileComparisonVariant(
+          currentVariantDefinition,
+          nextVariantDefinition,
+          currentVariant
+        )
+      : await runTaxSimulationForVariant(nextVariantDefinition);
 
     const currentResult = getVariantDisplayedTaxResult(currentVariant);
     const nextResult = getVariantDisplayedTaxResult(nextVariant);
@@ -4112,12 +4413,40 @@ export default function App() {
       | Record<string, any>
       | undefined;
     const beforeEconomicPayload = beforeEconomicPayloads?.canton as Record<string, any> | undefined;
+    const beforeFortunePayload = beforeEconomicPayloads?.fortune as Record<string, any> | undefined;
+    const afterGrossAssets = Math.max(
+      0,
+      Math.round(beforeFortunePayload?.assets ?? payload.fortuneImposable)
+    );
 
     let economicBeforeResult: any = null;
     let economicAfterResult: any = null;
     let afterIfdBase = Math.max(0, Math.round(payload.revenuImposableIfd));
     let afterIccBase = Math.max(0, Math.round(payload.revenuImposableIcc));
-    const afterFortuneBase = Math.max(0, Math.round(payload.fortuneImposable));
+    let afterFortuneBase = Math.max(0, Math.round(payload.fortuneImposable));
+    let afterFortuneResult: any = null;
+    let afterFortunePayload: Record<string, any> | null = null;
+    let afterCantonAssetIncome = 0;
+
+    if (beforeFortunePayload && typeof beforeFortunePayload === "object") {
+      afterFortunePayload = {
+        ...beforeFortunePayload,
+        partnership:
+          beforeFortunePayload.partnership ??
+          (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
+        childrenCount: afterChildren,
+      };
+
+      delete afterFortunePayload.Partnership;
+      delete afterFortunePayload.NumChildren;
+
+      afterFortuneResult = await callTaxware(afterFortunePayload as any);
+      assertTaxwareSuccess(afterFortuneResult, "Simulation enfant après fortune");
+      afterFortuneBase = Math.max(
+        0,
+        Math.round(afterFortuneResult?.normalized?.taxableAssets ?? afterFortuneBase)
+      );
+    }
 
     if (beforeEconomicPayload && typeof beforeEconomicPayload === "object") {
       economicBeforeResult = await callTaxware(beforeEconomicPayload as any);
@@ -4125,8 +4454,11 @@ export default function App() {
 
       const afterEconomicPayload: Record<string, any> = {
         ...beforeEconomicPayload,
-        partnership: beforeEconomicPayload.partnership ?? (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
+        partnership:
+          beforeEconomicPayload.partnership ??
+          (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
         childrenCount: afterChildren,
+        assets: afterGrossAssets,
       };
 
       delete afterEconomicPayload.Partnership;
@@ -4134,9 +4466,27 @@ export default function App() {
 
       economicAfterResult = await callTaxware(afterEconomicPayload as any);
       assertTaxwareSuccess(economicAfterResult, "Simulation enfant après");
+      afterCantonAssetIncome = Math.max(
+        0,
+        Math.round(
+          (afterFortuneResult?.normalized?.wealthTax ?? 0) +
+            Number(economicAfterResult?.raw?.TaxesIncome?.CantonFixTax ?? 0) +
+            Math.max(0, beforeChildren - afterChildren) +
+            (beforeDossier.famille.aConjoint ? 1 : 0)
+        )
+      );
+
+      const economicAfterAdjustedPayload: Record<string, any> = {
+        ...afterEconomicPayload,
+        assetIncome: afterCantonAssetIncome,
+      };
+      const economicAfterAdjustedResult = await callTaxware(economicAfterAdjustedPayload as any);
+      assertTaxwareSuccess(economicAfterAdjustedResult, "Simulation enfant après patrimoine");
       afterIccBase = Math.max(
         0,
-        Math.round(economicAfterResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
+        Math.round(
+          economicAfterAdjustedResult?.normalized?.taxableIncomeCantonal ?? afterIccBase
+        )
       );
     }
 
@@ -4156,7 +4506,7 @@ export default function App() {
     const afterIfdBaseProbe = await callTaxware(
       buildFederalEnfantRequest(afterIfdProbeDossier, {
         miscIncome: beforeIfdCalibrationDriver,
-        assets: afterFortuneBase,
+        assets: afterGrossAssets,
         targetFederal: beforeDossier.fiscalite.revenuImposableIfd || 0,
       })
     );
@@ -4183,8 +4533,17 @@ export default function App() {
         source: "mobile-enfant-before-federal-recalibrated",
       },
     });
-    const buildAfterRequest = (params: { miscIncome: number; assets: number }) =>
-      buildDirectBaseTaxwareRequestForDossier(afterDossier, params);
+    const buildAfterRequest = (params: {
+      miscIncome: number;
+      assets: number;
+      assetIncome?: number;
+    }) => ({
+      ...buildDirectBaseTaxwareRequestForDossier(afterDossier, {
+        miscIncome: params.miscIncome,
+        assets: params.assets,
+      }),
+      assetIncome: Math.max(0, Math.round(params.assetIncome ?? 0)),
+    });
 
     const afterCantonResult = await resolveTaxwareTarget({
       label: "mobile-enfant-after-direct-canton",
@@ -4193,7 +4552,8 @@ export default function App() {
       buildRequest: (miscIncome) =>
         buildAfterRequest({
           miscIncome,
-          assets: afterFortuneBase,
+          assets: afterGrossAssets,
+          assetIncome: afterCantonAssetIncome,
         }),
     });
 
@@ -4204,27 +4564,34 @@ export default function App() {
       buildRequest: (miscIncome) =>
         buildFederalEnfantRequest(afterDossier, {
           miscIncome,
-          assets: afterFortuneBase,
+          assets: afterGrossAssets,
           targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
         }),
     });
 
-    const afterFortuneResult = await resolveTaxwareTarget({
-      label: "mobile-enfant-after-direct-fortune",
-      targetValue: afterFortuneBase,
-      metric: (result) => result?.normalized?.taxableAssets,
-      buildRequest: (assets) =>
-        buildAfterRequest({
-          miscIncome: afterDossier.fiscalite.revenuImposable || 0,
-          assets,
-        }),
-    });
+    const finalFortuneResult = afterFortuneResult ?? afterCantonResult;
+    const nextIfdBase = Math.max(
+      0,
+      Math.round(afterIfdResult?.normalized?.taxableIncomeFederal ?? afterIfdBase)
+    );
+    const nextIccBase = Math.max(
+      0,
+      Math.round(afterCantonResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
+    );
+    const nextFortuneBase = Math.max(
+      0,
+      Math.round(finalFortuneResult?.normalized?.taxableAssets ?? afterFortuneBase)
+    );
+
+    afterDossier.fiscalite.revenuImposableIfd = nextIfdBase;
+    afterDossier.fiscalite.revenuImposable = nextIccBase;
+    afterDossier.fiscalite.fortuneImposableActuelleSaisie = nextFortuneBase;
 
     const afterResult = composeCorrectedTaxwareResult({
       baseResult: afterCantonResult,
       ifdResult: afterIfdResult,
       cantonResult: afterCantonResult,
-      fortuneResult: afterFortuneResult,
+      fortuneResult: finalFortuneResult,
       debug: {
         source: "mobile-enfant-after-direct-bases",
         payloads: {
@@ -4232,20 +4599,23 @@ export default function App() {
             miscIncome:
               afterCantonResult?.raw?.calibration?.driverValue ??
               (afterDossier.fiscalite.revenuImposable || 0),
-            assets: afterFortuneBase,
+            assets: afterGrossAssets,
+            assetIncome: afterCantonAssetIncome,
           }),
           ifd: buildFederalEnfantRequest(afterDossier, {
             miscIncome:
               afterIfdResult?.raw?.calibration?.driverValue ??
               (afterDossier.fiscalite.revenuImposableIfd || 0),
-            assets: afterFortuneBase,
+            assets: afterGrossAssets,
             targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
           }),
-          fortune: buildAfterRequest({
-            miscIncome: afterDossier.fiscalite.revenuImposable || 0,
-            assets:
-              afterFortuneResult?.raw?.calibration?.driverValue ?? afterFortuneBase,
-          }),
+          fortune:
+            afterFortunePayload ??
+            buildAfterRequest({
+              miscIncome: afterDossier.fiscalite.revenuImposable || 0,
+              assets: afterGrossAssets,
+              assetIncome: afterCantonAssetIncome,
+            }),
         },
       },
     });
@@ -5404,6 +5774,68 @@ export default function App() {
     activeVariant.dossier.immobilier.regimeFiscal,
     activeVariant.label,
     activeVariant.taxRegime,
+  ]);
+
+  useEffect(() => {
+    const activeLabel = `${activeVariant.customLabel} ${activeVariant.label}`.toLowerCase();
+    const isDomicileVariant =
+      activeVariantIndex > 0 &&
+      (activeDesktopCalculator === "changement-domicile" || activeLabel.includes("domicile"));
+    const debugSource =
+      typeof taxResultAffiche?.raw?.debug?.source === "string"
+        ? taxResultAffiche.raw.debug.source
+        : "";
+
+    if (
+      !isDomicileVariant ||
+      !debugSource.startsWith("domicile-reference-economic-payloads") ||
+      typeof taxResultAffiche?.normalized?.taxableIncomeFederal !== "number" ||
+      typeof taxResultAffiche?.normalized?.taxableIncomeCantonal !== "number" ||
+      typeof taxResultAffiche?.normalized?.taxableAssets !== "number"
+    ) {
+      return;
+    }
+
+    const nextIfd = Math.max(0, Math.round(taxResultAffiche.normalized.taxableIncomeFederal));
+    const nextCanton = Math.max(0, Math.round(taxResultAffiche.normalized.taxableIncomeCantonal));
+    const nextFortune = Math.max(0, Math.round(taxResultAffiche.normalized.taxableAssets));
+
+    if (
+      (activeVariant.dossier.fiscalite.revenuImposableIfd || 0) === nextIfd &&
+      (activeVariant.dossier.fiscalite.revenuImposable || 0) === nextCanton &&
+      (activeVariant.dossier.fiscalite.fortuneImposableActuelleSaisie || 0) === nextFortune
+    ) {
+      return;
+    }
+
+    setVariants((current) =>
+      current.map((variant, index) =>
+        index === activeVariantIndex
+          ? {
+              ...variant,
+              dossier: {
+                ...variant.dossier,
+                fiscalite: {
+                  ...variant.dossier.fiscalite,
+                  revenuImposableIfd: nextIfd,
+                  revenuImposable: nextCanton,
+                  fortuneImposableActuelleSaisie: nextFortune,
+                },
+              },
+            }
+          : variant
+      )
+    );
+  }, [
+    activeDesktopCalculator,
+    activeVariant.customLabel,
+    activeVariant.dossier.fiscalite.fortuneImposableActuelleSaisie,
+    activeVariant.dossier.fiscalite.revenuImposable,
+    activeVariant.dossier.fiscalite.revenuImposableIfd,
+    activeVariant.id,
+    activeVariant.label,
+    activeVariantIndex,
+    taxResultAffiche,
   ]);
 
   useEffect(() => {
@@ -9642,7 +10074,7 @@ export default function App() {
                 <label style={labelStyle}>Revenu imposable canton / commune simulé</label>
                 <input
                   type="text"
-                  value={formatMontantCHFArrondi(revenuImposableCantonalSimule)}
+                  value={formatMontantCHFArrondi(revenuImposableApresSimulationCalcule)}
                   readOnly
                   style={inputReadOnlyStyle}
                 />
@@ -9651,7 +10083,7 @@ export default function App() {
                 <label style={labelStyle}>Fortune imposable simulée</label>
                 <input
                   type="text"
-                  value={formatMontantCHFArrondi(fortuneImposableSimulee)}
+                  value={formatMontantCHFArrondi(fortuneImposableApresSimulationCalcule)}
                   readOnly
                   style={inputReadOnlyStyle}
                 />
@@ -10352,7 +10784,7 @@ export default function App() {
                     <label style={labelStyle}>Fortune imposable simulée</label>
                     <input
                       type="text"
-                      value={formatMontantCHFArrondi(fortuneImposableSimulee)}
+                      value={formatMontantCHFArrondi(fortuneImposableApresSimulationCalcule)}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -11471,13 +11903,18 @@ export default function App() {
                     ["3e pilier simulé", formatMontantCHF(dossier.fiscalite.troisiemePilierSimule)],
                     ["Rachat LPP", formatMontantCHF(dossier.fiscalite.rachatLpp)],
                     ["Ajustement manuel", formatMontantCHF(dossier.fiscalite.ajustementManuelRevenu)],
-                    ["IFD", formatMontantCHF(impotFederalDirect)],
+                    ["IFD", formatMontantCHFArrondi(impotFederalDirect)],
                     [
                       "Impôt cantonal / communal",
-                      formatMontantCHF(taxResultAffiche?.normalized?.cantonalCommunalTax || 0),
+                      formatMontantCHFArrondi(
+                        taxResultAffiche?.normalized?.cantonalCommunalTax || 0
+                      ),
                     ],
-                    ["Impôt sur la fortune", formatMontantCHF(taxResultAffiche?.normalized?.wealthTax || 0)],
-                    ["Impôt total", formatMontantCHF(impotCorrigeSynthese)],
+                    [
+                      "Impôt sur la fortune",
+                      formatMontantCHFArrondi(taxResultAffiche?.normalized?.wealthTax || 0),
+                    ],
+                    ["Impôt total", formatMontantCHFArrondi(impotCorrigeSynthese)],
                     ["Objectif principal", objectifPrincipalSynthese],
                   ],
                 },
