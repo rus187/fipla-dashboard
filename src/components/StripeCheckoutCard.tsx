@@ -265,6 +265,8 @@ export default function StripeCheckoutCard({
     };
   }, [accessToken]);
 
+  const resolvedOrganizationId = accessStatus?.organization_id ?? organizationId;
+
   const handleCheckout = async (offer: CheckoutOffer) => {
     if (activeOfferId) {
       return;
@@ -284,7 +286,7 @@ export default function StripeCheckoutCard({
       const result = await createStripeCheckoutSession({
         planId: offer.id,
         profileId,
-        organizationId,
+        organizationId: resolvedOrganizationId,
       });
 
       if (!result.url) {

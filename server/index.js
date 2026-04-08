@@ -475,6 +475,10 @@ const deriveOrganizationBillingPlan = (plan) => {
 
 const premiumUnlockStatuses = new Set(["active", "trialing", "past_due"]);
 const premiumBillingPlans = new Set(["private_full", "pro"]);
+const MINI_CREDIT_PAYMENT_INTENT_GRANTED_AT_KEY = "fipla_mini_credit_granted_at";
+const MINI_CREDIT_PAYMENT_INTENT_SESSION_ID_KEY = "fipla_mini_credit_session_id";
+const MINI_CREDIT_PAYMENT_INTENT_PROFILE_ID_KEY = "fipla_mini_credit_profile_id";
+const MINI_CREDIT_PAYMENT_INTENT_ORGANIZATION_ID_KEY = "fipla_mini_credit_organization_id";
 
 const normalizeOneTimeBillingStatus = (paymentStatus) => {
   const normalizedPaymentStatus = normalizeOptionalString(paymentStatus);
@@ -605,6 +609,41 @@ const setPendingMiniCheckoutSessionIdsOnMetadata = (metadata, sessionIds) => {
   }
 
   return nextMetadata;
+};
+
+const getMiniCreditGrantMarkerFromPaymentIntent = (paymentIntent) => {
+  const metadata =
+    paymentIntent?.metadata && typeof paymentIntent.metadata === "object"
+      ? paymentIntent.metadata
+      : null;
+
+  return {
+    grantedAt: normalizeOptionalString(metadata?.[MINI_CREDIT_PAYMENT_INTENT_GRANTED_AT_KEY]),
+    sessionId: normalizeOptionalString(metadata?.[MINI_CREDIT_PAYMENT_INTENT_SESSION_ID_KEY]),
+    profileId: normalizeOptionalString(metadata?.[MINI_CREDIT_PAYMENT_INTENT_PROFILE_ID_KEY]),
+    organizationId: normalizeOptionalString(
+      metadata?.[MINI_CREDIT_PAYMENT_INTENT_ORGANIZATION_ID_KEY]
+    ),
+  };
+};
+
+const hasMiniCreditGrantMarker = ({ paymentIntent, checkoutSessionId }) => {
+  if (!paymentIntent) {
+    return false;
+  }
+
+  const marker = getMiniCreditGrantMarkerFromPaymentIntent(paymentIntent);
+  const normalizedCheckoutSessionId = normalizeOptionalString(checkoutSessionId);
+
+  if (!marker.grantedAt && !marker.sessionId) {
+    return false;
+  }
+
+  if (!normalizedCheckoutSessionId) {
+    return true;
+  }
+
+  return marker.sessionId === normalizedCheckoutSessionId || Boolean(marker.grantedAt);
 };
 
 const buildSubscriptionSnapshotFields = ({
@@ -873,6 +912,173 @@ async function incrementOrganizationSimulationCredits({
   });
 }
 
+async function markMiniCheckoutSessionCreditGranted({
+  paymentIntentId,
+  checkoutSessionId,
+  profile,
+  organization,
+  source,
+}) {
+  const normalizedPaymentIntentId = normalizeOptionalString(paymentIntentId);
+  const normalizedCheckoutSessionId = normalizeOptionalString(checkoutSessionId);
+
+  if (!normalizedPaymentIntentId || !normalizedCheckoutSessionId) {
+    return false;
+  }
+
+  try {
+    await stripe.paymentIntents.update(normalizedPaymentIntentId, {
+      metadata: {
+        [MINI_CREDIT_PAYMENT_INTENT_GRANTED_AT_KEY]: new Date().toISOString(),
+        [MINI_CREDIT_PAYMENT_INTENT_SESSION_ID_KEY]: normalizedCheckoutSessionId,
+        [MINI_CREDIT_PAYMENT_INTENT_PROFILE_ID_KEY]: profile?.id ?? "",
+        [MINI_CREDIT_PAYMENT_INTENT_ORGANIZATION_ID_KEY]: organization?.id ?? "",
+      },
+    });
+
+    console.info("[stripe:credits] Mini payment intent marked as granted", {
+      source,
+      profileId: profile?.id ?? null,
+      organizationId: organization?.id ?? null,
+      checkoutSessionId: normalizedCheckoutSessionId,
+      paymentIntentId: normalizedPaymentIntentId,
+    });
+
+    return true;
+  } catch (error) {
+    console.error("[stripe:credits] Mini payment intent grant marker failed", {
+      source,
+      profileId: profile?.id ?? null,
+      organizationId: organization?.id ?? null,
+      checkoutSessionId: normalizedCheckoutSessionId,
+      paymentIntentId: normalizedPaymentIntentId,
+      error: serializeOperationalError(error),
+    });
+    return false;
+  }
+}
+
+function evaluateMiniCreditGrantEligibility({
+  organization,
+  profile,
+  checkoutSessionId,
+  checkoutSessionCreatedAt,
+  checkoutPaymentStatus,
+  paymentIntent,
+  paymentIntentId,
+  source,
+}) {
+  const normalizedCheckoutSessionId = normalizeOptionalString(checkoutSessionId);
+  const normalizedPaymentIntentId = normalizeOptionalString(paymentIntentId);
+  const normalizedPaymentStatus = normalizeOneTimeBillingStatus(checkoutPaymentStatus);
+
+  if (!organization?.id || !normalizedCheckoutSessionId) {
+    return {
+      allowed: false,
+      reason: "invalid-session",
+    };
+  }
+
+  if (normalizedPaymentStatus !== "active") {
+    console.info("[stripe:credits] Mini credit refused because session is not paid", {
+      source,
+      profileId: profile?.id ?? null,
+      organizationId: organization.id,
+      checkoutSessionId: normalizedCheckoutSessionId,
+      checkoutPaymentStatus: normalizeOptionalString(checkoutPaymentStatus) ?? null,
+    });
+
+    return {
+      allowed: false,
+      reason: "not-paid",
+    };
+  }
+
+  if (!normalizedPaymentIntentId) {
+    console.warn("[stripe:credits] Mini credit refused because payment intent is missing", {
+      source,
+      profileId: profile?.id ?? null,
+      organizationId: organization.id,
+      checkoutSessionId: normalizedCheckoutSessionId,
+      checkoutPaymentStatus: normalizeOptionalString(checkoutPaymentStatus) ?? null,
+    });
+
+    return {
+      allowed: false,
+      reason: "missing-payment-intent",
+    };
+  }
+
+  if (hasMiniCreditGrantMarker({ paymentIntent, checkoutSessionId: normalizedCheckoutSessionId })) {
+    console.info("[stripe:credits] Mini credit refused because session is already processed", {
+      source,
+      profileId: profile?.id ?? null,
+      organizationId: organization.id,
+      checkoutSessionId: normalizedCheckoutSessionId,
+      paymentIntentId: normalizedPaymentIntentId,
+      marker: getMiniCreditGrantMarkerFromPaymentIntent(paymentIntent),
+    });
+
+    return {
+      allowed: false,
+      reason: "already-processed",
+    };
+  }
+
+  const currentCredits = getSimulationCreditsFromOrganization(organization);
+  const consumedAtTimestamp = organization?.billing_private_mini_consumed_at
+    ? Date.parse(organization.billing_private_mini_consumed_at)
+    : Number.NaN;
+  const sessionCreatedTimestamp =
+    typeof checkoutSessionCreatedAt === "number" && Number.isFinite(checkoutSessionCreatedAt)
+      ? checkoutSessionCreatedAt * 1000
+      : Number.NaN;
+
+  if (
+    currentCredits <= 0 &&
+    Number.isFinite(consumedAtTimestamp) &&
+    Number.isFinite(sessionCreatedTimestamp) &&
+    sessionCreatedTimestamp <= consumedAtTimestamp
+  ) {
+    console.info("[stripe:credits] Mini credit refused because session was already consumed", {
+      source,
+      profileId: profile?.id ?? null,
+      organizationId: organization.id,
+      checkoutSessionId: normalizedCheckoutSessionId,
+      paymentIntentId: normalizedPaymentIntentId,
+      consumedAt: organization.billing_private_mini_consumed_at,
+      sessionCreatedAt: new Date(sessionCreatedTimestamp).toISOString(),
+    });
+
+    return {
+      allowed: false,
+      reason: "already-consumed",
+    };
+  }
+
+  if (currentCredits > 0) {
+    console.info("[stripe:credits] Mini credit already available for organization", {
+      source,
+      profileId: profile?.id ?? null,
+      organizationId: organization.id,
+      checkoutSessionId: normalizedCheckoutSessionId,
+      paymentIntentId: normalizedPaymentIntentId,
+      simulationCredits: currentCredits,
+    });
+
+    return {
+      allowed: false,
+      reason: "credit-already-available",
+    };
+  }
+
+  return {
+    allowed: true,
+    reason: "grantable",
+    paymentIntentId: normalizedPaymentIntentId,
+  };
+}
+
 async function recordPendingMiniCheckoutSession({
   organization,
   checkoutSessionId,
@@ -894,7 +1100,10 @@ async function grantMiniSimulationCreditIfEligible({
   plan,
   profile,
   checkoutSessionId,
+  checkoutSessionCreatedAt,
   checkoutPaymentStatus,
+  paymentIntent,
+  paymentIntentId,
   source,
 }) {
   const normalizedSessionId = normalizeOptionalString(checkoutSessionId);
@@ -909,27 +1118,31 @@ async function grantMiniSimulationCreditIfEligible({
       organization,
       simulationCredits: getSimulationCreditsFromOrganization(organization),
       creditGranted: false,
+      creditStatus: "ineligible",
+    };
+  }
+
+  const eligibility = evaluateMiniCreditGrantEligibility({
+    organization,
+    profile,
+    checkoutSessionId: normalizedSessionId,
+    checkoutSessionCreatedAt,
+    checkoutPaymentStatus,
+    paymentIntent,
+    paymentIntentId,
+    source,
+  });
+
+  if (!eligibility.allowed) {
+    return {
+      organization,
+      simulationCredits: getSimulationCreditsFromOrganization(organization),
+      creditGranted: false,
+      creditStatus: eligibility.reason,
     };
   }
 
   const currentCredits = getSimulationCreditsFromOrganization(organization);
-
-  if (currentCredits > 0) {
-    console.info("[stripe:credits] Mini credit already granted", {
-      source,
-      profileId: profile?.id ?? null,
-      organizationId: organization.id,
-      checkoutSessionId: normalizedSessionId,
-      simulationCredits: currentCredits,
-    });
-
-    return {
-      organization,
-      simulationCredits: currentCredits,
-      creditGranted: false,
-    };
-  }
-
   const { data, error } = await supabase
     .from("organizations")
     .update({
@@ -953,12 +1166,21 @@ async function grantMiniSimulationCreditIfEligible({
       organization,
       simulationCredits: currentCredits,
       creditGranted: false,
+      creditStatus: "update-failed",
     };
   }
 
   const updatedOrganization =
     data ?? { ...organization, billing_private_mini_credits: currentCredits + 1 };
   const nextCredits = getSimulationCreditsFromOrganization(updatedOrganization);
+
+  await markMiniCheckoutSessionCreditGranted({
+    paymentIntentId: eligibility.paymentIntentId,
+    checkoutSessionId: normalizedSessionId,
+    profile,
+    organization: updatedOrganization,
+    source,
+  });
 
   console.info("[stripe:credits] Mini credit granted", {
     source,
@@ -972,6 +1194,7 @@ async function grantMiniSimulationCreditIfEligible({
     organization: updatedOrganization,
     simulationCredits: nextCredits,
     creditGranted: true,
+    creditStatus: "granted",
   };
 }
 
@@ -1069,6 +1292,64 @@ async function getOrganizationsByProfileEmail(profileEmail) {
     .from("organizations")
     .select("*")
     .ilike("name", `%${normalizedEmail}%`)
+    .order("created_at", { ascending: true });
+}
+
+function buildPersonalOrganizationNames(profile) {
+  const names = [];
+  const normalizedEmail = normalizeOptionalString(profile?.email)?.toLowerCase() ?? null;
+
+  if (normalizedEmail) {
+    names.push(`Espace personnel ${normalizedEmail}`);
+    names.push(`Org of ${normalizedEmail}`);
+  }
+
+  if (profile?.id) {
+    names.push(`Espace personnel ${profile.id.slice(0, 8)}`);
+  }
+
+  return [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+}
+
+function normalizeOrganizationName(name) {
+  return normalizeOptionalString(name)?.toLowerCase() ?? null;
+}
+
+function isOrganizationOwnedByProfile(profile, organization) {
+  return Boolean(profile?.id) && normalizeOptionalString(organization?.owner_id) === profile.id;
+}
+
+function isPersonalOrganizationNameForProfile(profile, organizationName) {
+  const normalizedOrganizationName = normalizeOrganizationName(organizationName);
+
+  if (!normalizedOrganizationName) {
+    return false;
+  }
+
+  return buildPersonalOrganizationNames(profile)
+    .map((name) => name.toLowerCase())
+    .includes(normalizedOrganizationName);
+}
+
+function isAdoptablePersonalOrganization(profile, organization) {
+  return (
+    Boolean(profile?.id) &&
+    !normalizeOptionalString(organization?.owner_id) &&
+    isPersonalOrganizationNameForProfile(profile, organization?.name)
+  );
+}
+
+async function getPersonalOrganizationsByProfile(profile) {
+  const personalOrganizationNames = buildPersonalOrganizationNames(profile);
+
+  if (personalOrganizationNames.length === 0) {
+    return { data: [], error: null };
+  }
+
+  return supabase
+    .from("organizations")
+    .select("*")
+    .in("name", personalOrganizationNames)
     .order("created_at", { ascending: true });
 }
 
@@ -1236,6 +1517,28 @@ async function ensureOrganizationOwnedByProfile({ profile, organization, source 
   return data ?? { ...organization, owner_id: profile.id };
 }
 
+function hasStripeBillingLink({ organization, subscription }) {
+  return Boolean(
+    normalizeOptionalString(organization?.stripe_customer_id) ||
+      normalizeOptionalString(organization?.stripe_subscription_id) ||
+      normalizeOptionalString(organization?.stripe_price_id) ||
+      normalizeOptionalString(subscription?.stripe_subscription_id) ||
+      normalizeOptionalString(subscription?.stripe_customer_id)
+  );
+}
+
+function getPersonalOrganizationNamePriority(profile, organization) {
+  const normalizedOrganizationName = normalizeOrganizationName(organization?.name);
+
+  if (!normalizedOrganizationName) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const normalizedNames = buildPersonalOrganizationNames(profile).map((name) => name.toLowerCase());
+  const nameIndex = normalizedNames.indexOf(normalizedOrganizationName);
+  return nameIndex >= 0 ? nameIndex : Number.MAX_SAFE_INTEGER;
+}
+
 function getAccessCandidateSortValue(organization, subscription) {
   const timestamps = [
     organization?.billing_updated_at,
@@ -1253,56 +1556,17 @@ function getAccessCandidateSortValue(organization, subscription) {
   return Math.max(...timestamps);
 }
 
-async function resolveAccessOrganizationForProfile(profile) {
-  const { data: ownedOrganizations, error: ownedOrganizationsError } = await getOwnedOrganizations(
-    profile.id
-  );
-
-  if (ownedOrganizationsError) {
-    return {
-      organization: null,
-      subscription: null,
-      accessStatus: { hasPaidAccess: false, source: null },
-      error: ownedOrganizationsError,
-    };
-  }
-
-  const { data: emailOrganizations, error: emailOrganizationsError } =
-    await getOrganizationsByProfileEmail(profile.email ?? null);
-
-  if (emailOrganizationsError) {
-    return {
-      organization: null,
-      subscription: null,
-      accessStatus: { hasPaidAccess: false, source: null },
-      error: emailOrganizationsError,
-    };
-  }
-
-  const candidates = [...(ownedOrganizations ?? []), ...(emailOrganizations ?? [])].reduce(
-    (map, organization) => {
-      if (!organization?.id || map.has(organization.id)) {
-        return map;
-      }
-
-      map.set(organization.id, organization);
-      return map;
-    },
-    new Map()
-  );
-
+async function evaluateCanonicalOrganizationCandidates(profile, organizations) {
   const evaluatedCandidates = [];
 
-  for (const organization of candidates.values()) {
+  for (const organization of organizations) {
     const { data: subscription, error: subscriptionError } = await getLatestSubscriptionByOrganizationId(
       organization.id
     );
 
     if (subscriptionError) {
       return {
-        organization: null,
-        subscription: null,
-        accessStatus: { hasPaidAccess: false, source: null },
+        candidates: [],
         error: subscriptionError,
       };
     }
@@ -1314,50 +1578,253 @@ async function resolveAccessOrganizationForProfile(profile) {
         organization,
         subscription,
       }),
-      isOwned: normalizeOptionalString(organization.owner_id) === profile.id,
+      isOwned: isOrganizationOwnedByProfile(profile, organization),
+      isAdoptableOrphan: isAdoptablePersonalOrganization(profile, organization),
+      hasStripeLink: hasStripeBillingLink({ organization, subscription }),
+      personalNamePriority: getPersonalOrganizationNamePriority(profile, organization),
       sortValue: getAccessCandidateSortValue(organization, subscription),
     });
   }
 
-  if (evaluatedCandidates.length === 0) {
+  return {
+    candidates: evaluatedCandidates,
+    error: null,
+  };
+}
+
+function sortCanonicalOrganizationCandidates(left, right) {
+  if (left.isOwned !== right.isOwned) {
+    return Number(right.isOwned) - Number(left.isOwned);
+  }
+
+  if (left.isAdoptableOrphan !== right.isAdoptableOrphan) {
+    return Number(right.isAdoptableOrphan) - Number(left.isAdoptableOrphan);
+  }
+
+  if (left.accessStatus.hasPaidAccess !== right.accessStatus.hasPaidAccess) {
+    return Number(right.accessStatus.hasPaidAccess) - Number(left.accessStatus.hasPaidAccess);
+  }
+
+  if (left.accessStatus.simulationCredits !== right.accessStatus.simulationCredits) {
+    return right.accessStatus.simulationCredits - left.accessStatus.simulationCredits;
+  }
+
+  if (left.hasStripeLink !== right.hasStripeLink) {
+    return Number(right.hasStripeLink) - Number(left.hasStripeLink);
+  }
+
+  if (left.personalNamePriority !== right.personalNamePriority) {
+    return left.personalNamePriority - right.personalNamePriority;
+  }
+
+  return right.sortValue - left.sortValue;
+}
+
+async function resolveCanonicalOrganizationForProfile({
+  profile,
+  requestedOrganizationId,
+  source,
+  createIfMissing = false,
+  adoptOrphan = false,
+}) {
+  const { data: ownedOrganizations, error: ownedOrganizationsError } = await getOwnedOrganizations(profile.id);
+
+  if (ownedOrganizationsError) {
     return {
       organization: null,
       subscription: null,
-      accessStatus: { hasPaidAccess: false, source: null },
+      accessStatus: { hasPaidAccess: false, source: null, simulationCredits: 0 },
+      error: ownedOrganizationsError,
+    };
+  }
+
+  const {
+    data: personalOrganizations,
+    error: personalOrganizationsError,
+  } = await getPersonalOrganizationsByProfile(profile);
+
+  if (personalOrganizationsError) {
+    return {
+      organization: null,
+      subscription: null,
+      accessStatus: { hasPaidAccess: false, source: null, simulationCredits: 0 },
+      error: personalOrganizationsError,
+    };
+  }
+
+  const candidates = [...(ownedOrganizations ?? []), ...(personalOrganizations ?? [])].reduce(
+    (map, organization) => {
+      if (!organization?.id || map.has(organization.id)) {
+        return map;
+      }
+
+      map.set(organization.id, organization);
+      return map;
+    },
+    new Map()
+  );
+
+  const normalizedRequestedOrganizationId = normalizeOptionalString(requestedOrganizationId);
+
+  if (normalizedRequestedOrganizationId && !candidates.has(normalizedRequestedOrganizationId)) {
+    const { data: requestedOrganization, error: requestedOrganizationError } =
+      await getOrganizationById(normalizedRequestedOrganizationId);
+
+    if (requestedOrganizationError) {
+      return {
+        organization: null,
+        subscription: null,
+        accessStatus: { hasPaidAccess: false, source: null, simulationCredits: 0 },
+        error: requestedOrganizationError,
+      };
+    }
+
+    if (requestedOrganization) {
+      candidates.set(requestedOrganization.id, requestedOrganization);
+    }
+  }
+
+  const eligibleOrganizations = [...candidates.values()].filter(
+    (organization) =>
+      isOrganizationOwnedByProfile(profile, organization) ||
+      isAdoptablePersonalOrganization(profile, organization)
+  );
+
+  const { candidates: evaluatedCandidates, error: evaluationError } =
+    await evaluateCanonicalOrganizationCandidates(profile, eligibleOrganizations);
+
+  if (evaluationError) {
+    return {
+      organization: null,
+      subscription: null,
+      accessStatus: { hasPaidAccess: false, source: null, simulationCredits: 0 },
+      error: evaluationError,
+    };
+  }
+
+  evaluatedCandidates.sort(sortCanonicalOrganizationCandidates);
+
+  const selectedCandidate = evaluatedCandidates[0] ?? null;
+
+  if (selectedCandidate) {
+    const ignoredOrphanCandidates = evaluatedCandidates
+      .filter(
+        (candidate) =>
+          candidate.organization.id !== selectedCandidate.organization.id && candidate.isAdoptableOrphan
+      )
+      .map((candidate) => candidate.organization.id);
+
+    if (ignoredOrphanCandidates.length > 0 && selectedCandidate.isOwned) {
+      console.info("[stripe:billing] orphan personal organizations ignored", {
+        source,
+        profileId: profile.id,
+        selectedOrganizationId: selectedCandidate.organization.id,
+        ignoredOrganizationIds: ignoredOrphanCandidates,
+      });
+    }
+
+    if (
+      normalizedRequestedOrganizationId &&
+      normalizedRequestedOrganizationId !== selectedCandidate.organization.id
+    ) {
+      console.info("[stripe:billing] requested organization overridden by canonical selection", {
+        source,
+        profileId: profile.id,
+        requestedOrganizationId: normalizedRequestedOrganizationId,
+        selectedOrganizationId: selectedCandidate.organization.id,
+        selectedOrganizationOwnerId: selectedCandidate.organization.owner_id ?? null,
+      });
+    }
+
+    let selectedOrganization = selectedCandidate.organization;
+
+    if (adoptOrphan && selectedCandidate.isAdoptableOrphan && !selectedCandidate.isOwned) {
+      selectedOrganization =
+        (await ensureOrganizationOwnedByProfile({
+          profile,
+          organization: selectedCandidate.organization,
+          source,
+        })) ?? selectedCandidate.organization;
+    }
+
+    return {
+      organization: selectedOrganization,
+      subscription: selectedCandidate.subscription,
+      accessStatus: selectedCandidate.accessStatus,
       error: null,
     };
   }
 
-  evaluatedCandidates.sort((left, right) => {
-    if (left.accessStatus.hasPaidAccess !== right.accessStatus.hasPaidAccess) {
-      return Number(right.accessStatus.hasPaidAccess) - Number(left.accessStatus.hasPaidAccess);
-    }
+  if (!createIfMissing) {
+    return {
+      organization: null,
+      subscription: null,
+      accessStatus: { hasPaidAccess: false, source: null, simulationCredits: 0 },
+      error: null,
+    };
+  }
 
-    if (left.accessStatus.simulationCredits !== right.accessStatus.simulationCredits) {
-      return right.accessStatus.simulationCredits - left.accessStatus.simulationCredits;
-    }
+  const { data: createdOrganization, error: createOrganizationError } =
+    await createPersonalOrganization(profile);
 
-    if (left.isOwned !== right.isOwned) {
-      return Number(right.isOwned) - Number(left.isOwned);
-    }
+  if (createOrganizationError) {
+    return {
+      organization: null,
+      subscription: null,
+      accessStatus: { hasPaidAccess: false, source: null, simulationCredits: 0 },
+      error: createOrganizationError,
+    };
+  }
 
-    return right.sortValue - left.sortValue;
+  console.info("[stripe:billing] canonical personal organization created", {
+    source,
+    profileId: profile.id,
+    organizationId: createdOrganization.id,
+    ownerId: createdOrganization.owner_id ?? null,
   });
 
-  const selectedCandidate = evaluatedCandidates[0];
-  const selectedOrganization =
-    selectedCandidate.accessStatus.hasPaidAccess || selectedCandidate.accessStatus.simulationCredits > 0
-    ? await ensureOrganizationOwnedByProfile({
-        profile,
-        organization: selectedCandidate.organization,
-        source: "access-status",
-      })
-    : selectedCandidate.organization;
+  return {
+    organization: createdOrganization,
+    subscription: null,
+    accessStatus: hasPaidAccessFromBillingContext({
+      organization: createdOrganization,
+      subscription: null,
+    }),
+    error: null,
+  };
+}
+
+async function resolveAccessOrganizationForProfile(profile) {
+  const accessResolution = await resolveCanonicalOrganizationForProfile({
+    profile,
+    requestedOrganizationId: null,
+    source: "access-status",
+    createIfMissing: false,
+    adoptOrphan: true,
+  });
+
+  if (accessResolution.error) {
+    return {
+      organization: null,
+      subscription: null,
+      accessStatus: { hasPaidAccess: false, source: null },
+      error: accessResolution.error,
+    };
+  }
+
+  if (!accessResolution.organization) {
+    return {
+      organization: null,
+      subscription: null,
+      accessStatus: { hasPaidAccess: false, source: null, simulationCredits: 0 },
+      error: null,
+    };
+  }
 
   return {
-    organization: selectedOrganization,
-    subscription: selectedCandidate.subscription,
-    accessStatus: selectedCandidate.accessStatus,
+    organization: accessResolution.organization,
+    subscription: accessResolution.subscription,
+    accessStatus: accessResolution.accessStatus,
     error: null,
   };
 }
@@ -1637,24 +2104,29 @@ async function reconcileMiniAccessFromPendingSessions(profile) {
       stripePriceId: latestMiniSession.stripePriceId,
     });
 
-    await persistOneTimePaymentInSupabase({
-      profile,
-      organization: linkedOrganization,
-      plan: checkoutPlan,
-      stripeCustomerId: latestMiniSession.stripeCustomerId,
-      stripePriceId: latestMiniSession.stripePriceId,
-      checkoutPaymentStatus: latestMiniSession.session?.payment_status ?? null,
-      source: "access-status-mini-reconcile",
-    });
-
     const grantResult = await grantMiniSimulationCreditIfEligible({
       organization: linkedOrganization,
       plan: checkoutPlan,
       profile,
       checkoutSessionId: latestMiniSession.sessionId,
+      checkoutSessionCreatedAt: latestMiniSession.session?.created ?? null,
       checkoutPaymentStatus: latestMiniSession.session?.payment_status ?? null,
+      paymentIntent: latestMiniSession.paymentIntent ?? null,
+      paymentIntentId: latestMiniSession.paymentIntentId ?? null,
       source: "access-status-mini-reconcile",
     });
+
+    if (grantResult.creditGranted) {
+      await persistOneTimePaymentInSupabase({
+        profile,
+        organization: linkedOrganization,
+        plan: checkoutPlan,
+        stripeCustomerId: latestMiniSession.stripeCustomerId,
+        stripePriceId: latestMiniSession.stripePriceId,
+        checkoutPaymentStatus: latestMiniSession.session?.payment_status ?? null,
+        source: "access-status-mini-reconcile",
+      });
+    }
 
     console.info("[stripe:access-status] Reconciled Mini credit from Stripe", {
       profileId: profile.id,
@@ -1663,6 +2135,7 @@ async function reconcileMiniAccessFromPendingSessions(profile) {
       checkoutSessionId: latestMiniSession.sessionId,
       simulationCredits: grantResult.simulationCredits,
       creditGranted: grantResult.creditGranted,
+      creditStatus: grantResult.creditStatus,
     });
 
     return {
@@ -1680,67 +2153,40 @@ async function reconcileMiniAccessFromPendingSessions(profile) {
 }
 
 async function resolveCheckoutOrganization({ profile, requestedOrganizationId }) {
-  const normalizedOrganizationId = normalizeOptionalString(requestedOrganizationId);
-
-  if (normalizedOrganizationId) {
-    const { data: organization, error } = await getOrganizationById(normalizedOrganizationId);
-
-    if (error) {
-      console.error("[stripe:checkout] organization lookup failed", {
-        organizationId: normalizedOrganizationId,
-        error,
-      });
-      throw error;
-    }
-
-    if (organization) {
-      console.info("[stripe:checkout] using provided organization", {
-        profileId: profile.id,
-        organizationId: organization.id,
-        ownerId: organization.owner_id,
-      });
-      return organization.id;
-    }
-  }
-
-  const { data: existingOrganization, error: existingOrganizationError } =
-    await getOwnedOrganization(profile.id);
-
-  if (existingOrganizationError) {
-    console.error("[stripe:checkout] owned organization lookup failed", {
-      profileId: profile.id,
-      error: existingOrganizationError,
-    });
-    throw existingOrganizationError;
-  }
-
-  if (existingOrganization) {
-    console.info("[stripe:checkout] using owned organization", {
-      profileId: profile.id,
-      organizationId: existingOrganization.id,
-      ownerId: existingOrganization.owner_id,
-    });
-    return existingOrganization.id;
-  }
-
-  const { data: createdOrganization, error: createOrganizationError } =
-    await createPersonalOrganization(profile);
-
-  if (createOrganizationError) {
-    console.error("[stripe:checkout] personal organization creation failed", {
-      profileId: profile.id,
-      error: createOrganizationError,
-    });
-    throw createOrganizationError;
-  }
-
-  console.info("[stripe:checkout] personal organization created", {
-    profileId: profile.id,
-    organizationId: createdOrganization.id,
-    ownerId: createdOrganization.owner_id,
+  const checkoutResolution = await resolveCanonicalOrganizationForProfile({
+    profile,
+    requestedOrganizationId,
+    source: "checkout",
+    createIfMissing: true,
+    adoptOrphan: true,
   });
 
-  return createdOrganization.id;
+  if (checkoutResolution.error) {
+    console.error("[stripe:checkout] canonical organization resolution failed", {
+      profileId: profile.id,
+      requestedOrganizationId: requestedOrganizationId ?? null,
+      error: checkoutResolution.error,
+    });
+    throw checkoutResolution.error;
+  }
+
+  if (!checkoutResolution.organization?.id) {
+    const error = new Error("Organisation personnelle introuvable pour ce checkout");
+    console.error("[stripe:checkout] canonical organization missing", {
+      profileId: profile.id,
+      requestedOrganizationId: requestedOrganizationId ?? null,
+    });
+    throw error;
+  }
+
+  console.info("[stripe:checkout] using canonical organization", {
+    profileId: profile.id,
+    organizationId: checkoutResolution.organization.id,
+    ownerId: checkoutResolution.organization.owner_id ?? null,
+    requestedOrganizationId: requestedOrganizationId ?? null,
+  });
+
+  return checkoutResolution.organization.id;
 }
 
 async function resolvePlanForStripeContext({ metadata, stripePriceId }) {
@@ -1937,6 +2383,10 @@ async function loadCheckoutSessionContext(checkoutSession) {
   const sessionId = normalizeOptionalString(checkoutSession?.id);
   let hydratedSession = checkoutSession;
   let lineItems = [];
+  let paymentIntent =
+    hydratedSession?.payment_intent && typeof hydratedSession.payment_intent === "object"
+      ? hydratedSession.payment_intent
+      : null;
 
   if (sessionId) {
     try {
@@ -1957,6 +2407,30 @@ async function loadCheckoutSessionContext(checkoutSession) {
     } catch (error) {
       console.error("[stripe:webhook] checkout line items reload failed", {
         sessionId,
+        error: serializeOperationalError(error),
+      });
+    }
+  }
+
+  const paymentIntentId =
+    normalizeOptionalString(
+      typeof hydratedSession?.payment_intent === "string"
+        ? hydratedSession.payment_intent
+        : hydratedSession?.payment_intent?.id
+    ) ??
+    normalizeOptionalString(
+      typeof checkoutSession?.payment_intent === "string"
+        ? checkoutSession.payment_intent
+        : checkoutSession?.payment_intent?.id
+    );
+
+  if (!paymentIntent && paymentIntentId) {
+    try {
+      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    } catch (error) {
+      console.error("[stripe:webhook] payment intent reload failed", {
+        sessionId,
+        paymentIntentId,
         error: serializeOperationalError(error),
       });
     }
@@ -2024,6 +2498,8 @@ async function loadCheckoutSessionContext(checkoutSession) {
     stripeCustomerId,
     customerEmail,
     metadata,
+    paymentIntent,
+    paymentIntentId,
   };
 }
 
@@ -2403,24 +2879,29 @@ async function handleCheckoutSessionCompleted(event) {
       paymentStatus: checkoutContext.session?.payment_status ?? null,
     });
 
-    await persistOneTimePaymentInSupabase({
-      profile,
-      organization: linkedOrganization,
-      plan,
-      stripeCustomerId: checkoutContext.stripeCustomerId,
-      stripePriceId: checkoutContext.stripePriceId,
-      checkoutPaymentStatus: checkoutContext.session?.payment_status ?? null,
-      source: event.type,
-    });
-
-    await grantMiniSimulationCreditIfEligible({
+    const grantResult = await grantMiniSimulationCreditIfEligible({
       organization: linkedOrganization,
       plan,
       profile,
       checkoutSessionId: checkoutContext.sessionId,
+      checkoutSessionCreatedAt: checkoutContext.session?.created ?? null,
       checkoutPaymentStatus: checkoutContext.session?.payment_status ?? null,
+      paymentIntent: checkoutContext.paymentIntent ?? null,
+      paymentIntentId: checkoutContext.paymentIntentId ?? null,
       source: `${event.type}:mini-credit`,
     });
+
+    if (grantResult.creditGranted) {
+      await persistOneTimePaymentInSupabase({
+        profile,
+        organization: linkedOrganization,
+        plan,
+        stripeCustomerId: checkoutContext.stripeCustomerId,
+        stripePriceId: checkoutContext.stripePriceId,
+        checkoutPaymentStatus: checkoutContext.session?.payment_status ?? null,
+        source: event.type,
+      });
+    }
 
     console.info("[stripe:webhook] no subscription on session", {
       eventId: event.id,
@@ -2428,6 +2909,8 @@ async function handleCheckoutSessionCompleted(event) {
       stripeCustomerId: checkoutContext.stripeCustomerId,
       customerEmail: checkoutContext.customerEmail,
       matchedBy,
+      creditGranted: grantResult.creditGranted,
+      creditStatus: grantResult.creditStatus,
     });
     return;
   }
@@ -3095,24 +3578,67 @@ app.post("/api/stripe/reconcile-checkout-session", async (req, res) => {
       });
     }
 
-    await persistOneTimePaymentInSupabase({
-      profile,
-      organization: linkedOrganization,
-      plan,
-      stripeCustomerId: checkoutContext.stripeCustomerId,
-      stripePriceId: checkoutContext.stripePriceId,
-      checkoutPaymentStatus: checkoutContext.session?.payment_status ?? null,
-      source: "reconcile-checkout-session",
-    });
+    const normalizedSessionStatus = normalizeOptionalString(checkoutContext.session?.status);
+    const normalizedPaymentStatus = normalizeOneTimeBillingStatus(
+      checkoutContext.session?.payment_status ?? null
+    );
+
+    if (plan?.name === "fipla_private_mini") {
+      if (normalizedSessionStatus !== "complete" || normalizedPaymentStatus !== "active") {
+        console.info("[stripe:reconcile-checkout-session] Mini session refused because payment is not complete", {
+          profileId: profile.id,
+          organizationId: linkedOrganization.id,
+          sessionId,
+          sessionStatus: normalizedSessionStatus ?? null,
+          paymentStatus: normalizeOptionalString(checkoutContext.session?.payment_status) ?? null,
+        });
+
+        return res.json({
+          session_id: sessionId,
+          plan_name: plan?.name ?? null,
+          mode: checkoutContext.session?.mode ?? null,
+          payment_status: checkoutContext.session?.payment_status ?? null,
+          simulation_credits: getSimulationCreditsFromOrganization(linkedOrganization),
+          credit_granted: false,
+          credit_status: "not-paid",
+          organization_id: linkedOrganization.id,
+        });
+      }
+    } else {
+      await persistOneTimePaymentInSupabase({
+        profile,
+        organization: linkedOrganization,
+        plan,
+        stripeCustomerId: checkoutContext.stripeCustomerId,
+        stripePriceId: checkoutContext.stripePriceId,
+        checkoutPaymentStatus: checkoutContext.session?.payment_status ?? null,
+        source: "reconcile-checkout-session",
+      });
+    }
 
     const grantResult = await grantMiniSimulationCreditIfEligible({
       organization: linkedOrganization,
       plan,
       profile,
       checkoutSessionId: checkoutContext.sessionId,
+      checkoutSessionCreatedAt: checkoutContext.session?.created ?? null,
       checkoutPaymentStatus: checkoutContext.session?.payment_status ?? null,
+      paymentIntent: checkoutContext.paymentIntent ?? null,
+      paymentIntentId: checkoutContext.paymentIntentId ?? null,
       source: "reconcile-checkout-session",
     });
+
+    if (plan?.name === "fipla_private_mini" && grantResult.creditGranted) {
+      await persistOneTimePaymentInSupabase({
+        profile,
+        organization: linkedOrganization,
+        plan,
+        stripeCustomerId: checkoutContext.stripeCustomerId,
+        stripePriceId: checkoutContext.stripePriceId,
+        checkoutPaymentStatus: checkoutContext.session?.payment_status ?? null,
+        source: "reconcile-checkout-session",
+      });
+    }
 
     return res.json({
       session_id: sessionId,
@@ -3121,6 +3647,7 @@ app.post("/api/stripe/reconcile-checkout-session", async (req, res) => {
       payment_status: checkoutContext.session?.payment_status ?? null,
       simulation_credits: grantResult.simulationCredits,
       credit_granted: grantResult.creditGranted,
+      credit_status: grantResult.creditStatus,
       organization_id: grantResult.organization?.id ?? linkedOrganization.id,
     });
   } catch (error) {

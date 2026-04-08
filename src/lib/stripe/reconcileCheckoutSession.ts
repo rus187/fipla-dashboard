@@ -18,6 +18,7 @@ type ReconcileCheckoutSessionResponse = {
   payment_status: string | null;
   simulation_credits: number;
   credit_granted: boolean;
+  credit_status?: string | null;
   organization_id: string | null;
 };
 

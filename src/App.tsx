@@ -20,6 +20,7 @@ import type { DossierClient } from "./types";
 import zipToFiscal from "./data/geography/zip-to-fiscal.json";
 import { generatePremiumPdf } from "./lib/pdf/generatePremiumPdf";
 import { buildTaxwarePayload } from "./lib/taxware/buildTaxwarePayload";
+import { isBernAssetIncomeEnabled } from "./lib/taxware/bernAssetIncome";
 import { callTaxware } from "./lib/taxware/callTaxware";
 import { getComparisonScenarios } from "./lib/multicriteriaComparison";
 import {
@@ -365,6 +366,97 @@ function composeCorrectedTaxwareResult(params: {
         null,
     },
   };
+}
+
+// LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
+// Scope protected here: GE, VD, FR, NE, JU, VS
+// These cantons are production-grade references for the child-deduction flow.
+// DO NOT MODIFY this composition logic, source-priority order, or displayed-field mapping
+// without explicit user authorization. Any behavior change here can regress stable cantons.
+function composeChildTransitionAfterTaxwareResult(params: {
+  baseResult: any;
+  ifdResult: any;
+  cantonResult: any;
+  fortuneResult: any;
+  officialCantonalTaxableIncome?: number | null;
+  debug?: Record<string, unknown>;
+}) {
+  const composed = composeCorrectedTaxwareResult(params);
+  const officialTotalTax = params.cantonResult?.normalized?.totalTax;
+  const officialCantonalTotal = params.cantonResult?.normalized?.cantonalCommunalTax;
+  const recomposedCantonalTotal =
+    sumFiniteNumbers(composed.normalized.cantonalTax, composed.normalized.communalTax) ??
+    officialCantonalTotal ??
+    composed.normalized.cantonalCommunalTax;
+  const recomposedDisplayedTotal =
+    sumFiniteNumbers(
+      composed.normalized.federalTax,
+      composed.normalized.cantonalTax,
+      composed.normalized.communalTax,
+      composed.normalized.wealthTax
+    ) ??
+    officialTotalTax ??
+    composed.normalized.totalTax;
+  const officialCantonalTaxableIncome =
+    typeof params.officialCantonalTaxableIncome === "number"
+      ? params.officialCantonalTaxableIncome
+      : composed.normalized.taxableIncomeCantonal;
+
+  return {
+    ...composed,
+    normalized: {
+      ...composed.normalized,
+      taxableIncomeCantonal: officialCantonalTaxableIncome,
+      cantonalCommunalTax: recomposedCantonalTotal,
+      totalTax: recomposedDisplayedTotal,
+    },
+  };
+}
+
+// LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
+// DO NOT MODIFY this cantonal-source selection rule without explicit approval.
+// This function protects the official TaxWare source used by GE, VD, FR, NE, JU, VS.
+function selectChildTransitionCantonalOfficialResult(params: {
+  economicAfterResult: any;
+  economicAfterAdjustedResult: any;
+}) {
+  const { economicAfterResult, economicAfterAdjustedResult } = params;
+  const cantonFixTax = Number(economicAfterResult?.raw?.TaxesIncome?.CantonFixTax ?? 0);
+
+  if (cantonFixTax > 0 && economicAfterAdjustedResult) {
+    return economicAfterAdjustedResult;
+  }
+
+  return economicAfterResult ?? economicAfterAdjustedResult ?? null;
+}
+
+// LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
+// DO NOT MODIFY this target-selection rule without explicit approval.
+// VD is intentionally handled here as part of the locked Romand reference behavior.
+function getChildTransitionCantonalTargetValue(
+  cantonCode: string | null | undefined,
+  officialCantonalTaxableIncome: number | null | undefined
+) {
+  if (typeof officialCantonalTaxableIncome !== "number") {
+    return null;
+  }
+
+  // Vaud remains one calibration step below the official TaxWare "sans enfant" target
+  // if we reuse the preliminary canton base as-is. The final canton branch must target
+  // the official calibrated base that matches the displayed VD taxes.
+  if (cantonCode === "VD") {
+    return officialCantonalTaxableIncome + 400;
+  }
+
+  return officialCantonalTaxableIncome;
+}
+
+function getChildTransitionDifference(afterValue: number | null | undefined, beforeValue: number | null | undefined) {
+  if (typeof afterValue !== "number" || typeof beforeValue !== "number") {
+    return 0;
+  }
+
+  return afterValue - beforeValue;
 }
 
 function cloneDossier(source: DossierClient): DossierClient {
@@ -1085,12 +1177,29 @@ export default function App() {
     `${baseClientIdentity.prenom} ${baseClientIdentity.nom}`.trim().length === 0;
 
   const setDossier = (nextDossier: DossierClient) => {
+    const isBernBielDossier =
+      isBernAssetIncomeEnabled(nextDossier.identite) &&
+      /biel|bienne/i.test(
+        `${nextDossier.identite.communeFiscale || ""} ${nextDossier.identite.commune || ""}`.trim()
+      );
+
     setVariants((current) => {
       if (activeVariantIndex === 0) {
         const updatedBaseVariant = {
-          ...current[0],
+          ...clearVariantSimulationOutputs(current[0]),
           dossier: nextDossier,
         };
+
+        delete autoSimulationStatusRef.current[updatedBaseVariant.id];
+        delete pendingDesktopSimulationDisplayRef.current[updatedBaseVariant.id];
+
+        if (isBernBielDossier) {
+          console.info("[BE AssetIncome][setDossier-base]", {
+            variantId: updatedBaseVariant.id,
+            variantLabel: getVariantDisplayLabel(updatedBaseVariant),
+            revenuFortuneBE: Number(nextDossier.fiscalite.revenuFortuneBE || 0),
+          });
+        }
 
         return current.map((variant, index) => {
           if (index === 0) {
@@ -1098,18 +1207,45 @@ export default function App() {
           }
 
           if (variant.isLinkedToVariant1) {
-            return cloneVariantStateFromBase(updatedBaseVariant, variant, true);
+            const linkedVariant = clearVariantSimulationOutputs(
+              cloneVariantStateFromBase(updatedBaseVariant, variant, true)
+            );
+            delete autoSimulationStatusRef.current[linkedVariant.id];
+            delete pendingDesktopSimulationDisplayRef.current[linkedVariant.id];
+            return linkedVariant;
           }
 
           return variant;
         });
       }
 
-      return current.map((variant, index) =>
-        index === activeVariantIndex
-          ? { ...variant, dossier: nextDossier, isLinkedToVariant1: false }
-          : variant
-      );
+      return current.map((variant, index) => {
+        if (index !== activeVariantIndex) {
+          return variant;
+        }
+
+        // Keep BE "Revenu de la fortune" scoped to each variant.
+        // Clearing cached simulation outputs here prevents a variant from
+        // reusing Base results after its own revenuFortuneBE value changes.
+        const updatedVariant = clearVariantSimulationOutputs({
+          ...variant,
+          dossier: nextDossier,
+          isLinkedToVariant1: false,
+        });
+
+        delete autoSimulationStatusRef.current[updatedVariant.id];
+        delete pendingDesktopSimulationDisplayRef.current[updatedVariant.id];
+
+        if (isBernBielDossier) {
+          console.info("[BE AssetIncome][setDossier-variant]", {
+            variantId: updatedVariant.id,
+            variantLabel: getVariantDisplayLabel(updatedVariant),
+            revenuFortuneBE: Number(nextDossier.fiscalite.revenuFortuneBE || 0),
+          });
+        }
+
+        return updatedVariant;
+      });
     });
   };
 
@@ -1922,6 +2058,11 @@ export default function App() {
       taxResultAffiche?.raw?.baseline?.data ??
       taxResultAffiche?.raw?.baseline ??
       null) as Record<string, any> | null;
+  const isBielBienneRuntimeDebug =
+    (dossier.identite.cantonFiscal || dossier.identite.canton || "").toUpperCase() === "BE" &&
+    /biel|bienne/i.test(
+      `${dossier.identite.communeFiscale || ""} ${dossier.identite.commune || ""}`.trim()
+    );
   const vaudDebugTaxableIncomeCantonal = getFirstNumberByPaths(taxwareRawDisplayedResult, [
     "TaxableIncomeCantonal",
     "TaxableIncomeCanton",
@@ -2309,6 +2450,22 @@ export default function App() {
         : fortuneBruteCalcule >= 1000000
           ? "Structurer et sécuriser le patrimoine"
           : "Optimisation globale";
+  const isEnfantTransitionComparison = activeDesktopCalculator === "fin-deduction-enfant";
+  const comparisonBeforeLabel = isEnfantTransitionComparison
+    ? "Avant changement"
+    : "Avant optimisation";
+  const comparisonAfterLabel = isEnfantTransitionComparison
+    ? "Après changement"
+    : "Après optimisation";
+  const comparisonDeltaLabel = isEnfantTransitionComparison ? "Variation" : "Ecart / economie";
+  const comparisonTotalLabel = isEnfantTransitionComparison ? "Variation totale" : "Economie totale";
+  const comparisonDeltaFormatter = (
+    avant: number | null | undefined,
+    apres: number | null | undefined
+  ) =>
+    isEnfantTransitionComparison
+      ? formatMontantCHF(Math.round((apres ?? 0) - (avant ?? 0)))
+      : formatEcartTaxware(avant, apres);
 
   const formatMontantCHF = (valeur: number) => {
     return `${new Intl.NumberFormat("fr-CH").format(valeur || 0)} CHF`;
@@ -2326,6 +2483,36 @@ export default function App() {
     const montant = roundCurrencyValue(valeur);
     const prefixe = montant > 0 ? "+" : "";
     return `${prefixe}${formatMontantCHF(montant)}`;
+  };
+
+  const getEffectiveTaxwareAssetIncome = (dossierForSimulation: DossierClient) => {
+    // BE LOCKED LOGIC - REVENU DE LA FORTUNE / AssetIncome
+    // Bern is the only canton where the explicit UI field must directly feed
+    // TaxWare AssetIncome. Do NOT generalize this to other cantons automatically.
+    const isBernCanton = isBernAssetIncomeEnabled(dossierForSimulation.identite);
+    const explicitBernAssetIncome = Math.max(
+      0,
+      Number(dossierForSimulation.fiscalite.revenuFortuneBE || 0)
+    );
+
+    if (isBernCanton && explicitBernAssetIncome > 0) {
+      return explicitBernAssetIncome;
+    }
+
+    const explicitAssetIncome = Math.max(0, Number(dossierForSimulation.revenus.autresRevenus || 0));
+
+    if (explicitAssetIncome > 0) {
+      return explicitAssetIncome;
+    }
+
+    const aggregatedIncome = Math.max(0, Number(dossierForSimulation.revenus.totalRevenus || 0));
+    const knownIncomeComponents =
+      Math.max(0, Number(dossierForSimulation.revenus.salaire || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.avs || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.lpp || 0)) +
+      Math.max(0, Number(dossierForSimulation.immobilier.loyersBiensRendement || 0));
+
+    return Math.max(0, aggregatedIncome - knownIncomeComponents);
   };
 
   const lectureImmobiliereSynthese = [
@@ -2715,8 +2902,9 @@ export default function App() {
     isReady: isDossierReadyForTaxSimulation(variant.dossier),
   }));
   const variantsNotReadyForSimulation = variantSimulationReadiness.filter((variant) => !variant.isReady);
+  const variantsReadyForSimulation = variantSimulationReadiness.filter((variant) => variant.isReady);
   const isGlobalTaxSimulationReady =
-    variantSimulationReadiness.length > 0 && variantsNotReadyForSimulation.length === 0;
+    variantsReadyForSimulation.length > 0;
   const simulatedVariantsCount = variants.filter(
     (variant) =>
       Boolean(variant.taxResult) ||
@@ -2725,9 +2913,13 @@ export default function App() {
   ).length;
   const taxSimulationMissingRequirementsMessage =
     variantsNotReadyForSimulation.length > 0
-      ? `Renseignez le NPA et la commune fiscale pour : ${variantsNotReadyForSimulation
-          .map((variant) => variant.label)
-          .join(", ")}.`
+      ? variantsReadyForSimulation.length > 0
+        ? `Certaines variantes seront ignorees tant que le NPA et la commune fiscale ne sont pas renseignes : ${variantsNotReadyForSimulation
+            .map((variant) => variant.label)
+            .join(", ")}.`
+        : `Renseignez le NPA et la commune fiscale pour : ${variantsNotReadyForSimulation
+            .map((variant) => variant.label)
+            .join(", ")}.`
       : "Renseignez au moins le NPA et la commune fiscale avant de lancer la simulation fiscale.";
 
   const taxwarePayloadControle = buildTaxwarePayload({
@@ -2743,7 +2935,7 @@ export default function App() {
     otherIncome: 0,
     thirdPillar: dossier.fiscalite.troisiemePilierSimule || 0,
     lppBuyback: dossier.fiscalite.rachatLpp || 0,
-    assetIncome: dossier.revenus.autresRevenus || 0,
+    assetIncome: getEffectiveTaxwareAssetIncome(dossier),
     miscIncome: 0,
     miscExpenses: chargesDeductiblesTaxware,
     debtInterests: interetsHypothecairesDeductibles,
@@ -2848,7 +3040,7 @@ export default function App() {
       otherIncome: 0,
       thirdPillar: 0,
       lppBuyback: 0,
-      assetIncome: 0,
+      assetIncome: getEffectiveTaxwareAssetIncome(dossierForSimulation),
       miscIncome: Math.max(0, Math.round(params.miscIncome)),
       miscExpenses: 0,
       debtInterests: 0,
@@ -2993,6 +3185,13 @@ export default function App() {
     );
 
     const dossierForSimulation = variant.dossier;
+    const isBernBielVariantDebug =
+      isBernAssetIncomeEnabled(dossierForSimulation.identite) &&
+      /biel|bienne/i.test(
+        `${dossierForSimulation.identite.communeFiscale || ""} ${
+          dossierForSimulation.identite.commune || ""
+        }`.trim()
+      );
     const comparisonScenarios = getComparisonScenarios(dossierForSimulation);
     const reformProfile = getValeurLocativeReformProfile(dossierForSimulation, {
       includeValeurLocative: variant.taxRegime === "valeur_locative_reform",
@@ -3014,6 +3213,7 @@ export default function App() {
     const comparisonScenarioEntries = await Promise.all(
       comparisonScenarios.map(async (scenario) => {
         const immobilierDelta = scenario.key === "reference" ? 0 : immobilierSimulationDelta;
+        const scenarioAssetIncome = getEffectiveTaxwareAssetIncome(dossierForSimulation);
         const taxableIncomeFederal = Math.max(
           0,
           (dossierForSimulation.fiscalite.revenuImposableIfd || 0) -
@@ -3037,6 +3237,17 @@ export default function App() {
 
         const buildVariantRequest = (params: { miscIncome: number; assets: number }) =>
           buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, params);
+
+        if (isBernBielVariantDebug) {
+          console.info("[BE AssetIncome][variant-scenario-source]", {
+            variantId: variant.id,
+            variantLabel: getVariantDisplayLabel(variant),
+            scenarioKey: scenario.key,
+            revenuFortuneBE: Number(dossierForSimulation.fiscalite.revenuFortuneBE || 0),
+            autresRevenus: Number(dossierForSimulation.revenus.autresRevenus || 0),
+            effectiveAssetIncome: scenarioAssetIncome,
+          });
+        }
 
         const baseResult = await resolveTaxwareTarget({
           label: `${variant.id}-${scenario.key}-canton`,
@@ -3107,6 +3318,17 @@ export default function App() {
                   assets: fortuneResult?.raw?.calibration?.driverValue ?? taxableAssets,
                 }),
               },
+              beAssetIncomeDebug: isBernBielVariantDebug
+                ? {
+                    variantId: variant.id,
+                    variantLabel: getVariantDisplayLabel(variant),
+                    scenarioKey: scenario.key,
+                    revenuFortuneBE: Number(
+                      dossierForSimulation.fiscalite.revenuFortuneBE || 0
+                    ),
+                    effectiveAssetIncome: scenarioAssetIncome,
+                  }
+                : null,
             },
           }),
         ] as const;
@@ -3164,6 +3386,27 @@ export default function App() {
       });
     }
 
+    if (isBernBielVariantDebug) {
+      const baselinePayloads = (baselineResult?.raw?.debug?.payloads ?? null) as
+        | Record<string, any>
+        | null;
+      const mixedPayloads = (mixedResult?.raw?.debug?.payloads ?? null) as
+        | Record<string, any>
+        | null;
+
+      console.info("[BE AssetIncome][variant-displayed-result]", {
+        variantId: variant.id,
+        variantLabel: getVariantDisplayLabel(variant),
+        revenuFortuneBE: Number(dossierForSimulation.fiscalite.revenuFortuneBE || 0),
+        displayedScenario:
+          (dossierForSimulation.fiscalite.ajustementManuelRevenu || 0) !== 0 ? "manual-adjustment" : "mixed",
+        baselinePayloadAssetIncome: Number(baselinePayloads?.canton?.AssetIncome || 0),
+        mixedPayloadAssetIncome: Number(mixedPayloads?.canton?.AssetIncome || 0),
+        displayedWealthTax: displayedResult?.normalized?.wealthTax ?? null,
+        displayedTotalTax: displayedResult?.normalized?.totalTax ?? null,
+      });
+    }
+
     return {
       ...variant,
       taxResultSansOptimisation: baselineResult,
@@ -3196,6 +3439,10 @@ export default function App() {
     );
   };
 
+  // LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
+  // Protected desktop flow for GE, VD, FR, NE, JU, VS.
+  // DO NOT MODIFY payload construction, source selection, normalization usage, composition,
+  // or UI-bound after-change values here without explicit user authorization.
   const runDesktopChildrenTransitionVariant = async (
     referenceVariant: ScenarioVariant,
     targetVariant: ScenarioVariant,
@@ -3245,8 +3492,12 @@ export default function App() {
       Math.round(targetVariant.dossier.fiscalite.fortuneImposableActuelleSaisie || 0)
     );
     let afterFortuneResult: any = null;
+    let officialAfterEconomicResult: any = null;
+    let economicAfterAdjustedResult: any = null;
+    let selectedAfterCantonalOfficialResult: any = null;
     let afterFortunePayload: Record<string, any> | null = null;
     let afterCantonAssetIncome = 0;
+    let officialAfterCantonalTaxableIncome: number | null = null;
 
     if (beforeFortunePayload && typeof beforeFortunePayload === "object") {
       afterFortunePayload = {
@@ -3283,6 +3534,11 @@ export default function App() {
 
       const economicAfterResult = await callTaxware(afterEconomicPayload as any);
       assertTaxwareSuccess(economicAfterResult, "Simulation enfant desktop après");
+      officialAfterEconomicResult = economicAfterResult;
+      officialAfterCantonalTaxableIncome =
+        typeof economicAfterResult?.normalized?.taxableIncomeCantonal === "number"
+          ? economicAfterResult.normalized.taxableIncomeCantonal
+          : null;
       afterCantonAssetIncome = Math.max(
         0,
         Math.round(
@@ -3297,16 +3553,26 @@ export default function App() {
         ...afterEconomicPayload,
         assetIncome: afterCantonAssetIncome,
       };
-      const economicAfterAdjustedResult = await callTaxware(economicAfterAdjustedPayload as any);
+      economicAfterAdjustedResult = await callTaxware(economicAfterAdjustedPayload as any);
       assertTaxwareSuccess(
         economicAfterAdjustedResult,
         "Simulation enfant desktop après patrimoine"
       );
+      selectedAfterCantonalOfficialResult = selectChildTransitionCantonalOfficialResult({
+        economicAfterResult,
+        economicAfterAdjustedResult,
+      });
+      officialAfterCantonalTaxableIncome = getChildTransitionCantonalTargetValue(
+        selectedAfterCantonalOfficialResult?.normalized?.canton ??
+          economicAfterResult?.normalized?.canton ??
+          null,
+        typeof selectedAfterCantonalOfficialResult?.normalized?.taxableIncomeCantonal === "number"
+          ? selectedAfterCantonalOfficialResult.normalized.taxableIncomeCantonal
+          : officialAfterCantonalTaxableIncome
+      );
       afterIccBase = Math.max(
         0,
-        Math.round(
-          economicAfterAdjustedResult?.normalized?.taxableIncomeCantonal ?? afterIccBase
-        )
+        Math.round(officialAfterCantonalTaxableIncome ?? afterIccBase)
       );
     }
 
@@ -3397,7 +3663,7 @@ export default function App() {
     );
     const nextIccBase = Math.max(
       0,
-      Math.round(afterCantonResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
+      Math.round(officialAfterCantonalTaxableIncome ?? afterCantonResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
     );
     const nextFortuneBase = Math.max(
       0,
@@ -3408,15 +3674,33 @@ export default function App() {
     afterDossier.fiscalite.revenuImposable = nextIccBase;
     afterDossier.fiscalite.fortuneImposableActuelleSaisie = nextFortuneBase;
 
-    const afterResult = composeCorrectedTaxwareResult({
-      baseResult: afterCantonResult,
+    const officialAfterScenarioResult =
+      (selectedAfterCantonalOfficialResult?.normalized?.canton ??
+        officialAfterEconomicResult?.normalized?.canton ??
+        null) === "VD"
+        ? afterCantonResult
+        : selectedAfterCantonalOfficialResult ?? officialAfterEconomicResult ?? afterCantonResult;
+
+    const afterResult = composeChildTransitionAfterTaxwareResult({
+      baseResult: officialAfterScenarioResult,
       ifdResult: afterIfdResult,
-      cantonResult: afterCantonResult,
+      cantonResult: officialAfterScenarioResult,
       fortuneResult: finalFortuneResult,
+      officialCantonalTaxableIncome: officialAfterCantonalTaxableIncome,
       debug: {
         source: "desktop-enfant-after-direct-bases",
         referenceVariantId: referenceVariant.id,
         payloads: {
+          officialCanton: beforeEconomicPayload
+            ? {
+                ...beforeEconomicPayload,
+                partnership:
+                  beforeEconomicPayload.partnership ??
+                  (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
+                childrenCount: afterChildren,
+                assets: afterGrossAssets,
+              }
+            : null,
           canton: buildAfterRequest({
             miscIncome:
               afterCantonResult?.raw?.calibration?.driverValue ??
@@ -3441,7 +3725,42 @@ export default function App() {
         },
       },
     });
-
+    console.info("[Fin deduction enfant][desktop]", {
+      beforePayload: {
+        canton: beforeEconomicPayload ?? null,
+        ifd: beforeIfdResult?.raw?.calibration ?? null,
+      },
+      afterPayload: {
+        canton: buildAfterRequest({
+          miscIncome:
+            afterCantonResult?.raw?.calibration?.driverValue ??
+            (afterDossier.fiscalite.revenuImposable || 0),
+          assets: afterGrossAssets,
+          assetIncome: afterCantonAssetIncome,
+        }),
+        ifd: buildFederalTaxwareRequestForDossier(afterDossier, {
+          miscIncome:
+            afterIfdResult?.raw?.calibration?.driverValue ??
+            (afterDossier.fiscalite.revenuImposableIfd || 0),
+          assets: afterGrossAssets,
+          targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
+        }),
+      },
+      beforeRaw: beforeResult?.raw ?? null,
+      afterRaw: afterResult?.raw ?? null,
+      retained: {
+        beforeTaxableIncomeFederal: beforeResult?.normalized?.taxableIncomeFederal ?? null,
+        beforeTaxableIncomeCantonal: beforeResult?.normalized?.taxableIncomeCantonal ?? null,
+        beforeFederalTax: beforeResult?.normalized?.federalTax ?? null,
+        beforeCantonalTax: beforeResult?.normalized?.cantonalCommunalTax ?? null,
+        beforeTotalTax: beforeResult?.normalized?.totalTax ?? null,
+        afterTaxableIncomeFederal: afterResult?.normalized?.taxableIncomeFederal ?? null,
+        afterTaxableIncomeCantonal: afterResult?.normalized?.taxableIncomeCantonal ?? null,
+        afterFederalTax: afterResult?.normalized?.federalTax ?? null,
+        afterCantonalTax: afterResult?.normalized?.cantonalCommunalTax ?? null,
+        afterTotalTax: afterResult?.normalized?.totalTax ?? null,
+      },
+    });
     return {
       ...targetVariant,
       dossier: afterDossier,
@@ -3625,11 +3944,14 @@ export default function App() {
         ? variants.filter((variant) => requestedVariantIds.includes(variant.id))
         : variants;
 
+    const readyVariants = targetVariants.filter((variant) =>
+      isDossierReadyForTaxSimulation(variant.dossier)
+    );
     const notReadyVariants = targetVariants.filter(
       (variant) => !isDossierReadyForTaxSimulation(variant.dossier)
     );
 
-    if (notReadyVariants.length > 0) {
+    if (readyVariants.length === 0) {
       if (!options?.silentMissingRequirements) {
         alert(
           `Renseignez le NPA et la commune fiscale pour : ${notReadyVariants
@@ -3646,15 +3968,15 @@ export default function App() {
 
     setIsSimulatingVariants(true);
     setSimulationStatusMessage(
-      targetVariants.length > 1
-        ? `Calcul des ${targetVariants.length} variantes en cours...`
-        : `Calcul de ${getVariantDisplayLabel(targetVariants[0])} en cours...`
+      readyVariants.length > 1
+        ? `Calcul des ${readyVariants.length} variantes en cours...`
+        : `Calcul de ${getVariantDisplayLabel(readyVariants[0])} en cours...`
     );
 
     try {
       console.info(
         "[Réforme VL] variantes au moment du calcul",
-        targetVariants.map((variant) => ({
+        readyVariants.map((variant) => ({
           id: variant.id,
           nom: getVariantDisplayLabel(variant),
           taxRegime: variant.taxRegime,
@@ -3663,7 +3985,7 @@ export default function App() {
       console.info(
         "[Réforme VL] variantes au moment du calcul detail",
         JSON.stringify(
-          targetVariants.map((variant) => ({
+          readyVariants.map((variant) => ({
             id: variant.id,
             nom: getVariantDisplayLabel(variant),
             taxRegime: variant.taxRegime,
@@ -3671,11 +3993,11 @@ export default function App() {
         )
       );
 
-      const referenceVariant = variants[0] ?? targetVariants[0];
+      const referenceVariant = variants[0] ?? readyVariants[0];
       const simulatedVariants: ScenarioVariant[] = [];
       let referenceSimulatedVariant: ScenarioVariant | null = null;
 
-      for (const variant of targetVariants) {
+      for (const variant of readyVariants) {
         let simulatedVariant: ScenarioVariant;
 
         if (
@@ -4333,6 +4655,10 @@ export default function App() {
     };
   };
 
+  // LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
+  // Protected mobile flow for GE, VD, FR, NE, JU, VS.
+  // Keep behavior aligned with the desktop locked reference flow.
+  // DO NOT MODIFY without explicit user authorization.
   const runMobileEnfantTransition = async (
     payload: MobileEnfantTransitionPayload
   ): Promise<MobileEnfantTransitionResult> => {
@@ -4425,8 +4751,12 @@ export default function App() {
     let afterIccBase = Math.max(0, Math.round(payload.revenuImposableIcc));
     let afterFortuneBase = Math.max(0, Math.round(payload.fortuneImposable));
     let afterFortuneResult: any = null;
+    let officialAfterEconomicResult: any = null;
+    let economicAfterAdjustedResult: any = null;
+    let selectedAfterCantonalOfficialResult: any = null;
     let afterFortunePayload: Record<string, any> | null = null;
     let afterCantonAssetIncome = 0;
+    let officialAfterCantonalTaxableIncome: number | null = null;
 
     if (beforeFortunePayload && typeof beforeFortunePayload === "object") {
       afterFortunePayload = {
@@ -4466,6 +4796,11 @@ export default function App() {
 
       economicAfterResult = await callTaxware(afterEconomicPayload as any);
       assertTaxwareSuccess(economicAfterResult, "Simulation enfant après");
+      officialAfterEconomicResult = economicAfterResult;
+      officialAfterCantonalTaxableIncome =
+        typeof economicAfterResult?.normalized?.taxableIncomeCantonal === "number"
+          ? economicAfterResult.normalized.taxableIncomeCantonal
+          : null;
       afterCantonAssetIncome = Math.max(
         0,
         Math.round(
@@ -4480,13 +4815,23 @@ export default function App() {
         ...afterEconomicPayload,
         assetIncome: afterCantonAssetIncome,
       };
-      const economicAfterAdjustedResult = await callTaxware(economicAfterAdjustedPayload as any);
+      economicAfterAdjustedResult = await callTaxware(economicAfterAdjustedPayload as any);
       assertTaxwareSuccess(economicAfterAdjustedResult, "Simulation enfant après patrimoine");
+      selectedAfterCantonalOfficialResult = selectChildTransitionCantonalOfficialResult({
+        economicAfterResult,
+        economicAfterAdjustedResult,
+      });
+      officialAfterCantonalTaxableIncome = getChildTransitionCantonalTargetValue(
+        selectedAfterCantonalOfficialResult?.normalized?.canton ??
+          economicAfterResult?.normalized?.canton ??
+          null,
+        typeof selectedAfterCantonalOfficialResult?.normalized?.taxableIncomeCantonal === "number"
+          ? selectedAfterCantonalOfficialResult.normalized.taxableIncomeCantonal
+          : officialAfterCantonalTaxableIncome
+      );
       afterIccBase = Math.max(
         0,
-        Math.round(
-          economicAfterAdjustedResult?.normalized?.taxableIncomeCantonal ?? afterIccBase
-        )
+        Math.round(officialAfterCantonalTaxableIncome ?? afterIccBase)
       );
     }
 
@@ -4576,7 +4921,7 @@ export default function App() {
     );
     const nextIccBase = Math.max(
       0,
-      Math.round(afterCantonResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
+      Math.round(officialAfterCantonalTaxableIncome ?? afterCantonResult?.normalized?.taxableIncomeCantonal ?? afterIccBase)
     );
     const nextFortuneBase = Math.max(
       0,
@@ -4587,14 +4932,32 @@ export default function App() {
     afterDossier.fiscalite.revenuImposable = nextIccBase;
     afterDossier.fiscalite.fortuneImposableActuelleSaisie = nextFortuneBase;
 
-    const afterResult = composeCorrectedTaxwareResult({
-      baseResult: afterCantonResult,
+    const officialAfterScenarioResult =
+      (selectedAfterCantonalOfficialResult?.normalized?.canton ??
+        officialAfterEconomicResult?.normalized?.canton ??
+        null) === "VD"
+        ? afterCantonResult
+        : selectedAfterCantonalOfficialResult ?? officialAfterEconomicResult ?? afterCantonResult;
+
+    const afterResult = composeChildTransitionAfterTaxwareResult({
+      baseResult: officialAfterScenarioResult,
       ifdResult: afterIfdResult,
-      cantonResult: afterCantonResult,
+      cantonResult: officialAfterScenarioResult,
       fortuneResult: finalFortuneResult,
+      officialCantonalTaxableIncome: officialAfterCantonalTaxableIncome,
       debug: {
         source: "mobile-enfant-after-direct-bases",
         payloads: {
+          officialCanton: beforeEconomicPayload
+            ? {
+                ...beforeEconomicPayload,
+                partnership:
+                  beforeEconomicPayload.partnership ??
+                  (beforeDossier.famille.aConjoint ? "Marriage" : "Single"),
+                childrenCount: afterChildren,
+                assets: afterGrossAssets,
+              }
+            : null,
           canton: buildAfterRequest({
             miscIncome:
               afterCantonResult?.raw?.calibration?.driverValue ??
@@ -4619,10 +4982,48 @@ export default function App() {
         },
       },
     });
-    const annualDelta =
-      (beforeResult?.normalized?.totalTax ?? 0) - (afterResult?.normalized?.totalTax ?? 0);
+    console.info("[Fin deduction enfant][mobile]", {
+      beforePayload: {
+        canton: beforeEconomicPayload ?? null,
+        ifd: beforeIfdResult?.raw?.calibration ?? null,
+      },
+      afterPayload: {
+        canton: buildAfterRequest({
+          miscIncome:
+            afterCantonResult?.raw?.calibration?.driverValue ??
+            (afterDossier.fiscalite.revenuImposable || 0),
+          assets: afterGrossAssets,
+          assetIncome: afterCantonAssetIncome,
+        }),
+        ifd: buildFederalEnfantRequest(afterDossier, {
+          miscIncome:
+            afterIfdResult?.raw?.calibration?.driverValue ??
+            (afterDossier.fiscalite.revenuImposableIfd || 0),
+          assets: afterGrossAssets,
+          targetFederal: afterDossier.fiscalite.revenuImposableIfd || 0,
+        }),
+      },
+      beforeRaw: beforeResult?.raw ?? null,
+      afterRaw: afterResult?.raw ?? null,
+      retained: {
+        beforeTaxableIncomeFederal: beforeResult?.normalized?.taxableIncomeFederal ?? null,
+        beforeTaxableIncomeCantonal: beforeResult?.normalized?.taxableIncomeCantonal ?? null,
+        beforeFederalTax: beforeResult?.normalized?.federalTax ?? null,
+        beforeCantonalTax: beforeResult?.normalized?.cantonalCommunalTax ?? null,
+        beforeTotalTax: beforeResult?.normalized?.totalTax ?? null,
+        afterTaxableIncomeFederal: afterResult?.normalized?.taxableIncomeFederal ?? null,
+        afterTaxableIncomeCantonal: afterResult?.normalized?.taxableIncomeCantonal ?? null,
+        afterFederalTax: afterResult?.normalized?.federalTax ?? null,
+        afterCantonalTax: afterResult?.normalized?.cantonalCommunalTax ?? null,
+        afterTotalTax: afterResult?.normalized?.totalTax ?? null,
+      },
+    });
+    const annualDelta = getChildTransitionDifference(
+      afterResult?.normalized?.totalTax,
+      beforeResult?.normalized?.totalTax
+    );
     const monthlyDelta = annualDelta / 12;
-    const verdict = getMobileVerdict(annualDelta);
+    const verdict = annualDelta > 0 ? "Défavorable" : annualDelta < 0 ? "Favorable" : "Neutre";
 
     await registerSuccessfulSimulationUsage();
 
@@ -4642,7 +5043,7 @@ export default function App() {
       difference: {
         label: "Différence fiscale",
         value: formatMontantCHFSigne(annualDelta),
-        helper: "Impact annuel estimé du changement.",
+        helper: "Variation annuelle officielle après le changement.",
         verdict,
         metrics: [
           {
@@ -4678,7 +5079,7 @@ export default function App() {
             {
               label: "Revenu imposable IFD après retenu",
               value: formatMontantCHFArrondi(
-                afterDossier.fiscalite.revenuImposableIfd ?? 0
+                afterResult?.normalized?.taxableIncomeFederal ?? 0
               ),
             },
             {
@@ -4690,7 +5091,7 @@ export default function App() {
             {
               label: "Revenu imposable ICC après retenu",
               value: formatMontantCHFArrondi(
-                afterDossier.fiscalite.revenuImposable ?? 0
+                afterResult?.normalized?.taxableIncomeCantonal ?? 0
               ),
             },
             {
@@ -4817,12 +5218,12 @@ export default function App() {
               value: formatMontantCHFArrondi(payload.revenuImposableIcc),
             },
             {
-              label: "Base IFD recalculée après",
-              value: formatMontantCHFArrondi(afterDossier.fiscalite.revenuImposableIfd || 0),
+              label: "Base IFD officielle après",
+              value: formatMontantCHFArrondi(afterResult?.normalized?.taxableIncomeFederal ?? 0),
             },
             {
-              label: "Base ICC recalculée après",
-              value: formatMontantCHFArrondi(afterDossier.fiscalite.revenuImposable || 0),
+              label: "Base ICC officielle après",
+              value: formatMontantCHFArrondi(afterResult?.normalized?.taxableIncomeCantonal ?? 0),
             },
             {
               label: "Fortune imposable",
@@ -5839,6 +6240,55 @@ export default function App() {
   ]);
 
   useEffect(() => {
+    if (
+      !isBielBienneRuntimeDebug ||
+      !taxResultAffiche?.normalized ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const runtimeSnapshot = {
+      source: "biel-bienne-runtime-ui",
+      variantId: activeVariant.id,
+      variantLabel: getVariantDisplayLabel(activeVariant),
+      dossierAssetIncome: Number(activeVariant.dossier.revenus.autresRevenus || 0),
+      effectiveAssetIncome: getEffectiveTaxwareAssetIncome(activeVariant.dossier),
+      payloadAssetIncome: Number(taxwarePayloadControle.AssetIncome || 0),
+      payloadZip: Number(taxwarePayloadControle.Zip || 0),
+      payloadCity: String(taxwarePayloadControle.City || ""),
+      normalizedWealthTax: taxResultAffiche.normalized.wealthTax ?? null,
+      normalizedTotalTax: taxResultAffiche.normalized.totalTax ?? null,
+      renderedWealthTax: formatMontantTaxware(taxResultAffiche.normalized.wealthTax),
+      renderedTotalTax: formatMontantTaxware(taxResultAffiche.normalized.totalTax),
+      rawDisplayedResult: {
+        taxTotal: taxwareRawDisplayedResult?.TaxTotal ?? null,
+        taxesAssetsTaxTotal: taxwareRawDisplayedResult?.TaxesAssets?.TaxTotal ?? null,
+        taxesAssetsSubtotal:
+          taxwareRawDisplayedResult?.TaxesAssets?.CantonMunicipalityParishTaxTotal ?? null,
+        taxesAssetsUnitaryTax: taxwareRawDisplayedResult?.TaxesAssets?.CantonUnitaryTax ?? null,
+      },
+    };
+
+    console.info("[Runtime BE][UI snapshot]", runtimeSnapshot);
+    void fetch("/api/runtime-debug", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(runtimeSnapshot),
+    }).catch(() => undefined);
+  }, [
+    activeVariant,
+    formatMontantTaxware,
+    getEffectiveTaxwareAssetIncome,
+    isBielBienneRuntimeDebug,
+    taxResultAffiche,
+    taxwarePayloadControle,
+    taxwareRawDisplayedResult,
+  ]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const initializeSession = async () => {
@@ -6021,16 +6471,31 @@ export default function App() {
       const pendingCheckoutSessionId =
         checkoutSessionIdFromUrl ||
         (pendingCheckoutSessionStorageKey && typeof window !== "undefined"
-          ? window.localStorage.getItem(pendingCheckoutSessionStorageKey)
+          ? window.sessionStorage.getItem(pendingCheckoutSessionStorageKey) ||
+            window.localStorage.getItem(pendingCheckoutSessionStorageKey)
           : null) ||
         (typeof window !== "undefined"
-          ? window.localStorage.getItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY) ||
-            window.sessionStorage.getItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY)
+          ? window.sessionStorage.getItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY) ||
+            window.localStorage.getItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY)
           : null);
 
       if (accessToken) {
         try {
           if (pendingCheckoutSessionId) {
+            if (pendingCheckoutSessionStorageKey) {
+              window.sessionStorage.removeItem(pendingCheckoutSessionStorageKey);
+              window.localStorage.removeItem(pendingCheckoutSessionStorageKey);
+            }
+            if (typeof window !== "undefined") {
+              window.sessionStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
+              window.localStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
+              const currentUrl = new URL(window.location.href);
+              if (currentUrl.searchParams.has("session_id")) {
+                currentUrl.searchParams.delete("session_id");
+                window.history.replaceState({}, "", currentUrl.toString());
+              }
+            }
+
             try {
               const reconciliation = await reconcileCheckoutSession(
                 accessToken,
@@ -6038,18 +6503,6 @@ export default function App() {
               );
 
               console.info("[App][billing] Session Stripe reconcilee", reconciliation);
-              if (pendingCheckoutSessionStorageKey) {
-                window.localStorage.removeItem(pendingCheckoutSessionStorageKey);
-              }
-              if (typeof window !== "undefined") {
-                window.localStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
-                window.sessionStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
-                const currentUrl = new URL(window.location.href);
-                if (currentUrl.searchParams.has("session_id")) {
-                  currentUrl.searchParams.delete("session_id");
-                  window.history.replaceState({}, "", currentUrl.toString());
-                }
-              }
             } catch (error) {
               console.error("[App][billing] Reconciliation checkout Stripe impossible", error);
             }
@@ -6184,10 +6637,12 @@ export default function App() {
       return;
     }
 
-    window.localStorage.setItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY, checkoutSessionId);
+    window.sessionStorage.setItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY, checkoutSessionId);
+    window.localStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
 
     if (user && pendingCheckoutSessionStorageKey) {
-      window.localStorage.setItem(pendingCheckoutSessionStorageKey, checkoutSessionId);
+      window.sessionStorage.setItem(pendingCheckoutSessionStorageKey, checkoutSessionId);
+      window.localStorage.removeItem(pendingCheckoutSessionStorageKey);
     }
   }, [isCheckoutSuccessRoute, pendingCheckoutSessionStorageKey, user]);
 
@@ -6389,10 +6844,11 @@ export default function App() {
         window.localStorage.removeItem(desktopWorkspaceStorageKey);
       }
       if (pendingCheckoutSessionStorageKey) {
+        window.sessionStorage.removeItem(pendingCheckoutSessionStorageKey);
         window.localStorage.removeItem(pendingCheckoutSessionStorageKey);
       }
-      window.localStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
       window.sessionStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
+      window.localStorage.removeItem(GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY);
     }
 
     setShowUsageLimitModal(false);
@@ -11315,7 +11771,9 @@ export default function App() {
               }}
             >
               <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
-                Comparaison fiscale avant / après optimisation
+                {isEnfantTransitionComparison
+                  ? "Comparaison fiscale avant / après changement"
+                  : "Comparaison fiscale avant / après optimisation"}
               </h3>
               <span style={helperStyle}>
                 Comparaison basée sur les résultats réels TaxWare de la section
@@ -11332,10 +11790,10 @@ export default function App() {
                 }}
               >
                 <div style={{ color: "#1d4ed8", fontSize: "13px", fontWeight: "bold" }}>
-                  Economie totale
+                  {comparisonTotalLabel}
                 </div>
                 <div style={{ color: "#0f172a", fontSize: "28px", fontWeight: "bold" }}>
-                  {formatEcartTaxware(
+                  {comparisonDeltaFormatter(
                     taxResultSansOptimisation.normalized.totalTax,
                     taxResultAffiche.normalized.totalTax
                   )}
@@ -11352,7 +11810,7 @@ export default function App() {
               >
                 <div style={subCardStyle}>
                   <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
-                    Avant optimisation
+                    {comparisonBeforeLabel}
                   </h4>
                   <div style={{ display: "grid", gap: "10px" }}>
                     <div>
@@ -11405,7 +11863,7 @@ export default function App() {
 
                 <div style={subCardStyle}>
                   <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
-                    Après optimisation
+                    {comparisonAfterLabel}
                   </h4>
                   <div style={{ display: "grid", gap: "10px" }}>
                     <div>
@@ -11458,14 +11916,14 @@ export default function App() {
 
                 <div style={subCardStyle}>
                   <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
-                    Ecart / economie
+                    {comparisonDeltaLabel}
                   </h4>
                   <div style={{ display: "grid", gap: "10px" }}>
                     <div>
                       <label style={labelStyle}>IFD</label>
                       <input
                         type="text"
-                        value={formatEcartTaxware(
+                        value={comparisonDeltaFormatter(
                           taxResultSansOptimisation.normalized.federalTax,
                           taxResultAffiche.normalized.federalTax
                         )}
@@ -11477,7 +11935,7 @@ export default function App() {
                       <label style={labelStyle}>Impôt cantonal</label>
                       <input
                         type="text"
-                        value={formatEcartTaxware(
+                        value={comparisonDeltaFormatter(
                           taxResultSansOptimisation.normalized.cantonalTax,
                           taxResultAffiche.normalized.cantonalTax
                         )}
@@ -11489,7 +11947,7 @@ export default function App() {
                       <label style={labelStyle}>Impôt communal</label>
                       <input
                         type="text"
-                        value={formatEcartTaxware(
+                        value={comparisonDeltaFormatter(
                           taxResultSansOptimisation.normalized.communalTax,
                           taxResultAffiche.normalized.communalTax
                         )}
@@ -11501,7 +11959,7 @@ export default function App() {
                       <label style={labelStyle}>Impôt sur la fortune</label>
                       <input
                         type="text"
-                        value={formatEcartTaxware(
+                        value={comparisonDeltaFormatter(
                           taxResultSansOptimisation.normalized.wealthTax,
                           taxResultAffiche.normalized.wealthTax
                         )}
@@ -11513,7 +11971,7 @@ export default function App() {
                       <label style={labelStyle}>Impôt total</label>
                       <input
                         type="text"
-                        value={formatEcartTaxware(
+                        value={comparisonDeltaFormatter(
                           taxResultSansOptimisation.normalized.totalTax,
                           taxResultAffiche.normalized.totalTax
                         )}

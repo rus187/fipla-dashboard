@@ -5,6 +5,10 @@ import MobileComparisonCard from "./MobileComparisonCard";
 import MobileNavigation from "./MobileNavigation";
 import MobilePrimaryAction from "./MobilePrimaryAction";
 import MobileSectionHeader from "./MobileSectionHeader";
+import {
+  resolveSwissLocationSelection,
+  searchSwissLocations,
+} from "../../lib/geography/locationLookup";
 
 export type MobileDomicilePayload = {
   prenom: string;
@@ -91,6 +95,8 @@ export default function MobileDomicileFlow({
   const [form, setForm] = useState<MobileDomicilePayload>(() => createInitialState(activeDossier));
   const [result, setResult] = useState<MobileDomicileResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const currentLocalitySuggestions = searchSwissLocations(form.currentLocality, 8);
+  const newLocalitySuggestions = searchSwissLocations(form.newLocality, 8);
 
   useEffect(() => {
     setForm((current) => ({
@@ -267,14 +273,54 @@ export default function MobileDomicileFlow({
                 className="mobile-field__input"
                 type="text"
                 value={form.currentLocality}
-                onChange={(event) =>
-                  {
-                    const value = event.target.value;
-                    setForm((current) => ({ ...current, currentLocality: value }));
-                    onActiveDossierChange({ locality: value });
+                list="mobile-current-locality-suggestions"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  const selectedLocation = resolveSwissLocationSelection(value, {
+                    preferredZip: form.currentZip,
+                  });
+
+                  if (selectedLocation) {
+                    setForm((current) => ({
+                      ...current,
+                      currentZip: selectedLocation.zip,
+                      currentLocality: selectedLocation.locality,
+                    }));
+                    onActiveDossierChange({
+                      zip: selectedLocation.zip,
+                      locality: selectedLocation.locality,
+                    });
+                    return;
                   }
-                }
+
+                  setForm((current) => ({ ...current, currentLocality: value }));
+                  onActiveDossierChange({ locality: value });
+                }}
+                onBlur={(event) => {
+                  const selectedLocation = resolveSwissLocationSelection(event.target.value, {
+                    preferredZip: form.currentZip,
+                  });
+
+                  if (!selectedLocation) {
+                    return;
+                  }
+
+                  setForm((current) => ({
+                    ...current,
+                    currentZip: selectedLocation.zip,
+                    currentLocality: selectedLocation.locality,
+                  }));
+                  onActiveDossierChange({
+                    zip: selectedLocation.zip,
+                    locality: selectedLocation.locality,
+                  });
+                }}
               />
+              <datalist id="mobile-current-locality-suggestions">
+                {currentLocalitySuggestions.map((suggestion) => (
+                  <option key={suggestion.key} value={suggestion.selectionLabel} />
+                ))}
+              </datalist>
             </label>
           </div>
           <MobilePrimaryAction label="Passer au nouveau domicile" onClick={() => setStepIndex(2)} />
@@ -300,10 +346,45 @@ export default function MobileDomicileFlow({
                 className="mobile-field__input"
                 type="text"
                 value={form.newLocality}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, newLocality: event.target.value }))
-                }
+                list="mobile-new-locality-suggestions"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  const selectedLocation = resolveSwissLocationSelection(value, {
+                    preferredZip: form.newZip,
+                  });
+
+                  if (selectedLocation) {
+                    setForm((current) => ({
+                      ...current,
+                      newZip: selectedLocation.zip,
+                      newLocality: selectedLocation.locality,
+                    }));
+                    return;
+                  }
+
+                  setForm((current) => ({ ...current, newLocality: value }));
+                }}
+                onBlur={(event) => {
+                  const selectedLocation = resolveSwissLocationSelection(event.target.value, {
+                    preferredZip: form.newZip,
+                  });
+
+                  if (!selectedLocation) {
+                    return;
+                  }
+
+                  setForm((current) => ({
+                    ...current,
+                    newZip: selectedLocation.zip,
+                    newLocality: selectedLocation.locality,
+                  }));
+                }}
               />
+              <datalist id="mobile-new-locality-suggestions">
+                {newLocalitySuggestions.map((suggestion) => (
+                  <option key={suggestion.key} value={suggestion.selectionLabel} />
+                ))}
+              </datalist>
             </label>
           </div>
           <MobilePrimaryAction label="Passer aux données fiscales" onClick={() => setStepIndex(3)} />

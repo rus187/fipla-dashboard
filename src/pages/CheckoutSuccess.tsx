@@ -14,8 +14,8 @@ export default function CheckoutSuccess() {
     }
 
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("fipla-pending-checkout-session-global", sessionId);
       window.sessionStorage.setItem("fipla-pending-checkout-session-global", sessionId);
+      window.localStorage.removeItem("fipla-pending-checkout-session-global");
     }
 
     console.info("[Stripe][checkout] success page loaded", {

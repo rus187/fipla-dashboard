@@ -78,6 +78,7 @@ export type ClientFiscalite = {
   revenuImposableIfd: number;
   revenuImposable: number;
   fortuneImposableActuelleSaisie: number;
+  revenuFortuneBE: number;
   troisiemePilierSimule: number;
   rachatLpp: number;
   ajustementManuelRevenu: number;

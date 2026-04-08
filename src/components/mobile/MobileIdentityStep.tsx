@@ -1,3 +1,8 @@
+import {
+  resolveSwissLocationSelection,
+  searchSwissLocations,
+} from "../../lib/geography/locationLookup";
+
 type MobileIdentityValue = {
   prenom: string;
   nom: string;
@@ -16,6 +21,8 @@ export default function MobileIdentityStep({
   value,
   onChange,
 }: MobileIdentityStepProps) {
+  const localitySuggestions = searchSwissLocations(value.locality, 8);
+
   return (
     <div className="mobile-form-grid">
       <label className="mobile-field">
@@ -55,8 +62,45 @@ export default function MobileIdentityStep({
           className="mobile-field__input"
           type="text"
           value={value.locality}
-          onChange={(event) => onChange({ ...value, locality: event.target.value })}
+          list="mobile-locality-suggestions"
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            const selectedLocation = resolveSwissLocationSelection(nextValue, {
+              preferredZip: value.zip,
+            });
+
+            if (selectedLocation) {
+              onChange({
+                ...value,
+                zip: selectedLocation.zip,
+                locality: selectedLocation.locality,
+              });
+              return;
+            }
+
+            onChange({ ...value, locality: nextValue });
+          }}
+          onBlur={(event) => {
+            const selectedLocation = resolveSwissLocationSelection(event.target.value, {
+              preferredZip: value.zip,
+            });
+
+            if (!selectedLocation) {
+              return;
+            }
+
+            onChange({
+              ...value,
+              zip: selectedLocation.zip,
+              locality: selectedLocation.locality,
+            });
+          }}
         />
+        <datalist id="mobile-locality-suggestions">
+          {localitySuggestions.map((suggestion) => (
+            <option key={suggestion.key} value={suggestion.selectionLabel} />
+          ))}
+        </datalist>
       </label>
 
       <label className="mobile-field">

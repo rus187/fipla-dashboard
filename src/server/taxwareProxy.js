@@ -9,6 +9,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.post("/api/runtime-debug", (req, res) => {
+  console.log("[RUNTIME DEBUG]", JSON.stringify(req.body ?? {}, null, 2));
+  return res.json({ ok: true });
+});
+
 function basicAuthHeader() {
   const username = process.env.TAXWARE_USERNAME?.trim();
   const password = process.env.TAXWARE_PASSWORD?.trim();

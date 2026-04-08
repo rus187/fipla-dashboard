@@ -284,9 +284,13 @@ export function normalizeTaxwareResponse(
     firstNumber(source, [
       "WealthTaxCantonalCommunal",
       "AssetTaxCantonalCommunal",
+      "TaxesAssets.TaxTotal",
       "TaxesAssets.CantonMunicipalityParishTaxTotal",
       "TaxesAssets.CantonMunicipalityTaxTotal",
-      "TaxesAssets.TaxTotal",
+      "Result.TaxesAssets.TaxTotal",
+      "Summary.TaxesAssets.TaxTotal",
+      "Result.TaxesAssets.CantonMunicipalityParishTaxTotal",
+      "Summary.TaxesAssets.CantonMunicipalityParishTaxTotal",
     ]);
 
   const exactTotalTax = firstNumberWithMatchedPath(source, [

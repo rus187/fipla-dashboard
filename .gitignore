@@ -37,6 +37,9 @@ dist-ssr
 **/.served-*/
 **/.simulation-*.png
 **/simulation-*-proof.png
+.tmp-taxware-test/
+.billing-e2e-*.json
+.ui-*.png
 
 *.env
 src/server/.env

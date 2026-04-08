@@ -1,6 +1,11 @@
 import type { RefObject } from "react";
 import type { DossierClient } from "../types";
 import type { AnalysisMode } from "./DecisionIntro";
+import {
+  resolveSwissLocationSelection,
+  searchSwissLocations,
+} from "../lib/geography/locationLookup";
+import { isBernAssetIncomeEnabled } from "../lib/taxware/bernAssetIncome";
 
 type SituationEntryScreenProps = {
   analysisMode: AnalysisMode | null;
@@ -46,6 +51,8 @@ export default function SituationEntryScreen({
   onFiscalInputsCompleted,
   identitySectionRef,
 }: SituationEntryScreenProps) {
+  const localitySuggestions = searchSwissLocations(dossier.identite.commune, 8);
+
   const selectedMode =
     analysisMode ?? (dossier.immobilier.regimeFiscal === "reforme" ? "projected" : "current");
   const selectedModeLabel = modeLabels[selectedMode];
@@ -86,9 +93,16 @@ export default function SituationEntryScreen({
     (effectiveIncome > 0 || effectiveFortune > 0);
 
   const isLaunchDisabled = !isMinimumDataReady || !canLaunchSimulation || isSimulating;
+  // BE LOCKED LOGIC - REVENU DE LA FORTUNE / AssetIncome
+  // The explicit field is intentionally visible for Bern only.
+  const isBernCanton = isBernAssetIncomeEnabled(dossier.identite);
 
   const updateFiscalField = (
-    field: "revenuImposableIfd" | "revenuImposable" | "fortuneImposableActuelleSaisie",
+    field:
+      | "revenuImposableIfd"
+      | "revenuImposable"
+      | "fortuneImposableActuelleSaisie"
+      | "revenuFortuneBE",
     value: string
   ) => {
     onDossierChange({
@@ -188,18 +202,69 @@ export default function SituationEntryScreen({
                 <input
                   type="text"
                   value={dossier.identite.commune}
-                  onChange={(event) =>
+                  list="desktop-locality-suggestions"
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    const selectedLocation = resolveSwissLocationSelection(nextValue, {
+                      preferredZip: dossier.identite.npa,
+                    });
+
+                    if (selectedLocation) {
+                      onDossierChange({
+                        ...dossier,
+                        identite: {
+                          ...dossier.identite,
+                          npa: selectedLocation.zip,
+                          commune: selectedLocation.locality,
+                          communeFiscale: selectedLocation.fiscalCommune,
+                          canton: selectedLocation.canton,
+                          cantonFiscal: selectedLocation.canton,
+                          taxwareZip: selectedLocation.zip,
+                          taxwareCity: selectedLocation.fiscalCommune,
+                        },
+                      });
+                      return;
+                    }
+
                     onDossierChange({
                       ...dossier,
                       identite: {
                         ...dossier.identite,
-                        commune: event.target.value,
-                        communeFiscale: event.target.value,
-                        taxwareCity: event.target.value,
+                        commune: nextValue,
+                        communeFiscale: nextValue,
+                        taxwareCity: nextValue,
                       },
-                    })
-                  }
+                    });
+                  }}
+                  onBlur={(event) => {
+                    const selectedLocation = resolveSwissLocationSelection(event.target.value, {
+                      preferredZip: dossier.identite.npa,
+                    });
+
+                    if (!selectedLocation) {
+                      return;
+                    }
+
+                    onDossierChange({
+                      ...dossier,
+                      identite: {
+                        ...dossier.identite,
+                        npa: selectedLocation.zip,
+                        commune: selectedLocation.locality,
+                        communeFiscale: selectedLocation.fiscalCommune,
+                        canton: selectedLocation.canton,
+                        cantonFiscal: selectedLocation.canton,
+                        taxwareZip: selectedLocation.zip,
+                        taxwareCity: selectedLocation.fiscalCommune,
+                      },
+                    });
+                  }}
                 />
+                <datalist id="desktop-locality-suggestions">
+                  {localitySuggestions.map((suggestion) => (
+                    <option key={suggestion.key} value={suggestion.selectionLabel} />
+                  ))}
+                </datalist>
               </label>
 
               <label className="situation-field">
@@ -258,7 +323,11 @@ export default function SituationEntryScreen({
                 <h3 className="situation-card__title">Bases imposables à reporter</h3>
               </div>
 
-              <div className="situation-fields situation-fields--three">
+              <div
+                className={`situation-fields ${
+                  isBernCanton ? "situation-fields--four" : "situation-fields--three"
+                }`}
+              >
                 <label className="situation-field">
                   <span>Revenu imposable IFD</span>
                   <input
@@ -300,6 +369,19 @@ export default function SituationEntryScreen({
                     }}
                   />
                 </label>
+
+                {isBernCanton ? (
+                  <label className="situation-field">
+                    <span>Revenu de la fortune</span>
+                    <input
+                      type="number"
+                      value={dossier.fiscalite.revenuFortuneBE || 0}
+                      onChange={(event) =>
+                        updateFiscalField("revenuFortuneBE", event.target.value)
+                      }
+                    />
+                  </label>
+                ) : null}
               </div>
 
               <p className="situation-fiscal-entry__helper">
