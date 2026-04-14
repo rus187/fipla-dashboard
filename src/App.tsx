@@ -1,4 +1,11 @@
-import { useEffect, useEffectEvent, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import {
   Bar,
@@ -20,9 +27,21 @@ import type { DossierClient } from "./types";
 import zipToFiscal from "./data/geography/zip-to-fiscal.json";
 import { generatePremiumPdf } from "./lib/pdf/generatePremiumPdf";
 import { buildTaxwarePayload } from "./lib/taxware/buildTaxwarePayload";
+import { computeInsurancePrimesDeductionCap } from "./lib/taxware/domicileInsurancePrimes";
 import { isBernAssetIncomeEnabled } from "./lib/taxware/bernAssetIncome";
-import { callTaxware } from "./lib/taxware/callTaxware";
-import { getComparisonScenarios } from "./lib/multicriteriaComparison";
+import { callTaxware, callTaxwareDomicileFromCityV2 } from "./lib/taxware/callTaxware";
+import {
+  buildDomicilePayloadAudit,
+  extractDomicileTaxwareMetrics,
+  getDomicileLocationFromDossier,
+  getDomicileValidationError,
+  hasDomicileEconomicInputs,
+  stripDomicilePayloadLocation,
+} from "./lib/taxware/domicileComparison";
+import { buildDomicileTaxCityV2Payload } from "./lib/taxware/domicileTaxCityV2";
+import { runDomicileRealSimulation } from "./lib/taxware/domicileRealSimulation";
+import { getComparisonScenarios, type ComparisonScenario } from "./lib/multicriteriaComparison";
+import StableNumberInput from "./components/StableNumberInput";
 import {
   getAdvisoryToneProfile,
   getClientProfiles,
@@ -76,6 +95,7 @@ type ZipFiscalRow = {
 };
 
 type VariantTaxRegime = "current" | "valeur_locative_reform";
+type DomicileComparisonMode = "quick-estimate" | "real-simulation";
 
 type ScenarioVariant = {
   id: string;
@@ -106,8 +126,16 @@ const SIMULATION_UNLOCKED_STORAGE_PREFIX = "fipla-simulations-unlocked";
 const DESKTOP_WORKSPACE_STORAGE_PREFIX = "fipla-desktop-workspace";
 const PENDING_CHECKOUT_SESSION_STORAGE_PREFIX = "fipla-pending-checkout-session";
 const GLOBAL_PENDING_CHECKOUT_SESSION_STORAGE_KEY = "fipla-pending-checkout-session-global";
-const DOMICILE_OCCUPATIONAL_EXPENSE_FLOOR = 2000;
-const DOMICILE_SECOND_EARNER_FEDERAL_FLOOR = 6650;
+const PENSION_SIMULATION_LOCKED_PC_CANTONS = new Set(["JU", "VS", "NE", "VD", "GE", "BE", "FR"]);
+const END_OF_CHILD_DEDUCTION_LOCKED_PC_CANTONS = new Set([
+  "JU",
+  "VS",
+  "NE",
+  "VD",
+  "GE",
+  "BE",
+  "FR",
+]);
 const VARIANT_TAX_REGIME_LABELS: Record<VariantTaxRegime, string> = {
   current: "Situation actuelle",
   valeur_locative_reform: "Réforme valeur locative",
@@ -368,8 +396,8 @@ function composeCorrectedTaxwareResult(params: {
   };
 }
 
-// LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
-// Scope protected here: GE, VD, FR, NE, JU, VS
+// END OF CHILD DEDUCTION LOCKED (PC) – JU/VS/NE/VD/GE/BE/FR – DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
+// Scope protected here: JU, VS, NE, VD, GE, BE, FR
 // These cantons are production-grade references for the child-deduction flow.
 // DO NOT MODIFY this composition logic, source-priority order, or displayed-field mapping
 // without explicit user authorization. Any behavior change here can regress stable cantons.
@@ -413,9 +441,9 @@ function composeChildTransitionAfterTaxwareResult(params: {
   };
 }
 
-// LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
+// END OF CHILD DEDUCTION LOCKED (PC) – JU/VS/NE/VD/GE/BE/FR – DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
 // DO NOT MODIFY this cantonal-source selection rule without explicit approval.
-// This function protects the official TaxWare source used by GE, VD, FR, NE, JU, VS.
+// This function protects the official TaxWare source used by JU, VS, NE, VD, GE, BE, FR.
 function selectChildTransitionCantonalOfficialResult(params: {
   economicAfterResult: any;
   economicAfterAdjustedResult: any;
@@ -430,9 +458,9 @@ function selectChildTransitionCantonalOfficialResult(params: {
   return economicAfterResult ?? economicAfterAdjustedResult ?? null;
 }
 
-// LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
+// END OF CHILD DEDUCTION LOCKED (PC) – JU/VS/NE/VD/GE/BE/FR – DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
 // DO NOT MODIFY this target-selection rule without explicit approval.
-// VD is intentionally handled here as part of the locked Romand reference behavior.
+// VD is intentionally handled here as part of the locked desktop reference behavior.
 function getChildTransitionCantonalTargetValue(
   cantonCode: string | null | undefined,
   officialCantonalTaxableIncome: number | null | undefined
@@ -605,6 +633,67 @@ function getTaxwareLocationForDossier(dossier: DossierClient) {
   };
 }
 
+function stripDomicileTaxCityV2PayloadLocation(payload: Record<string, unknown>) {
+  const { City, Zip, ...rest } = payload;
+  return rest;
+}
+
+function getDomicileTaxCityMetricsFromResult(result: any) {
+  return {
+    taxableIncomeFederal:
+      typeof result?.normalized?.taxableIncomeFederal === "number"
+        ? result.normalized.taxableIncomeFederal
+        : null,
+    taxableIncomeCantonal:
+      typeof result?.normalized?.taxableIncomeCantonal === "number"
+        ? result.normalized.taxableIncomeCantonal
+        : null,
+    taxableAssets:
+      typeof result?.normalized?.taxableAssets === "number"
+        ? result.normalized.taxableAssets
+        : null,
+    taxTotal:
+      typeof result?.normalized?.totalTax === "number" ? result.normalized.totalTax : null,
+  };
+}
+
+function getTaxwareMunicipalityIdentityForDossier(dossier: DossierClient) {
+  return {
+    municipality:
+      (dossier.identite.taxwareCity || "").trim() ||
+      (dossier.identite.communeFiscale || "").trim() ||
+      (dossier.identite.commune || "").trim(),
+    shortnameCanton:
+      ((dossier.identite.cantonFiscal || "").trim() || (dossier.identite.canton || "").trim()).toUpperCase(),
+  };
+}
+
+function getTotalHouseholdIncome(dossier: DossierClient) {
+  return (
+    (dossier.revenus.salaire || 0) +
+    (dossier.revenus.avs || 0) +
+    (dossier.revenus.lpp || 0) +
+    (dossier.revenus.salaireConjoint || 0) +
+    (dossier.revenus.avsConjoint || 0) +
+    (dossier.revenus.lppConjoint || 0) +
+    (dossier.revenus.autresRevenusConjoint || 0) +
+    (dossier.revenus.revenuFortune || 0) +
+    (dossier.revenus.dividendesPriviligies || 0) +
+    (dossier.revenus.participationsPriviligiees || 0) +
+    (dossier.revenus.autresRevenus || 0)
+  );
+}
+
+function getDomicileInsuranceDeductionCap(dossier: DossierClient) {
+  const caps = computeInsurancePrimesDeductionCap(dossier);
+
+  return {
+    federal: caps.federal,
+    cantonal: caps.cantonal,
+    retainedForPayload: Math.min(caps.federal, caps.cantonal),
+  };
+}
+
 function isDossierReadyForTaxSimulation(dossier: DossierClient) {
   const location = getTaxwareLocationForDossier(dossier);
   return location.zip.length > 0 && location.city.length > 0;
@@ -735,18 +824,11 @@ function getRentalPropertyNetTaxableAssetsAdjustment(dossier: DossierClient) {
 }
 
 function getLocalSimulatedTaxableAssets(dossier: DossierClient) {
-  const liquiditesAjustees =
-    (dossier.fortune.liquidites || 0) -
-    (dossier.fiscalite.troisiemePilierSimule || 0) -
-    (dossier.fiscalite.rachatLpp || 0) +
-    (dossier.fiscalite.ajustementManuelRevenu || 0);
-  const fortuneFiscale =
-    liquiditesAjustees + (dossier.fortune.titres || 0) + getTotalRealEstateFiscalValue(dossier);
-  const totalDettes = getTotalMortgageDebt(dossier) + (dossier.dettes.autresDettes || 0);
-
   return Math.max(
     0,
-    fortuneFiscale - totalDettes + (dossier.fiscalite.correctionFiscaleManuelleFortune || 0)
+    Math.max(0, dossier.fiscalite.fortuneImposableActuelleSaisie || 0) +
+      getRentalPropertyNetTaxableAssetsAdjustment(dossier) +
+      (dossier.fiscalite.correctionFiscaleManuelleFortune || 0)
   );
 }
 
@@ -842,6 +924,41 @@ function getVariantDisplayedTaxResult(variant: ScenarioVariant) {
     : variant.taxResult;
 }
 
+function isDesktopDomicileVariantLabel(variant: ScenarioVariant) {
+  return `${variant.customLabel || ""} ${variant.label || ""}`.toLowerCase().includes("domicile");
+}
+
+function isDesktopDomicileFinalResult(result: any) {
+  const debugSource = String(result?.raw?.debug?.source || "");
+
+  return debugSource.startsWith("domicile-") && hasCompleteDisplayedTaxResult(result);
+}
+
+function getDesktopDomicileFinalDisplayedResult(variant: ScenarioVariant) {
+  const candidates = [
+    variant.taxResult,
+    variant.taxResultAvecDeductionsEstime,
+    variant.comparisonTaxResults?.mixed,
+  ];
+
+  return candidates.find((result) => isDesktopDomicileFinalResult(result)) ?? null;
+}
+
+function getVariantUiDisplayedTaxResult(variant: ScenarioVariant) {
+  const isDesktopDomicileVariant = isDesktopDomicileVariantLabel(variant);
+
+  if (!isDesktopDomicileVariant) {
+    return getVariantDisplayedTaxResult(variant);
+  }
+
+  const finalDomicileDisplayedResult = getDesktopDomicileFinalDisplayedResult(variant);
+  if (finalDomicileDisplayedResult) {
+    return finalDomicileDisplayedResult;
+  }
+
+  return null;
+}
+
 function hasCompleteDisplayedTaxResult(result: any) {
   const normalized = result?.normalized;
 
@@ -857,9 +974,88 @@ function hasCompleteDisplayedTaxResult(result: any) {
   );
 }
 
+function getDesktopLockedPensionSimulationCantonCode(
+  variant: ScenarioVariant,
+  displayedResult?: any
+) {
+  const debugSource = String(displayedResult?.raw?.debug?.source || "");
+  const cantonCode = `${variant.dossier.identite.cantonFiscal || variant.dossier.identite.canton || ""}`
+    .trim()
+    .toUpperCase();
+  const isLockedPensionDesktopFlow =
+    debugSource === "taxware-baseline-payloads-plus-pension" &&
+    (variant.dossier.fiscalite.troisiemePilierSimule || 0) + (variant.dossier.fiscalite.rachatLpp || 0) > 0;
+
+  if (!isLockedPensionDesktopFlow) {
+    return null;
+  }
+
+  if (PENSION_SIMULATION_LOCKED_PC_CANTONS.has(cantonCode)) {
+    return cantonCode;
+  }
+
+  return null;
+}
+
+function getDesktopLockedChildDeductionCantonCode(
+  variant: ScenarioVariant,
+  displayedResult?: any
+) {
+  const debugSource = String(displayedResult?.raw?.debug?.source || "");
+  const cantonCode = `${variant.dossier.identite.cantonFiscal || variant.dossier.identite.canton || ""}`
+    .trim()
+    .toUpperCase();
+  const isLockedChildDeductionDesktopFlow = debugSource === "desktop-enfant-after-direct-bases";
+
+  if (!isLockedChildDeductionDesktopFlow) {
+    return null;
+  }
+
+  if (END_OF_CHILD_DEDUCTION_LOCKED_PC_CANTONS.has(cantonCode)) {
+    return cantonCode;
+  }
+
+  return null;
+}
+
 function getVariantTaxTotal(variant: ScenarioVariant) {
+  const displayedResult = getVariantUiDisplayedTaxResult(variant);
+  const domicileLabel = `${variant.customLabel || ""} ${variant.label || ""}`.toLowerCase();
+  const isDesktopDomicileVariant = domicileLabel.includes("domicile");
+  const lockedPensionDesktopCantonCode = getDesktopLockedPensionSimulationCantonCode(
+    variant,
+    displayedResult
+  );
+  const lockedChildDeductionDesktopCantonCode = getDesktopLockedChildDeductionCantonCode(
+    variant,
+    displayedResult
+  );
+
+  if (
+    lockedPensionDesktopCantonCode &&
+    hasCompleteDisplayedTaxResult(displayedResult) &&
+    typeof displayedResult?.normalized?.totalTax === "number"
+  ) {
+    return displayedResult.normalized.totalTax;
+  }
+
+  // END OF CHILD DEDUCTION LOCKED (PC) – JU/VS/NE/VD/GE/BE/FR – DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
+  // Locked desktop child-deduction scenarios must render the real TaxWare-backed result card.
+  // Do not let validated variants fall back to stale dossier.fiscalite.impotsEstimes values here.
+  if (
+    lockedChildDeductionDesktopCantonCode &&
+    hasCompleteDisplayedTaxResult(displayedResult) &&
+    typeof displayedResult?.normalized?.totalTax === "number"
+  ) {
+    return displayedResult.normalized.totalTax;
+  }
+
+  if (isDesktopDomicileVariant) {
+    return displayedResult?.normalized?.totalTax ?? null;
+  }
+
   return (
-    getVariantDisplayedTaxResult(variant)?.normalized?.totalTax ??
+    displayedResult?.normalized?.totalTax ??
     variant.dossier.fiscalite.impotsEstimes ??
     null
   );
@@ -894,11 +1090,7 @@ function getVariantComparisonMetrics(variant: ScenarioVariant) {
     return null;
   }
 
-  const totalRevenus =
-    (dossier.revenus.salaire || 0) +
-    (dossier.revenus.avs || 0) +
-    (dossier.revenus.lpp || 0) +
-    (dossier.revenus.autresRevenus || 0);
+  const totalRevenus = getTotalHouseholdIncome(dossier);
 
   const habitationPropreActive = Boolean(dossier.immobilier.proprietaireOccupant);
   const biensRendementActifs = Boolean(dossier.immobilier.possedeBienRendement);
@@ -1152,14 +1344,14 @@ export default function App() {
   const [usageLimitError, setUsageLimitError] = useState("");
   const [isPreparingCheckout, setIsPreparingCheckout] = useState(false);
   const [hasStartedClientEdit, setHasStartedClientEdit] = useState(false);
-  const [showClientStartModal, setShowClientStartModal] = useState(false);
-  const [hasConfirmedClientStartModal, setHasConfirmedClientStartModal] = useState(false);
-  const [clientStartModalError, setClientStartModalError] = useState("");
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode | null>(null);
   const [isDecisionHelpOpen, setIsDecisionHelpOpen] = useState(false);
   const [activeDesktopCalculator, setActiveDesktopCalculator] =
     useState<DesktopCalculatorId>("simulation-fiscale");
   const [variants, setVariants] = useState<ScenarioVariant[]>(createInitialVariants);
+  const [domicileComparisonMode, setDomicileComparisonMode] =
+    useState<DomicileComparisonMode>("real-simulation");
+  const [domicileModeRequiresRerun, setDomicileModeRequiresRerun] = useState(false);
   const [isDesktopWorkspaceHydrated, setIsDesktopWorkspaceHydrated] = useState(false);
   const activeVariant = variants[activeVariantIndex];
   const conseillerPassword = import.meta.env.VITE_CONSEILLER_PASSWORD || "";
@@ -1171,10 +1363,6 @@ export default function App() {
   const dossier = activeVariant.dossier;
   const taxResult = activeVariant.taxResult;
   const taxResultSansOptimisation = activeVariant.taxResultSansOptimisation;
-  const taxResultAjustementManuel = activeVariant.taxResultAjustementManuel;
-  const baseClientIdentity = variants[0]?.dossier.identite ?? emptyDossier.identite;
-  const isDesktopClientCardPending =
-    `${baseClientIdentity.prenom} ${baseClientIdentity.nom}`.trim().length === 0;
 
   const setDossier = (nextDossier: DossierClient) => {
     const isBernBielDossier =
@@ -1210,6 +1398,7 @@ export default function App() {
             const linkedVariant = clearVariantSimulationOutputs(
               cloneVariantStateFromBase(updatedBaseVariant, variant, true)
             );
+
             delete autoSimulationStatusRef.current[linkedVariant.id];
             delete pendingDesktopSimulationDisplayRef.current[linkedVariant.id];
             return linkedVariant;
@@ -1224,6 +1413,11 @@ export default function App() {
           return variant;
         }
 
+        // PENSION SIMULATION LOCKED (PC) – JU/VS/NE/VD/GE/BE/FR – DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
+        // END OF CHILD DEDUCTION LOCKED (PC) – JU/VS/NE/VD/GE/BE/FR – DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
+        // Each variant must keep its own fiscal inputs and simulation outputs. This branch must remain
+        // variant-scoped so locked desktop pension and child-deduction scenarios never reuse Base values
+        // while a variant is edited.
         // Keep BE "Revenu de la fortune" scoped to each variant.
         // Clearing cached simulation outputs here prevents a variant from
         // reusing Base results after its own revenuFortuneBE value changes.
@@ -1232,7 +1426,6 @@ export default function App() {
           dossier: nextDossier,
           isLinkedToVariant1: false,
         });
-
         delete autoSimulationStatusRef.current[updatedVariant.id];
         delete pendingDesktopSimulationDisplayRef.current[updatedVariant.id];
 
@@ -1423,8 +1616,8 @@ export default function App() {
         }
 
         return {
-          ...cloneVariantStateFromBase(baseVariant, variant, false),
-          isLinkedToVariant1: false,
+          ...cloneVariantStateFromBase(baseVariant, variant, true),
+          isLinkedToVariant1: true,
         };
       }));
     });
@@ -1645,22 +1838,11 @@ export default function App() {
   };
 
   const handleDesktopActiveDossierEdit = () => {
-    setClientStartModalError("");
-    setShowClientStartModal(false);
     setHasStartedClientEdit(true);
     setActiveVariantIndex(0);
     setActiveDesktopCalculator("simulation-fiscale");
     handleJourneyNavigation("informations-generales");
     scrollToIdentitySection();
-  };
-
-  const handleClientStartModalContinue = () => {
-    if (!hasConfirmedClientStartModal) {
-      setClientStartModalError("Veuillez cocher la case");
-      return;
-    }
-
-    handleDesktopActiveDossierEdit();
   };
 
   const scrollToDesktopCalculatorHub = () => {
@@ -1722,7 +1904,7 @@ export default function App() {
       ...nextVariant,
       id: `variant-${calculatorId}-${Date.now()}-${nextIndex}`,
       customLabel: DESKTOP_CALCULATOR_CUSTOM_LABELS[calculatorId],
-      isLinkedToVariant1: false,
+      isLinkedToVariant1: true,
     };
 
     if (calculatorId === "reforme-vl") {
@@ -1734,14 +1916,38 @@ export default function App() {
     const nextVariants = normalizeVariantLabels([...variants, nextVariant]);
     setVariants(nextVariants);
     setActiveVariantIndex(nextVariants.length - 1);
-    setActiveSectionId(targetSectionId);
+    setActiveSectionId(
+      calculatorId === "changement-domicile" ? "informations-generales" : targetSectionId
+    );
+
+    if (calculatorId === "changement-domicile") {
+      setHasStartedClientEdit(true);
+      scrollToIdentitySection();
+    }
   };
 
   const handleDesktopCalculatorStart = (
     calculatorId: DesktopCalculatorId,
     targetSectionId = getDesktopCalculatorDefaultSection(calculatorId)
   ) => {
-    createDesktopCalculatorVariantFromBase(calculatorId, targetSectionId);
+    createDesktopCalculatorVariantFromBase(
+      calculatorId,
+      calculatorId === "changement-domicile" ? "informations-generales" : targetSectionId
+    );
+  };
+
+  const handleDomicileComparisonModeChange = (nextMode: DomicileComparisonMode) => {
+    if (nextMode === domicileComparisonMode) {
+      return;
+    }
+
+    setDomicileComparisonMode(nextMode);
+    setDomicileModeRequiresRerun(true);
+    setVariants((current) =>
+      current.map((variant) =>
+        isDesktopDomicileVariantLabel(variant) ? clearVariantSimulationOutputs(variant) : variant
+      )
+    );
   };
 
   const handleDesktopCalculatorOpen = (
@@ -1759,11 +1965,20 @@ export default function App() {
     const existingIndex = getDesktopCalculatorVariantIndex(calculatorId);
     if (existingIndex >= 0) {
       setActiveVariantIndex(existingIndex);
-      setActiveSectionId(targetSectionId);
+      setActiveSectionId(
+        calculatorId === "changement-domicile" ? "informations-generales" : targetSectionId
+      );
+      if (calculatorId === "changement-domicile") {
+        setHasStartedClientEdit(true);
+        scrollToIdentitySection();
+      }
       return;
     }
 
-    createDesktopCalculatorVariantFromBase(calculatorId, targetSectionId);
+    createDesktopCalculatorVariantFromBase(
+      calculatorId,
+      calculatorId === "changement-domicile" ? "informations-generales" : targetSectionId
+    );
   };
 
   const handleConseillerAccessToggle = () => {
@@ -1822,11 +2037,7 @@ export default function App() {
     activeVariant.taxRegime,
   ]);
 
-  const totalRevenusCalcule =
-    (dossier.revenus.salaire || 0) +
-    (dossier.revenus.avs || 0) +
-    (dossier.revenus.lpp || 0) +
-    (dossier.revenus.autresRevenus || 0);
+  const totalRevenusCalcule = getTotalHouseholdIncome(dossier);
 
   const regimeImmobilierLabel =
     dossier.immobilier.regimeFiscal === "actuel" ? "Régime actuel" : "Régime réformé";
@@ -1953,13 +2164,8 @@ export default function App() {
     interetsBiensRendementDeductibles +
     fraisBiensRendementDeductibles;
 
-  const taxResultAvantCorrectionsFiscales =
-    (dossier.fiscalite.ajustementManuelRevenu || 0) !== 0 && taxResultAjustementManuel?.normalized
-      ? taxResultAjustementManuel
-      : taxResult;
-
-  const taxResultAffiche = taxResultAvantCorrectionsFiscales;
-  const taxResultReferenceBrute = taxResultSansOptimisation ?? taxResultAvantCorrectionsFiscales;
+  const taxResultAffiche = getVariantUiDisplayedTaxResult(activeVariant);
+  const taxResultReferenceBrute = taxResultSansOptimisation ?? taxResultAffiche;
 
   const revenuImposableIfdReference = Math.max(0, dossier.fiscalite.revenuImposableIfd || 0);
   const revenuImposableReference = Math.max(0, dossier.fiscalite.revenuImposable || 0);
@@ -2008,40 +2214,76 @@ export default function App() {
           totalAjustementsSimulationFortune
       );
 
-  const revenuImposableTaxwareIfd =
-    typeof taxResultAffiche?.normalized?.taxableIncomeFederal === "number"
-      ? taxResultAffiche.normalized.taxableIncomeFederal
-      : revenuImposableIfdReference;
-
   const activeVariantCalculatorLabel =
     `${activeVariant.customLabel} ${activeVariant.label}`.toLowerCase();
+  const domicileRecalculatedBases = String(taxResultAffiche?.raw?.debug?.source || "").startsWith(
+    "domicile-"
+  )
+    ? taxResultAffiche?.raw?.debug?.recalculatedBases
+    : null;
+  const domicileDisplayedIfd =
+    typeof domicileRecalculatedBases?.taxableIncomeFederal === "number"
+      ? domicileRecalculatedBases.taxableIncomeFederal
+      : taxResultAffiche?.normalized?.taxableIncomeFederal;
+  const domicileDisplayedIcc =
+    typeof domicileRecalculatedBases?.taxableIncomeCantonal === "number"
+      ? domicileRecalculatedBases.taxableIncomeCantonal
+      : taxResultAffiche?.normalized?.taxableIncomeCantonal;
+  const domicileDisplayedWealth =
+    typeof domicileRecalculatedBases?.taxableAssets === "number"
+      ? domicileRecalculatedBases.taxableAssets
+      : taxResultAffiche?.normalized?.taxableAssets;
+  const revenuImposableTaxwareIfd =
+    typeof domicileDisplayedIfd === "number"
+      ? domicileDisplayedIfd
+      : typeof taxResultAffiche?.normalized?.taxableIncomeFederal === "number"
+        ? taxResultAffiche.normalized.taxableIncomeFederal
+      : revenuImposableIfdReference;
   const isDomicileTaxwareResult =
     (activeDesktopCalculator === "changement-domicile" ||
       activeVariantCalculatorLabel.includes("domicile") ||
-      String(taxResultAffiche?.raw?.debug?.source || "").startsWith(
-        "domicile-reference-economic-payloads"
-      )) &&
-    typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number";
+      String(taxResultAffiche?.raw?.debug?.source || "").startsWith("domicile-")) &&
+    typeof domicileDisplayedIcc === "number";
+  const shouldUseTaxwareNormalizedSimulatedBases =
+    typeof taxResultAffiche?.normalized?.taxableIncomeFederal === "number" &&
+    typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number" &&
+    typeof taxResultAffiche?.normalized?.taxableAssets === "number" &&
+    String(taxResultAffiche?.raw?.debug?.source || "").startsWith("taxware-");
 
   const revenuImposableApresSimulationCalcule =
-    isDomicileTaxwareResult
-      ? taxResultAffiche.normalized.taxableIncomeCantonal
+    isDomicileTaxwareResult || shouldUseTaxwareNormalizedSimulatedBases
+      ? isDomicileTaxwareResult && typeof domicileDisplayedIcc === "number"
+        ? domicileDisplayedIcc
+        : taxResultAffiche.normalized.taxableIncomeCantonal
       : revenuImposableCantonalSimule;
   const fortuneImposableApresSimulationCalcule =
-    isDomicileTaxwareResult && typeof taxResultAffiche?.normalized?.taxableAssets === "number"
-      ? taxResultAffiche.normalized.taxableAssets
+    (isDomicileTaxwareResult || shouldUseTaxwareNormalizedSimulatedBases) &&
+    typeof taxResultAffiche?.normalized?.taxableAssets === "number"
+      ? isDomicileTaxwareResult && typeof domicileDisplayedWealth === "number"
+        ? domicileDisplayedWealth
+        : taxResultAffiche.normalized.taxableAssets
       : fortuneImposableSimulee;
 
-  const revenuImposableIfdApresSimulationCalcule = revenuImposableIfdSimule;
+  const revenuImposableIfdApresSimulationCalcule =
+    (isDomicileTaxwareResult || shouldUseTaxwareNormalizedSimulatedBases) &&
+    typeof taxResultAffiche?.normalized?.taxableIncomeFederal === "number"
+      ? isDomicileTaxwareResult && typeof domicileDisplayedIfd === "number"
+        ? domicileDisplayedIfd
+        : taxResultAffiche.normalized.taxableIncomeFederal
+      : revenuImposableIfdSimule;
 
   const revenuImposableTaxwareCanton =
-    typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number"
-      ? taxResultAffiche.normalized.taxableIncomeCantonal
+    isDomicileTaxwareResult && typeof domicileDisplayedIcc === "number"
+      ? domicileDisplayedIcc
+      : typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number"
+        ? taxResultAffiche.normalized.taxableIncomeCantonal
       : revenuImposableApresSimulationCalcule;
 
   const fortuneImposableTaxware =
-    typeof taxResultAffiche?.normalized?.taxableAssets === "number"
-      ? taxResultAffiche.normalized.taxableAssets
+    isDomicileTaxwareResult && typeof domicileDisplayedWealth === "number"
+      ? domicileDisplayedWealth
+      : typeof taxResultAffiche?.normalized?.taxableAssets === "number"
+        ? taxResultAffiche.normalized.taxableAssets
       : fortuneImposableReference;
 
   const revenuImposableCorrigeIfd = revenuImposableTaxwareIfd;
@@ -2387,8 +2629,7 @@ export default function App() {
     interetsHabitationDeductibles +
     interetsBiensRendementDeductibles;
 
-  const chargesDeductiblesTaxware =
-    chargesDeductiblesGeneriques + fraisHabitationDeductibles + fraisBiensRendementDeductibles;
+  const chargesDeductiblesTaxware = chargesDeductiblesGeneriques;
 
   const realEstatesTaxware = [
     ...(habitationPropreActive && !reformeValeurLocativeHabitationAppliquee
@@ -2434,9 +2675,34 @@ export default function App() {
     impotEstimeCalcule;
   const impotCorrigeSynthese =
     taxResultAffiche?.normalized?.totalTax ?? impotReferenceTaxware;
-  const resultatFiscalBrutTitle = "Base fiscale actuelle";
-  const resultatFiscalBrutHelper =
-    "Montants actuels saisis par le fiduciaire, conservés comme référence et jamais recalculés automatiquement";
+  const isEnfantTransitionComparison = activeDesktopCalculator === "fin-deduction-enfant";
+  const isDomicileComparison =
+    activeDesktopCalculator === "changement-domicile" && !isEnfantTransitionComparison;
+  const isDomicileRealSimulationMode =
+    isDomicileComparison && domicileComparisonMode === "real-simulation";
+  const domicileModeLabel =
+    domicileComparisonMode === "quick-estimate" ? "Estimation rapide" : "Simulation réelle";
+  const domicileModeDescription =
+    domicileComparisonMode === "quick-estimate"
+      ? "Cette estimation compare les cantons en conservant les mêmes bases fiscales."
+      : "Cette simulation recalcule votre situation fiscale selon les règles du canton choisi.";
+  const domicileDisplayedMode =
+    (taxResultAffiche?.raw?.debug?.comparison?.mode as DomicileComparisonMode | undefined) ??
+    "real-simulation";
+  const domicileDisplayedModeLabel =
+    domicileDisplayedMode === "quick-estimate" ? "Estimation rapide" : "Simulation réelle";
+  const domicileResultNeedsRefresh =
+    isDomicileComparison &&
+    hasCompleteDisplayedTaxResult(taxResultAffiche) &&
+    domicileDisplayedMode !== domicileComparisonMode;
+  const domicileShouldShowModeChangedNotice =
+    isDomicileComparison && domicileModeRequiresRerun && !hasCompleteDisplayedTaxResult(taxResultAffiche);
+  const resultatFiscalBrutTitle = isDomicileComparison
+    ? "Domicile actuel"
+    : "Base fiscale actuelle";
+  const resultatFiscalBrutHelper = isDomicileComparison
+    ? "Résultat réel TaxWare du domicile actuel, calculé avec le payload économique complet du dossier actif."
+    : "Montants actuels saisis par le fiduciaire, conservés comme référence et jamais recalculés automatiquement";
   const impotTotalReference =
     impotCorrigeSynthese ??
     taxResultSansOptimisation?.normalized?.totalTax ??
@@ -2450,15 +2716,27 @@ export default function App() {
         : fortuneBruteCalcule >= 1000000
           ? "Structurer et sécuriser le patrimoine"
           : "Optimisation globale";
-  const isEnfantTransitionComparison = activeDesktopCalculator === "fin-deduction-enfant";
   const comparisonBeforeLabel = isEnfantTransitionComparison
     ? "Avant changement"
-    : "Avant optimisation";
+    : isDomicileComparison
+      ? "Domicile actuel"
+      : "Avant optimisation";
   const comparisonAfterLabel = isEnfantTransitionComparison
     ? "Après changement"
-    : "Après optimisation";
-  const comparisonDeltaLabel = isEnfantTransitionComparison ? "Variation" : "Ecart / economie";
-  const comparisonTotalLabel = isEnfantTransitionComparison ? "Variation totale" : "Economie totale";
+    : isDomicileComparison
+      ? "Domicile cible"
+      : "Après optimisation";
+  const comparisonDeltaLabel = isEnfantTransitionComparison
+    ? "Variation"
+    : isDomicileComparison
+      ? "Différence"
+      : "Ecart / economie";
+  const comparisonTotalLabel = isEnfantTransitionComparison
+    ? "Variation totale"
+    : isDomicileComparison
+      ? "Différence totale"
+      : "Economie totale";
+  const shouldRoundComparisonTotals = isDomicileComparison;
   const comparisonDeltaFormatter = (
     avant: number | null | undefined,
     apres: number | null | undefined
@@ -2466,6 +2744,71 @@ export default function App() {
     isEnfantTransitionComparison
       ? formatMontantCHF(Math.round((apres ?? 0) - (avant ?? 0)))
       : formatEcartTaxware(avant, apres);
+  const domicileComparisonDebug = isDomicileComparison
+    ? taxResultAffiche?.raw?.debug?.comparison ?? null
+    : null;
+  const domicileReferenceDisplayedBases = isDomicileComparison
+    ? taxResultSansOptimisation?.raw?.debug?.displayedMetrics ??
+      taxResultSansOptimisation?.raw?.debug?.rawMetrics ??
+      extractDomicileTaxwareMetrics(taxResultSansOptimisation?.raw)
+    : null;
+  const domicileTargetDisplayedBases = isDomicileComparison
+    ? taxResultAffiche?.raw?.debug?.displayedMetrics ??
+      taxResultAffiche?.raw?.debug?.targetMetrics ??
+      extractDomicileTaxwareMetrics(taxResultAffiche?.raw)
+    : null;
+  const domicileReferenceApplicationCorrection = isDomicileComparison
+    ? taxResultSansOptimisation?.raw?.debug?.applicationCorrection ?? null
+    : null;
+  const domicileTargetApplicationCorrection = isDomicileComparison
+    ? taxResultAffiche?.raw?.debug?.applicationCorrection ?? null
+    : null;
+  const domicileRealEstateDebug: any = null;
+  const domicilePayloadsMatchOutsideLocation = Boolean(
+    taxResultAffiche?.raw?.debug?.payloadsMatchOutsideLocation
+  );
+  const domicileCurrentLocationLabel =
+    domicileComparisonDebug?.currentLocation?.municipality &&
+    domicileComparisonDebug?.currentLocation?.shortnameCanton
+      ? `${domicileComparisonDebug.currentLocation.municipality} (${domicileComparisonDebug.currentLocation.shortnameCanton})`
+      : `${
+          getDomicileLocationFromDossier((variants[0] ?? activeVariant).dossier).municipality ||
+          "Commune actuelle"
+        } (${getDomicileLocationFromDossier((variants[0] ?? activeVariant).dossier).shortnameCanton || "Canton actuel"})`;
+  const domicileTargetLocationLabel =
+    domicileComparisonDebug?.targetLocation?.municipality &&
+    domicileComparisonDebug?.targetLocation?.shortnameCanton
+      ? `${domicileComparisonDebug.targetLocation.municipality} (${domicileComparisonDebug.targetLocation.shortnameCanton})`
+      : `${
+          getDomicileLocationFromDossier(activeVariant.dossier).municipality || "Commune cible"
+        } (${getDomicileLocationFromDossier(activeVariant.dossier).shortnameCanton || "Canton cible"})`;
+  const domicileFavorableLabel =
+    (domicileComparisonDebug?.differenceTotal ?? 0) > 0
+      ? "Le domicile cible est le plus favorable."
+      : (domicileComparisonDebug?.differenceTotal ?? 0) < 0
+        ? "Le domicile actuel reste le plus favorable."
+        : "Les deux domiciles sont équivalents sur le total fiscal.";
+  const activeDomicileValidationMessage =
+    isDomicileComparison && variants[0]
+      ? (() => {
+          const currentLocation = getDomicileLocationFromDossier(variants[0].dossier);
+          const targetLocation = getDomicileLocationFromDossier(activeVariant.dossier);
+
+          if (domicileComparisonMode === "quick-estimate") {
+            if (!currentLocation.zip || !currentLocation.city) {
+              return "Le domicile actuel doit contenir un NPA et une localité fiscale.";
+            }
+
+            if (!targetLocation.zip || !targetLocation.city) {
+              return "Le domicile cible doit contenir un NPA et une localité fiscale.";
+            }
+
+            return null;
+          }
+
+          return getDomicileValidationError(activeVariant.dossier, currentLocation, targetLocation);
+        })()
+      : null;
 
   const formatMontantCHF = (valeur: number) => {
     return `${new Intl.NumberFormat("fr-CH").format(valeur || 0)} CHF`;
@@ -2499,10 +2842,16 @@ export default function App() {
       return explicitBernAssetIncome;
     }
 
-    const explicitAssetIncome = Math.max(0, Number(dossierForSimulation.revenus.autresRevenus || 0));
+    const explicitAssetIncome = Math.max(0, Number(dossierForSimulation.revenus.revenuFortune || 0));
 
     if (explicitAssetIncome > 0) {
       return explicitAssetIncome;
+    }
+
+    const fallbackAssetIncome = Math.max(0, Number(dossierForSimulation.revenus.autresRevenus || 0));
+
+    if (fallbackAssetIncome > 0) {
+      return fallbackAssetIncome;
     }
 
     const aggregatedIncome = Math.max(0, Number(dossierForSimulation.revenus.totalRevenus || 0));
@@ -2513,6 +2862,152 @@ export default function App() {
       Math.max(0, Number(dossierForSimulation.immobilier.loyersBiensRendement || 0));
 
     return Math.max(0, aggregatedIncome - knownIncomeComponents);
+  };
+
+  const buildEconomicTaxwareParamsForDossier = (
+    dossierForSimulation: DossierClient,
+    options?: {
+      calculatorMode?: "default" | "domicile";
+    }
+  ) => {
+    const { city, zip } = getTaxwareLocationForDossier(dossierForSimulation);
+    const habitationPropreActive = Boolean(dossierForSimulation.immobilier.proprietaireOccupant);
+    const biensRendementActifs = Boolean(dossierForSimulation.immobilier.possedeBienRendement);
+    const reformProfile = getValeurLocativeReformProfile(dossierForSimulation, {
+      includeValeurLocative: true,
+    });
+    const reformeValeurLocativeHabitationAppliquee = reformProfile.shouldApply;
+    const valeurLocativeFiscalisee = reformeValeurLocativeHabitationAppliquee
+      ? 0
+      : dossierForSimulation.immobilier.valeurLocativeHabitationPropre || 0;
+    const interetsHabitationDeductibles = reformeValeurLocativeHabitationAppliquee
+      ? reformProfile.interetsPassifsConserves
+      : dossierForSimulation.immobilier.interetsHypothecairesHabitationPropre || 0;
+    const fraisHabitationDeductibles = reformeValeurLocativeHabitationAppliquee
+      ? 0
+      : dossierForSimulation.immobilier.fraisEntretienHabitationPropre || 0;
+    const loyersBiensRendementImposables = biensRendementActifs
+      ? dossierForSimulation.immobilier.loyersBiensRendement || 0
+      : 0;
+    const interetsBiensRendementDeductibles = biensRendementActifs
+      ? dossierForSimulation.immobilier.interetsHypothecairesBiensRendement || 0
+      : 0;
+    const fraisBiensRendementDeductibles = biensRendementActifs
+      ? dossierForSimulation.immobilier.fraisEntretienBiensRendement || 0
+      : 0;
+    const valeurFiscaleBiensRendementRetenue = getRentalPropertyTaxableValue(dossierForSimulation);
+    const fortuneImmobiliereTotaleCalculee = getTotalRealEstateFiscalValue(dossierForSimulation);
+    const hypothequesTotalesCalculees = getTotalMortgageDebt(dossierForSimulation);
+    const liquiditesAjusteesCalcule =
+      (dossierForSimulation.fortune.liquidites || 0) -
+      (dossierForSimulation.fiscalite.troisiemePilierSimule || 0) -
+      (dossierForSimulation.fiscalite.rachatLpp || 0) +
+      (dossierForSimulation.fiscalite.ajustementManuelRevenu || 0);
+    const fortuneFiscaleCalcule =
+      liquiditesAjusteesCalcule +
+      (dossierForSimulation.fortune.titres || 0) +
+      fortuneImmobiliereTotaleCalculee;
+    const totalDettesCalcule =
+      hypothequesTotalesCalculees + (dossierForSimulation.dettes.autresDettes || 0);
+    const interetsHypothecairesChargesDeductibles =
+      dossierForSimulation.charges.logementIsHypothequeDeductible
+        ? dossierForSimulation.charges.logement || 0
+        : 0;
+    const chargesDeductiblesGeneriques =
+      dossierForSimulation.charges.autresChargesIsPensionDeductible
+        ? dossierForSimulation.charges.autresCharges || 0
+        : 0;
+    const insuranceDeductionCap = getDomicileInsuranceDeductionCap(dossierForSimulation);
+    const retainedInsurancePremiumsForTaxware =
+      options?.calculatorMode === "domicile"
+        ? Math.min(
+            Math.max(0, Number(dossierForSimulation.charges.primesMaladie || 0)),
+            insuranceDeductionCap.retainedForPayload
+          )
+        : Math.max(0, Number(dossierForSimulation.charges.primesMaladie || 0));
+    const interetsHypothecairesDeductibles =
+      interetsHypothecairesChargesDeductibles +
+      interetsHabitationDeductibles +
+      interetsBiensRendementDeductibles;
+    const chargesDeductiblesTaxware = chargesDeductiblesGeneriques;
+    const revenuDetaillePersonne1 = Math.max(0, Number(dossierForSimulation.revenus.salaire || 0));
+    const revenuDetaillePersonne2 = Math.max(
+      0,
+      Number(dossierForSimulation.revenus.salaireConjoint || 0)
+    );
+    const miscIncomeTaxware =
+      Math.max(0, Number(dossierForSimulation.revenus.avs || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.lpp || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.avsConjoint || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.lppConjoint || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.autresRevenusConjoint || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.revenuFortune || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.dividendesPriviligies || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.participationsPriviligiees || 0)) +
+      Math.max(0, Number(dossierForSimulation.revenus.autresRevenus || 0));
+    const realEstates = [
+      ...(habitationPropreActive && !reformeValeurLocativeHabitationAppliquee
+        ? [
+            {
+              rentalIncome: valeurLocativeFiscalisee,
+              effectiveExpenses: fraisHabitationDeductibles,
+            },
+          ]
+        : []),
+      ...(biensRendementActifs
+        ? [
+            {
+              taxableValue: valeurFiscaleBiensRendementRetenue,
+              rentalIncome: loyersBiensRendementImposables,
+              effectiveExpenses: fraisBiensRendementDeductibles,
+            },
+          ]
+        : []),
+    ].filter(
+      (realEstate) =>
+        Number(realEstate.taxableValue || 0) > 0 ||
+        Number(realEstate.rentalIncome || 0) > 0 ||
+        Number(realEstate.effectiveExpenses || 0) > 0
+    );
+
+    console.log("[REVENUS][DETAILLES][TAXWARE]", {
+      netWagesPersonLeading: revenuDetaillePersonne1,
+      netWagesPersonSecond: revenuDetaillePersonne2,
+      miscIncome: miscIncomeTaxware,
+    });
+
+    return {
+      realEstates,
+      zip,
+      city,
+      partnership: (dossierForSimulation.famille.aConjoint ? "Marriage" : "Single") as
+        | "Marriage"
+        | "Single",
+      childrenCount: dossierForSimulation.famille.nombreEnfants,
+      netWages: revenuDetaillePersonne1,
+      pensionIncome: 0,
+      hasOasiPensions: false,
+      otherIncome: 0,
+      thirdPillar: dossierForSimulation.fiscalite.troisiemePilierSimule || 0,
+      lppBuyback: dossierForSimulation.fiscalite.rachatLpp || 0,
+      assetIncome: 0,
+      miscIncome: miscIncomeTaxware,
+      miscExpenses: chargesDeductiblesTaxware,
+      debtInterests: interetsHypothecairesDeductibles,
+      spouseNetWages: dossierForSimulation.famille.aConjoint
+        ? revenuDetaillePersonne2
+        : 0,
+      spousePensionIncome: 0,
+      spouseHasOasiPensions: false,
+      spouseOtherIncome: 0,
+      spouseThirdPillar: 0,
+      spouseLppBuyback: 0,
+      assets: fortuneFiscaleCalcule || 0,
+      debts: totalDettesCalcule || 0,
+      insurancePremiumsBudget: Math.max(0, Number(dossierForSimulation.charges.primesMaladie || 0)),
+      insurancePremiumsTaxwareRetained: retainedInsurancePremiumsForTaxware,
+      insuranceDeductionCap,
+    };
   };
 
   const lectureImmobiliereSynthese = [
@@ -2617,12 +3112,12 @@ export default function App() {
 
   const chartPalette = ["#0f172a", "#2563eb", "#14b8a6", "#f59e0b", "#a855f7"];
   const referenceVariant = variants[0];
-  const referenceVariantDisplayedTaxResult = getVariantDisplayedTaxResult(referenceVariant);
+  const referenceVariantDisplayedTaxResult = getVariantUiDisplayedTaxResult(referenceVariant);
   const referenceDossier = referenceVariant.dossier;
   const bestVariantState =
     variants.find((variant) => variant.id === bestVariant?.id) || activeVariant;
-  const bestVariantDisplayedTaxResult = getVariantDisplayedTaxResult(bestVariantState);
-  const activeVariantDisplayedTaxResult = getVariantDisplayedTaxResult(activeVariant);
+  const bestVariantDisplayedTaxResult = getVariantUiDisplayedTaxResult(bestVariantState);
+  const activeVariantDisplayedTaxResult = getVariantUiDisplayedTaxResult(activeVariant);
   const hasActiveVariantDisplayedCompleteTaxResult =
     hasCompleteDisplayedTaxResult(activeVariantDisplayedTaxResult);
   const referenceVariantTotalTaxRaw = getVariantTaxTotal(referenceVariant);
@@ -2668,11 +3163,7 @@ export default function App() {
     0,
     referenceFortuneFiscaleCalcule - referenceTotalDettesCalcule
   );
-  const referenceTotalRevenusCalcule =
-    (referenceDossier.revenus.salaire || 0) +
-    (referenceDossier.revenus.avs || 0) +
-    (referenceDossier.revenus.lpp || 0) +
-    (referenceDossier.revenus.autresRevenus || 0);
+  const referenceTotalRevenusCalcule = getTotalHouseholdIncome(referenceDossier);
   const referenceTotalChargesCalcule =
     (referenceDossier.charges.logement || 0) +
     (referenceDossier.charges.primesMaladie || 0) +
@@ -2891,10 +3382,6 @@ export default function App() {
     backgroundColor: "#ffffff",
   };
 
-  const numberValue = (value: string) => Number(value || 0);
-
-  const { city: cityForTaxwareControle, zip: zipForTaxwareControle } =
-    getTaxwareLocationForDossier(dossier);
   const isTaxSimulationReady = isDossierReadyForTaxSimulation(dossier);
   const variantSimulationReadiness = variants.map((variant) => ({
     id: variant.id,
@@ -2922,32 +3409,16 @@ export default function App() {
             .join(", ")}.`
       : "Renseignez au moins le NPA et la commune fiscale avant de lancer la simulation fiscale.";
 
-  const taxwarePayloadControle = buildTaxwarePayload({
-    realEstates: realEstatesTaxware,
-    zip: zipForTaxwareControle,
-    city: cityForTaxwareControle,
-    year: 2026,
-    partnership: dossier.famille.aConjoint ? "Marriage" : "Single",
-    childrenCount: dossier.famille.nombreEnfants,
-    netWages: dossier.revenus.salaire || 0,
-    pensionIncome: (dossier.revenus.avs || 0) + (dossier.revenus.lpp || 0),
-    hasOasiPensions: (dossier.revenus.avs || 0) > 0,
-    otherIncome: 0,
-    thirdPillar: dossier.fiscalite.troisiemePilierSimule || 0,
-    lppBuyback: dossier.fiscalite.rachatLpp || 0,
-    assetIncome: getEffectiveTaxwareAssetIncome(dossier),
-    miscIncome: 0,
-    miscExpenses: chargesDeductiblesTaxware,
-    debtInterests: interetsHypothecairesDeductibles,
-    spouseNetWages: 0,
-    spousePensionIncome: 0,
-    spouseHasOasiPensions: false,
-    spouseOtherIncome: 0,
-    spouseThirdPillar: 0,
-    spouseLppBuyback: 0,
-    assets: fortuneFiscaleCalcule || 0,
-    debts: totalDettesCalcule || 0,
-  });
+  const taxwarePayloadControle =
+    activeDesktopCalculator === "changement-domicile"
+      ? ((taxResultAffiche?.raw?.debug?.payload as Record<string, unknown> | undefined) ??
+        (taxResultAffiche?.raw?.debug?.targetPayload as Record<string, unknown> | undefined) ??
+        (taxResultSansOptimisation?.raw?.debug?.payload as Record<string, unknown> | undefined) ??
+        {})
+      : buildTaxwarePayload(buildEconomicTaxwareParamsForDossier(dossier));
+  const taxwarePayloadRecord = taxwarePayloadControle as Record<string, any>;
+  const taxwarePayloadPersonLeading = taxwarePayloadRecord.PersonLeading as Record<string, any> | undefined;
+  const taxwarePayloadPersonSecond = taxwarePayloadRecord.PersonSecond as Record<string, any> | undefined;
 
   const taxwarePayloadJson = JSON.stringify(taxwarePayloadControle, null, 2);
   const vaudPayloadChildrenCountSent = getFirstDefinedValueByPaths(
@@ -2985,36 +3456,135 @@ export default function App() {
 
   const handleNpaChange = (npa: string) => {
     const match = (zipToFiscal as ZipFiscalRow[]).find((item) => item.zip === npa);
+    setVariants((current) => {
+      const activeVariantState = current[activeVariantIndex];
 
-    if (match) {
-      setDossier({
-        ...dossier,
-        identite: {
-          ...dossier.identite,
-          npa,
-          commune: match.locality || "",
-          canton: match.fiscalCanton || match.localityCanton || "",
-          communeFiscale: match.fiscalCommune || "",
-          cantonFiscal: match.fiscalCanton || "",
-          taxwareZip: npa,
-          taxwareCity: match.fiscalCommune || "",
-        },
+      if (!activeVariantState) {
+        return current;
+      }
+
+      const currentDossier = activeVariantState.dossier;
+      const nextDossier = match
+        ? {
+            ...currentDossier,
+            identite: {
+              ...currentDossier.identite,
+              npa,
+              commune: match.locality || "",
+              canton: match.fiscalCanton || match.localityCanton || "",
+              communeFiscale: match.fiscalCommune || "",
+              cantonFiscal: match.fiscalCanton || "",
+              taxwareZip: npa,
+              taxwareCity: match.fiscalCommune || "",
+            },
+          }
+        : {
+            ...currentDossier,
+            identite: {
+              ...currentDossier.identite,
+              npa,
+              commune: "",
+              canton: "",
+              communeFiscale: "",
+              cantonFiscal: "",
+              taxwareZip: npa,
+              taxwareCity: "",
+            },
+          };
+      const isBernBielDossier =
+        isBernAssetIncomeEnabled(nextDossier.identite) &&
+        /biel|bienne/i.test(
+          `${nextDossier.identite.communeFiscale || ""} ${nextDossier.identite.commune || ""}`.trim()
+        );
+
+      if (activeVariantIndex === 0) {
+        const updatedBaseVariant = {
+          ...clearVariantSimulationOutputs(current[0]),
+          dossier: nextDossier,
+        };
+
+        delete autoSimulationStatusRef.current[updatedBaseVariant.id];
+        delete pendingDesktopSimulationDisplayRef.current[updatedBaseVariant.id];
+
+        if (isBernBielDossier) {
+          console.info("[BE AssetIncome][setDossier-base]", {
+            variantId: updatedBaseVariant.id,
+            variantLabel: getVariantDisplayLabel(updatedBaseVariant),
+            revenuFortuneBE: Number(nextDossier.fiscalite.revenuFortuneBE || 0),
+          });
+        }
+
+        return current.map((variant, index) => {
+          if (index === 0) {
+            return updatedBaseVariant;
+          }
+
+          const variantCantonCode = `${
+            variant.dossier.identite.cantonFiscal || variant.dossier.identite.canton || ""
+          }`
+            .trim()
+            .toUpperCase();
+          const baseCantonCode = `${
+            updatedBaseVariant.dossier.identite.cantonFiscal ||
+            updatedBaseVariant.dossier.identite.canton ||
+            ""
+          }`
+            .trim()
+            .toUpperCase();
+          if (baseCantonCode === "GE" && isDesktopDomicileVariantLabel(variant)) {
+            const invalidatedVariant = clearVariantSimulationOutputs(variant);
+            console.info("[DOMICILE][invalidate target variant after base change]", {
+              variantId: invalidatedVariant.id,
+              baseVariantId: updatedBaseVariant.id,
+              route: `${baseCantonCode}->${variantCantonCode}`,
+              baseAfter: {
+                ifd: updatedBaseVariant.dossier.fiscalite.revenuImposableIfd ?? 0,
+                canton: updatedBaseVariant.dossier.fiscalite.revenuImposable ?? 0,
+                wealth: updatedBaseVariant.dossier.fiscalite.fortuneImposableActuelleSaisie ?? 0,
+              },
+            });
+            delete autoSimulationStatusRef.current[invalidatedVariant.id];
+            delete pendingDesktopSimulationDisplayRef.current[invalidatedVariant.id];
+            return invalidatedVariant;
+          }
+
+          if (variant.isLinkedToVariant1) {
+            const linkedVariant = clearVariantSimulationOutputs(
+              cloneVariantStateFromBase(updatedBaseVariant, variant, true)
+            );
+            delete autoSimulationStatusRef.current[linkedVariant.id];
+            delete pendingDesktopSimulationDisplayRef.current[linkedVariant.id];
+            return linkedVariant;
+          }
+
+          return variant;
+        });
+      }
+
+      return current.map((variant, index) => {
+        if (index !== activeVariantIndex) {
+          return variant;
+        }
+
+        const updatedVariant = clearVariantSimulationOutputs({
+          ...variant,
+          dossier: nextDossier,
+          isLinkedToVariant1: false,
+        });
+        delete autoSimulationStatusRef.current[updatedVariant.id];
+        delete pendingDesktopSimulationDisplayRef.current[updatedVariant.id];
+
+        if (isBernBielDossier) {
+          console.info("[BE AssetIncome][setDossier-variant]", {
+            variantId: updatedVariant.id,
+            variantLabel: getVariantDisplayLabel(updatedVariant),
+            revenuFortuneBE: Number(nextDossier.fiscalite.revenuFortuneBE || 0),
+          });
+        }
+
+        return updatedVariant;
       });
-    } else {
-      setDossier({
-        ...dossier,
-        identite: {
-          ...dossier.identite,
-          npa,
-          commune: "",
-          canton: "",
-          communeFiscale: "",
-          cantonFiscal: "",
-          taxwareZip: npa,
-          taxwareCity: "",
-        },
-      });
-    }
+    });
   };
 
   const buildDirectBaseTaxwareRequestForDossier = (
@@ -3040,7 +3610,7 @@ export default function App() {
       otherIncome: 0,
       thirdPillar: 0,
       lppBuyback: 0,
-      assetIncome: getEffectiveTaxwareAssetIncome(dossierForSimulation),
+      assetIncome: 0,
       miscIncome: Math.max(0, Math.round(params.miscIncome)),
       miscExpenses: 0,
       debtInterests: 0,
@@ -3076,29 +3646,6 @@ export default function App() {
       0,
       Math.min(60000, Math.round((Math.max(0, params.targetFederal) * 0.35) / 500) * 500)
     );
-
-    return {
-      ...baseRequest,
-      netWages: sharedNetWages,
-      spouseNetWages: sharedNetWages,
-    };
-  };
-
-  const buildDomicileComparisonProbeRequest = (
-    dossierForSimulation: DossierClient,
-    params: {
-      miscIncome: number;
-      assets: number;
-    }
-  ) => {
-    const baseRequest = buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, params);
-
-    if (!dossierForSimulation.famille.aConjoint) {
-      return baseRequest;
-    }
-
-    const sharedNetWages =
-      DOMICILE_OCCUPATIONAL_EXPENSE_FLOOR + DOMICILE_SECOND_EARNER_FEDERAL_FLOOR;
 
     return {
       ...baseRequest,
@@ -3193,6 +3740,11 @@ export default function App() {
         }`.trim()
       );
     const comparisonScenarios = getComparisonScenarios(dossierForSimulation);
+    const simulationCantonCode = `${
+      dossierForSimulation.identite.cantonFiscal || dossierForSimulation.identite.canton || ""
+    }`
+      .trim()
+      .toUpperCase();
     const reformProfile = getValeurLocativeReformProfile(dossierForSimulation, {
       includeValeurLocative: variant.taxRegime === "valeur_locative_reform",
     });
@@ -3209,134 +3761,339 @@ export default function App() {
             ajustementFortuneBiensRendementSimulation +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleFortune || 0)
         );
+    const useBaselinePayloadForPensionSimulation =
+      !reformProfile.shouldApply &&
+      ajustementBienRendementSimulation === 0 &&
+      ajustementFortuneBiensRendementSimulation === 0;
+    const isLockedDesktopPensionSimulationCanton =
+      PENSION_SIMULATION_LOCKED_PC_CANTONS.has(simulationCantonCode);
+
+    const computeCalibratedScenarioResult = async (scenario: ComparisonScenario) => {
+      const immobilierDelta = scenario.key === "reference" ? 0 : immobilierSimulationDelta;
+      const scenarioAssetIncome = getEffectiveTaxwareAssetIncome(dossierForSimulation);
+      const taxableIncomeFederal = Math.max(
+        0,
+        (dossierForSimulation.fiscalite.revenuImposableIfd || 0) -
+          scenario.thirdPillar -
+          scenario.lppBuyback +
+          scenario.manualAdjustment +
+          ajustementBienRendementSimulation +
+          immobilierDelta +
+          (dossierForSimulation.fiscalite.correctionFiscaleManuelleIfd || 0)
+      );
+      const taxableIncomeCantonal = Math.max(
+        0,
+        (dossierForSimulation.fiscalite.revenuImposable || 0) -
+          scenario.thirdPillar -
+          scenario.lppBuyback +
+          scenario.manualAdjustment +
+          ajustementBienRendementSimulation +
+          immobilierDelta +
+          (dossierForSimulation.fiscalite.correctionFiscaleManuelleCanton || 0)
+      );
+
+      const buildVariantRequest = (params: { miscIncome: number; assets: number }) =>
+        buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, params);
+
+      if (isBernBielVariantDebug) {
+        console.info("[BE AssetIncome][variant-scenario-source]", {
+          variantId: variant.id,
+          variantLabel: getVariantDisplayLabel(variant),
+          scenarioKey: scenario.key,
+          revenuFortuneBE: Number(dossierForSimulation.fiscalite.revenuFortuneBE || 0),
+          autresRevenus: Number(dossierForSimulation.revenus.autresRevenus || 0),
+          effectiveAssetIncome: scenarioAssetIncome,
+        });
+      }
+
+      const baseResult = await resolveTaxwareTarget({
+        label: `${variant.id}-${scenario.key}-canton`,
+        targetValue: taxableIncomeCantonal,
+        metric: (result) => result?.normalized?.taxableIncomeCantonal,
+        buildRequest: (miscIncome) =>
+          buildVariantRequest({
+            miscIncome,
+            assets: taxableAssets,
+          }),
+      });
+
+      const ifdResult = await resolveTaxwareTarget({
+        label: `${variant.id}-${scenario.key}-ifd`,
+        targetValue: taxableIncomeFederal,
+        metric: (result) => result?.normalized?.taxableIncomeFederal,
+        buildRequest: (miscIncome) =>
+          buildVariantRequest({
+            miscIncome,
+            assets: taxableAssets,
+          }),
+      });
+
+      const fortuneResult = await resolveTaxwareTarget({
+        label: `${variant.id}-${scenario.key}-fortune`,
+        targetValue: taxableAssets,
+        metric: (result) => result?.normalized?.taxableAssets,
+        buildRequest: (assets) =>
+          buildVariantRequest({
+            miscIncome: taxableIncomeCantonal,
+            assets,
+          }),
+      });
+
+      return composeCorrectedTaxwareResult({
+        baseResult,
+        ifdResult,
+        cantonResult: baseResult,
+        fortuneResult,
+        debug: {
+          source: "taxware-direct-bases",
+          valeurLocativeReform: {
+            applied: reformProfile.shouldApply,
+            valeurLocativeRetiree: reformProfile.valeurLocativeRetiree,
+            fraisEntretienRetires: reformProfile.fraisEntretienRetires,
+            interetsPassifsRetires: reformProfile.interetsPassifsRetires,
+            interetsPassifsConserves: reformProfile.interetsPassifsConserves,
+          },
+          targets: {
+            taxableIncomeFederal,
+            taxableIncomeCantonal,
+            taxableAssets,
+            immobilierDelta,
+          },
+          payloads: {
+            canton: buildVariantRequest({
+              miscIncome: baseResult?.raw?.calibration?.driverValue ?? taxableIncomeCantonal,
+              assets: taxableAssets,
+            }),
+            ifd: buildVariantRequest({
+              miscIncome: ifdResult?.raw?.calibration?.driverValue ?? taxableIncomeFederal,
+              assets: taxableAssets,
+            }),
+            fortune: buildVariantRequest({
+              miscIncome: taxableIncomeCantonal,
+              assets: fortuneResult?.raw?.calibration?.driverValue ?? taxableAssets,
+            }),
+          },
+          beAssetIncomeDebug: isBernBielVariantDebug
+            ? {
+                variantId: variant.id,
+                variantLabel: getVariantDisplayLabel(variant),
+                scenarioKey: scenario.key,
+                revenuFortuneBE: Number(dossierForSimulation.fiscalite.revenuFortuneBE || 0),
+                effectiveAssetIncome: scenarioAssetIncome,
+              }
+            : null,
+        },
+      });
+    };
+
+    const referenceScenario =
+      comparisonScenarios.find((scenario) => scenario.key === "reference") ?? comparisonScenarios[0];
+    const baselineResult = await computeCalibratedScenarioResult(referenceScenario);
+    const baselinePayloads = (baselineResult?.raw?.debug?.payloads ?? null) as
+      | Record<string, any>
+      | null;
+
+    const applyPensionScenarioToPayload = (
+      payload: Record<string, any> | null | undefined,
+      scenario: ComparisonScenario
+    ) => {
+      if (!payload) {
+        return null;
+      }
+
+      const nextPayload = {
+        ...payload,
+        miscIncome: Math.max(
+          0,
+          Number(payload.miscIncome || 0) + Number(scenario.manualAdjustment || 0)
+        ),
+        thirdPillar: Number(scenario.thirdPillar || 0),
+        lppBuyback: Number(scenario.lppBuyback || 0),
+      } as Record<string, any>;
+
+      return nextPayload;
+    };
 
     const comparisonScenarioEntries = await Promise.all(
       comparisonScenarios.map(async (scenario) => {
-        const immobilierDelta = scenario.key === "reference" ? 0 : immobilierSimulationDelta;
-        const scenarioAssetIncome = getEffectiveTaxwareAssetIncome(dossierForSimulation);
-        const taxableIncomeFederal = Math.max(
+        if (scenario.key === "reference") {
+          return [scenario.key, baselineResult] as const;
+        }
+
+        const shouldUseBaselinePayloadPath =
+          useBaselinePayloadForPensionSimulation &&
+          baselinePayloads &&
+          (scenario.thirdPillar !== 0 || scenario.lppBuyback !== 0 || scenario.manualAdjustment !== 0);
+
+        if (!shouldUseBaselinePayloadPath) {
+          const result = await computeCalibratedScenarioResult(scenario);
+          return [scenario.key, result] as const;
+        }
+
+        const cantonPayload = applyPensionScenarioToPayload(baselinePayloads.canton, scenario);
+        const ifdPayload = applyPensionScenarioToPayload(baselinePayloads.ifd, scenario);
+        const fortunePayload = applyPensionScenarioToPayload(baselinePayloads.fortune, scenario);
+        const simulatedIfdTaxableIncomeTarget = Math.max(
           0,
           (dossierForSimulation.fiscalite.revenuImposableIfd || 0) -
             scenario.thirdPillar -
             scenario.lppBuyback +
             scenario.manualAdjustment +
             ajustementBienRendementSimulation +
-            immobilierDelta +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleIfd || 0)
         );
-        const taxableIncomeCantonal = Math.max(
+        const simulatedCantonalTaxableIncomeLocalTarget = Math.max(
           0,
           (dossierForSimulation.fiscalite.revenuImposable || 0) -
             scenario.thirdPillar -
             scenario.lppBuyback +
             scenario.manualAdjustment +
             ajustementBienRendementSimulation +
-            immobilierDelta +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleCanton || 0)
         );
+        const isVaudPensionBaselinePath =
+          simulationCantonCode === "VD";
 
-        const buildVariantRequest = (params: { miscIncome: number; assets: number }) =>
-          buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, params);
-
-        if (isBernBielVariantDebug) {
-          console.info("[BE AssetIncome][variant-scenario-source]", {
-            variantId: variant.id,
-            variantLabel: getVariantDisplayLabel(variant),
-            scenarioKey: scenario.key,
-            revenuFortuneBE: Number(dossierForSimulation.fiscalite.revenuFortuneBE || 0),
-            autresRevenus: Number(dossierForSimulation.revenus.autresRevenus || 0),
-            effectiveAssetIncome: scenarioAssetIncome,
-          });
+        if (isLockedDesktopPensionSimulationCanton) {
+          // PENSION SIMULATION LOCKED (PC) – JU/VS/NE/VD/GE/BE/FR – DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
+          // For validated desktop pension runs we preserve taxable wealth from the calibrated source
+          // and only let 2e/3e pilier affect the validated income branches.
+          if (cantonPayload) {
+            cantonPayload.assets = taxableAssets;
+          }
+          if (ifdPayload) {
+            ifdPayload.assets = taxableAssets;
+          }
+          if (fortunePayload) {
+            fortunePayload.assets = taxableAssets;
+          }
         }
 
-        const baseResult = await resolveTaxwareTarget({
-          label: `${variant.id}-${scenario.key}-canton`,
-          targetValue: taxableIncomeCantonal,
-          metric: (result) => result?.normalized?.taxableIncomeCantonal,
-          buildRequest: (miscIncome) =>
-            buildVariantRequest({
-              miscIncome,
-              assets: taxableAssets,
-            }),
+        console.info("[Simulation fiscale][source-values]", {
+          variantId: variant.id,
+          variantLabel: getVariantDisplayLabel(variant),
+          scenarioKey: scenario.key,
+          baseIfdTaxableIncome: dossierForSimulation.fiscalite.revenuImposableIfd || 0,
+          baseCantonalTaxableIncome: dossierForSimulation.fiscalite.revenuImposable || 0,
+          baseTaxableWealth: dossierForSimulation.fiscalite.fortuneImposableActuelleSaisie || 0,
+          thirdPillarAmount: scenario.thirdPillar || 0,
+          pensionFundBuyInAmount: scenario.lppBuyback || 0,
+          manualAdjustmentAmount: scenario.manualAdjustment || 0,
+        });
+        console.info("[Simulation fiscale][baseline-payloads]", {
+          variantId: variant.id,
+          scenarioKey: scenario.key,
+          cantonPayload,
+          ifdPayload,
+          fortunePayload,
         });
 
-        const ifdResult = await resolveTaxwareTarget({
-          label: `${variant.id}-${scenario.key}-ifd`,
-          targetValue: taxableIncomeFederal,
-          metric: (result) => result?.normalized?.taxableIncomeFederal,
-          buildRequest: (miscIncome) =>
-            buildVariantRequest({
-              miscIncome,
-              assets: taxableAssets,
-            }),
-        });
+        const preliminaryCantonResult = await callTaxware(cantonPayload as any);
+        assertTaxwareSuccess(
+          preliminaryCantonResult,
+          `${variant.id}-${scenario.key}-preliminary-canton-pension`
+        );
 
-        const fortuneResult = await resolveTaxwareTarget({
-          label: `${variant.id}-${scenario.key}-fortune`,
-          targetValue: taxableAssets,
-          metric: (result) => result?.normalized?.taxableAssets,
-          buildRequest: (assets) =>
-            buildVariantRequest({
-              miscIncome: taxableIncomeCantonal,
+        const simulatedCantonalTaxableIncomeTarget =
+          isVaudPensionBaselinePath &&
+          typeof preliminaryCantonResult?.normalized?.taxableIncomeCantonal === "number"
+            ? Math.max(0, preliminaryCantonResult.normalized.taxableIncomeCantonal - 100)
+            : simulatedCantonalTaxableIncomeLocalTarget;
+
+        const [cantonResult, ifdResult, fortuneResult] = await Promise.all([
+          resolveTaxwareTarget({
+            label: `${variant.id}-${scenario.key}-canton-pension`,
+            targetValue: simulatedCantonalTaxableIncomeTarget,
+            metric: (response) => response?.normalized?.taxableIncomeCantonal,
+            buildRequest: (miscIncome) => ({
+              ...(cantonPayload as Record<string, any>),
+              miscIncome,
+            }),
+          }),
+          resolveTaxwareTarget({
+            label: `${variant.id}-${scenario.key}-ifd-pension`,
+            targetValue: simulatedIfdTaxableIncomeTarget,
+            metric: (response) => response?.normalized?.taxableIncomeFederal,
+            buildRequest: (miscIncome) => ({
+              ...(ifdPayload as Record<string, any>),
+              miscIncome,
+            }),
+          }),
+          resolveTaxwareTarget({
+            label: `${variant.id}-${scenario.key}-fortune-pension`,
+            targetValue: taxableAssets,
+            metric: (response) => response?.normalized?.taxableAssets,
+            buildRequest: (assets) => ({
+              ...(fortunePayload as Record<string, any>),
               assets,
             }),
+          }),
+        ]);
+
+        const result = composeCorrectedTaxwareResult({
+          baseResult: cantonResult,
+          ifdResult,
+          cantonResult,
+          fortuneResult,
+          debug: {
+            source: "taxware-baseline-payloads-plus-pension",
+            payloads: {
+              canton: cantonPayload,
+              ifd: ifdPayload,
+              fortune: fortunePayload,
+            },
+            baselinePayloads,
+            targets: {
+              simulatedIfdTaxableIncomeTarget,
+              simulatedCantonalTaxableIncomeLocalTarget,
+              simulatedCantonalTaxableIncomeTarget,
+              taxableAssets,
+            },
+            preliminaryCantonResult: preliminaryCantonResult?.normalized ?? null,
+          },
         });
 
-        return [
-          scenario.key,
-          composeCorrectedTaxwareResult({
-            baseResult,
-            ifdResult,
-            cantonResult: baseResult,
-            fortuneResult,
-            debug: {
-              source: "taxware-direct-bases",
-              valeurLocativeReform: {
-                applied: reformProfile.shouldApply,
-                valeurLocativeRetiree: reformProfile.valeurLocativeRetiree,
-                fraisEntretienRetires: reformProfile.fraisEntretienRetires,
-                interetsPassifsRetires: reformProfile.interetsPassifsRetires,
-                interetsPassifsConserves: reformProfile.interetsPassifsConserves,
-              },
-              targets: {
-                taxableIncomeFederal,
-                taxableIncomeCantonal,
-                taxableAssets,
-                immobilierDelta,
-              },
-              payloads: {
-                canton: buildVariantRequest({
-                  miscIncome: baseResult?.raw?.calibration?.driverValue ?? taxableIncomeCantonal,
-                  assets: taxableAssets,
-                }),
-                ifd: buildVariantRequest({
-                  miscIncome: ifdResult?.raw?.calibration?.driverValue ?? taxableIncomeFederal,
-                  assets: taxableAssets,
-                }),
-                fortune: buildVariantRequest({
-                  miscIncome: taxableIncomeCantonal,
-                  assets: fortuneResult?.raw?.calibration?.driverValue ?? taxableAssets,
-                }),
-              },
-              beAssetIncomeDebug: isBernBielVariantDebug
-                ? {
-                    variantId: variant.id,
-                    variantLabel: getVariantDisplayLabel(variant),
-                    scenarioKey: scenario.key,
-                    revenuFortuneBE: Number(
-                      dossierForSimulation.fiscalite.revenuFortuneBE || 0
-                    ),
-                    effectiveAssetIncome: scenarioAssetIncome,
-                  }
-                : null,
-            },
-          }),
-        ] as const;
+        if (isLockedDesktopPensionSimulationCanton) {
+          const validatedWealth = fortuneResult?.normalized?.taxableAssets;
+          if (typeof validatedWealth === "number" && result?.normalized) {
+            result.normalized.taxableAssets = validatedWealth;
+          }
+
+          const validatedDisplayedTotal = sumFiniteNumbers(
+            result?.normalized?.federalTax,
+            result?.normalized?.cantonalCommunalTax,
+            result?.normalized?.wealthTax
+          );
+          if (typeof validatedDisplayedTotal === "number" && result?.normalized) {
+            result.normalized.totalTax = validatedDisplayedTotal;
+          }
+        }
+
+        console.info("[Simulation fiscale][simulated-tax-base]", {
+          variantId: variant.id,
+          scenarioKey: scenario.key,
+          simulatedIfdTaxableIncome: result?.normalized?.taxableIncomeFederal ?? null,
+          simulatedCantonalTaxableIncome: result?.normalized?.taxableIncomeCantonal ?? null,
+          simulatedTaxableWealth: result?.normalized?.taxableAssets ?? null,
+        });
+        console.info("[Simulation fiscale][taxware-raw-response]", {
+          variantId: variant.id,
+          scenarioKey: scenario.key,
+          cantonRaw: cantonResult?.raw ?? null,
+          ifdRaw: ifdResult?.raw ?? null,
+          fortuneRaw: fortuneResult?.raw ?? null,
+        });
+        console.info("[Simulation fiscale][taxware-normalized]", {
+          variantId: variant.id,
+          scenarioKey: scenario.key,
+          normalized: result?.normalized ?? null,
+        });
+
+        return [scenario.key, result] as const;
       })
     );
 
     const comparisonTaxResults = Object.fromEntries(comparisonScenarioEntries);
-    const baselineResult = comparisonTaxResults.reference;
     const mixedResult = comparisonTaxResults.mixed;
     const ajustementResult = comparisonTaxResults["manual-adjustment"];
     const displayedResult =
@@ -3409,6 +4166,16 @@ export default function App() {
 
     return {
       ...variant,
+      dossier: {
+        ...variant.dossier,
+        fiscalite: {
+          ...variant.dossier.fiscalite,
+          impotsEstimes:
+            displayedResult?.normalized?.totalTax ??
+            baselineResult?.normalized?.totalTax ??
+            variant.dossier.fiscalite.impotsEstimes,
+        },
+      },
       taxResultSansOptimisation: baselineResult,
       taxResultAvecDeductionsEstime: mixedResult,
       taxResult: mixedResult,
@@ -3439,8 +4206,8 @@ export default function App() {
     );
   };
 
-  // LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
-  // Protected desktop flow for GE, VD, FR, NE, JU, VS.
+  // END OF CHILD DEDUCTION LOCKED (PC) – JU/VS/NE/VD/GE/BE/FR – DO NOT MODIFY WITHOUT EXPLICIT INSTRUCTION
+  // Protected desktop flow for JU, VS, NE, VD, GE, BE, FR.
   // DO NOT MODIFY payload construction, source selection, normalization usage, composition,
   // or UI-bound after-change values here without explicit user authorization.
   const runDesktopChildrenTransitionVariant = async (
@@ -3793,135 +4560,250 @@ export default function App() {
     return (
       referenceDossier.famille.aConjoint === targetDossier.famille.aConjoint &&
       referenceDossier.famille.nombreEnfants === targetDossier.famille.nombreEnfants &&
-      (referenceLocation.zip !== targetLocation.zip || referenceLocation.city !== targetLocation.city)
+      referenceLocation.zip.length > 0 &&
+      referenceLocation.city.length > 0 &&
+      targetLocation.zip.length > 0 &&
+      targetLocation.city.length > 0
     );
   };
 
   const runDomicileComparisonVariant = async (
     referenceVariant: ScenarioVariant,
     targetVariant: ScenarioVariant,
-    referenceSimulatedVariant?: ScenarioVariant | null
+    _referenceSimulatedVariant?: ScenarioVariant | null
   ) => {
-    const currentVariant =
-      referenceSimulatedVariant ?? (await runTaxSimulationForVariant(referenceVariant));
-    const currentBaseResult =
-      currentVariant.taxResultSansOptimisation ?? getVariantDisplayedTaxResult(currentVariant);
-    if (
-      typeof currentBaseResult?.normalized?.taxableIncomeFederal !== "number" ||
-      typeof currentBaseResult?.normalized?.taxableAssets !== "number"
-    ) {
-      return runTaxSimulationForVariant(targetVariant);
-    }
-
-    const targetLocation = getTaxwareLocationForDossier(targetVariant.dossier);
-    const nextFederalBase = Math.max(
-      0,
-      Math.round(
-        currentBaseResult?.normalized?.taxableIncomeFederal ??
-          targetVariant.dossier.fiscalite.revenuImposableIfd ??
-          0
-      )
-    );
-    let nextFortuneBase = Math.max(
-      0,
-      Math.round(
-        currentBaseResult?.normalized?.taxableAssets ??
-          targetVariant.dossier.fiscalite.fortuneImposableActuelleSaisie ??
-          0
-      )
-    );
-    const referenceFortunePayload = currentBaseResult?.raw?.debug?.payloads?.fortune as
-      | Record<string, any>
-      | undefined;
-    let nextFortunePayload: Record<string, any> | null = null;
-    let nextFortuneResult: any = null;
-
-    if (referenceFortunePayload && typeof referenceFortunePayload === "object") {
-      nextFortunePayload = {
-        ...referenceFortunePayload,
-        zip: targetLocation.zip,
-        city: targetLocation.city,
-        partnership:
-          referenceFortunePayload.partnership ??
-          (targetVariant.dossier.famille.aConjoint ? "Marriage" : "Single"),
-        childrenCount: targetVariant.dossier.famille.nombreEnfants,
-      };
-
-      delete nextFortunePayload.Partnership;
-      delete nextFortunePayload.NumChildren;
-
-      nextFortuneResult = await callTaxware(nextFortunePayload as any);
-      assertTaxwareSuccess(nextFortuneResult, "Simulation domicile fortune cible");
-      nextFortuneBase = Math.max(
-        0,
-        Math.round(nextFortuneResult?.normalized?.taxableAssets ?? nextFortuneBase)
-      );
-    }
-
-    const nextSharedResult = await resolveTaxwareTarget({
-      label: `${targetVariant.id}-domicile-shared-federal`,
-      targetValue: nextFederalBase,
-      metric: (result) => result?.normalized?.taxableIncomeFederal,
-      buildRequest: (miscIncome) =>
-        buildDomicileComparisonProbeRequest(targetVariant.dossier, {
-          miscIncome,
-          assets: nextFortuneBase,
-        }),
+    const comparison = await runDomicileRealSimulation({
+      referenceDossier: referenceVariant.dossier,
+      targetDossier: targetVariant.dossier,
     });
 
-    const nextCantonalBase = Math.max(
-      0,
-      Math.round(
-        nextSharedResult?.normalized?.taxableIncomeCantonal ??
-          targetVariant.dossier.fiscalite.revenuImposable ??
-          0
-      )
+    assertTaxwareSuccess(
+      comparison.currentResult,
+      "Simulation réelle domicile actuel - payload V1 détaillé"
+    );
+    assertTaxwareSuccess(
+      comparison.targetResult,
+      "Simulation réelle domicile cible - payload V1 détaillé"
     );
 
-    const recalculatedTargetDossier = cloneDossier(targetVariant.dossier);
-    recalculatedTargetDossier.fiscalite.revenuImposableIfd = nextFederalBase;
-    recalculatedTargetDossier.fiscalite.revenuImposable = nextCantonalBase;
-    recalculatedTargetDossier.fiscalite.fortuneImposableActuelleSaisie = nextFortuneBase;
+    const differenceTotal =
+      (comparison.currentDisplay.displayedMetrics.taxTotal ?? comparison.currentMetrics.taxTotal ?? 0) -
+      (comparison.targetDisplay.displayedMetrics.taxTotal ?? comparison.targetMetrics.taxTotal ?? 0);
 
-    const nextResult = composeCorrectedTaxwareResult({
-      baseResult: nextSharedResult,
-      ifdResult: nextSharedResult,
-      cantonResult: nextSharedResult,
-      fortuneResult: nextFortuneResult ?? nextSharedResult,
-      debug: {
-        source: "domicile-shared-federal-probe",
-        referenceVariantId: referenceVariant.id,
-        recalculatedBases: {
-          taxableIncomeFederal: nextFederalBase,
-          taxableIncomeCantonal: nextCantonalBase,
-          taxableAssets: nextFortuneBase,
-        },
-        payloads: {
-          shared: buildDomicileComparisonProbeRequest(recalculatedTargetDossier, {
-            miscIncome:
-              nextSharedResult?.raw?.calibration?.driverValue ?? nextFederalBase,
-            assets: nextFortuneBase,
-          }),
-          fortune:
-            nextFortunePayload ??
-            buildDomicileComparisonProbeRequest(recalculatedTargetDossier, {
-              miscIncome: nextCantonalBase,
-              assets: nextFortuneBase,
-            }),
+    console.info("[DOMICILE][V1][PAYLOADS]", {
+      current: buildDomicilePayloadAudit(comparison.currentPayload),
+      target: buildDomicilePayloadAudit(comparison.targetPayload),
+      identicalOutsideLocation: comparison.payloadsMatchOutsideLocation,
+      strippedCurrent: stripDomicilePayloadLocation(comparison.currentPayload),
+      strippedTarget: stripDomicilePayloadLocation(comparison.targetPayload),
+    });
+    console.info("[DOMICILE][V1][RAW_METRICS]", {
+      current: comparison.currentMetrics,
+      target: comparison.targetMetrics,
+      differenceTotal,
+    });
+    console.info("[DOMICILE][V1][APPLICATION_CORRECTION]", {
+      current: comparison.currentDisplay,
+      target: comparison.targetDisplay,
+    });
+
+    const currentComparisonResult = {
+      ...comparison.currentResult,
+      normalized:
+        comparison.currentDisplay.displayedNormalized ?? comparison.currentResult?.normalized ?? null,
+      raw: {
+        ...(comparison.currentResult?.raw && typeof comparison.currentResult.raw === "object"
+          ? comparison.currentResult.raw
+          : {}),
+        debug: {
+          source: "domicile-real-simulation-current",
+          mode: "real-simulation",
+          payload: comparison.currentPayload,
+          rawMetrics: comparison.currentMetrics,
+          displayedMetrics: comparison.currentDisplay.displayedMetrics,
+          rawNormalized: comparison.currentResult?.normalized ?? null,
+          displayedNormalized:
+            comparison.currentDisplay.displayedNormalized ?? comparison.currentResult?.normalized ?? null,
+          applicationCorrection: {
+            ...comparison.currentDisplay.correction,
+            correctionPayload: comparison.currentDisplay.correctionPayload,
+            correctionRawResponse: comparison.currentDisplay.correctionResult?.raw ?? null,
+            correctionNormalizedResponse:
+              comparison.currentDisplay.correctionResult?.normalized ?? null,
+            displayedValueSources: comparison.currentDisplay.displayedValueSources,
+          },
+          recalculatedBases: comparison.currentDisplay.displayedMetrics,
         },
       },
-    });
+    };
+    const nextResult = {
+      ...comparison.targetResult,
+      normalized:
+        comparison.targetDisplay.displayedNormalized ?? comparison.targetResult?.normalized ?? null,
+      raw: {
+        ...(comparison.targetResult?.raw && typeof comparison.targetResult.raw === "object"
+          ? comparison.targetResult.raw
+          : {}),
+        debug: {
+          source: "domicile-real-simulation-comparison",
+          mode: "real-simulation",
+          currentPayload: comparison.currentPayload,
+          targetPayload: comparison.targetPayload,
+          payloadsMatchOutsideLocation: comparison.payloadsMatchOutsideLocation,
+          currentMetrics: comparison.currentMetrics,
+          targetMetrics: comparison.targetMetrics,
+          displayedMetrics: comparison.targetDisplay.displayedMetrics,
+          rawNormalized: comparison.targetResult?.normalized ?? null,
+          displayedNormalized:
+            comparison.targetDisplay.displayedNormalized ?? comparison.targetResult?.normalized ?? null,
+          applicationCorrection: {
+            ...comparison.targetDisplay.correction,
+            correctionPayload: comparison.targetDisplay.correctionPayload,
+            correctionRawResponse: comparison.targetDisplay.correctionResult?.raw ?? null,
+            correctionNormalizedResponse:
+              comparison.targetDisplay.correctionResult?.normalized ?? null,
+            displayedValueSources: comparison.targetDisplay.displayedValueSources,
+          },
+          recalculatedBases: comparison.targetDisplay.displayedMetrics,
+          comparison: {
+            mode: "real-simulation",
+            currentLocation: comparison.currentLocation,
+            targetLocation: comparison.targetLocation,
+            differenceTotal,
+            displayedCurrentMetrics: comparison.currentDisplay.displayedMetrics,
+            displayedTargetMetrics: comparison.targetDisplay.displayedMetrics,
+          },
+        },
+      },
+    };
 
     return {
       ...targetVariant,
-      dossier: recalculatedTargetDossier,
-      taxResultSansOptimisation: currentBaseResult,
+      dossier: {
+        ...targetVariant.dossier,
+        fiscalite: {
+          ...targetVariant.dossier.fiscalite,
+          impotsEstimes:
+            nextResult?.normalized?.totalTax ?? targetVariant.dossier.fiscalite.impotsEstimes,
+        },
+      },
+      taxResultSansOptimisation: currentComparisonResult,
       taxResultAvecDeductionsEstime: nextResult,
       taxResult: nextResult,
       taxResultAjustementManuel: nextResult,
       taxResultCorrectionFiscaleManuelle: null,
       comparisonTaxResults: {
-        reference: currentBaseResult,
+        reference: currentComparisonResult,
+        mixed: nextResult,
+        "manual-adjustment": nextResult,
+      },
+    };
+  };
+
+  const runDomicileQuickEstimateVariant = async (
+    referenceVariant: ScenarioVariant,
+    targetVariant: ScenarioVariant
+  ) => {
+    const currentLocation = getDomicileLocationFromDossier(referenceVariant.dossier);
+    const targetLocation = getDomicileLocationFromDossier(targetVariant.dossier);
+
+    if (!currentLocation.zip || !currentLocation.city) {
+      throw new Error("Le domicile actuel doit contenir un NPA et une localité fiscale.");
+    }
+
+    if (!targetLocation.zip || !targetLocation.city) {
+      throw new Error("Le domicile cible doit contenir un NPA et une localité fiscale.");
+    }
+
+    const simulationYear = Math.max(
+      2000,
+      Math.round(targetVariant.dossier.fiscalite.anneeSimulation || new Date().getFullYear())
+    );
+    const currentPayload = {
+      ...buildDomicileTaxCityV2Payload(targetVariant.dossier, currentLocation),
+      Year: simulationYear,
+    };
+    const targetPayload = {
+      ...buildDomicileTaxCityV2Payload(targetVariant.dossier, targetLocation),
+      Year: simulationYear,
+    };
+    const currentResult = await callTaxwareDomicileFromCityV2(currentPayload);
+    const targetResult = await callTaxwareDomicileFromCityV2(targetPayload);
+
+    assertTaxwareSuccess(currentResult, "Estimation rapide domicile actuel - payload V2");
+    assertTaxwareSuccess(targetResult, "Estimation rapide domicile cible - payload V2");
+
+    const currentMetrics = getDomicileTaxCityMetricsFromResult(currentResult);
+    const targetMetrics = getDomicileTaxCityMetricsFromResult(targetResult);
+    const payloadsMatchOutsideLocation =
+      JSON.stringify(stripDomicileTaxCityV2PayloadLocation(currentPayload)) ===
+      JSON.stringify(stripDomicileTaxCityV2PayloadLocation(targetPayload));
+    const differenceTotal = (currentMetrics.taxTotal ?? 0) - (targetMetrics.taxTotal ?? 0);
+
+    console.info("[DOMICILE][V2][PAYLOADS]", {
+      current: currentPayload,
+      target: targetPayload,
+      identicalOutsideLocation: payloadsMatchOutsideLocation,
+      strippedCurrent: stripDomicileTaxCityV2PayloadLocation(currentPayload),
+      strippedTarget: stripDomicileTaxCityV2PayloadLocation(targetPayload),
+    });
+    console.info("[DOMICILE][V2][RAW_METRICS]", {
+      current: currentMetrics,
+      target: targetMetrics,
+      differenceTotal,
+    });
+
+    const currentComparisonResult = {
+      ...currentResult,
+      raw: {
+        ...(currentResult?.raw && typeof currentResult.raw === "object" ? currentResult.raw : {}),
+        debug: {
+          source: "domicile-v2-current",
+          mode: "quick-estimate",
+          payload: currentPayload,
+          rawMetrics: currentMetrics,
+        },
+      },
+    };
+    const nextResult = {
+      ...targetResult,
+      raw: {
+        ...(targetResult?.raw && typeof targetResult.raw === "object" ? targetResult.raw : {}),
+        debug: {
+          source: "domicile-v2-comparison",
+          mode: "quick-estimate",
+          currentPayload,
+          targetPayload,
+          payloadsMatchOutsideLocation,
+          currentMetrics,
+          targetMetrics,
+          comparison: {
+            mode: "quick-estimate",
+            currentLocation,
+            targetLocation,
+            differenceTotal,
+          },
+        },
+      },
+    };
+
+    return {
+      ...targetVariant,
+      dossier: {
+        ...targetVariant.dossier,
+        fiscalite: {
+          ...targetVariant.dossier.fiscalite,
+          impotsEstimes:
+            nextResult?.normalized?.totalTax ?? targetVariant.dossier.fiscalite.impotsEstimes,
+        },
+      },
+      taxResultSansOptimisation: currentComparisonResult,
+      taxResultAvecDeductionsEstime: nextResult,
+      taxResult: nextResult,
+      taxResultAjustementManuel: nextResult,
+      taxResultCorrectionFiscaleManuelle: null,
+      comparisonTaxResults: {
+        reference: currentComparisonResult,
         mixed: nextResult,
         "manual-adjustment": nextResult,
       },
@@ -3966,6 +4848,110 @@ export default function App() {
       return false;
     }
 
+    const referenceVariant = variants[0] ?? readyVariants[0];
+    if (activeDesktopCalculator === "changement-domicile" && referenceVariant) {
+      const requestedTargetId = requestedVariantIds?.find((variantId) => variantId !== referenceVariant.id);
+      const domicileTargetVariant =
+        (requestedTargetId
+          ? variants.find((variant) => variant.id === requestedTargetId)
+          : undefined) ??
+        (activeVariant.id !== referenceVariant.id ? activeVariant : undefined) ??
+        readyVariants.find((variant) => variant.id !== referenceVariant.id);
+
+      if (!domicileTargetVariant || domicileTargetVariant.id === referenceVariant.id) {
+        if (!options?.silentMissingRequirements) {
+          alert("Créez ou ouvrez une variante `Changement de domicile` distincte du dossier actuel.");
+        }
+        return false;
+      }
+
+      const currentLocation = getDomicileLocationFromDossier(referenceVariant.dossier);
+      const targetLocation = getDomicileLocationFromDossier(domicileTargetVariant.dossier);
+      const validationError =
+        domicileComparisonMode === "quick-estimate"
+          ? !currentLocation.zip || !currentLocation.city
+            ? "Le domicile actuel doit contenir un NPA et une localité fiscale."
+            : !targetLocation.zip || !targetLocation.city
+              ? "Le domicile cible doit contenir un NPA et une localité fiscale."
+              : null
+          : getDomicileValidationError(
+              domicileTargetVariant.dossier,
+              currentLocation,
+              targetLocation
+            );
+
+      if (validationError) {
+        if (!options?.silentMissingRequirements) {
+          alert(validationError);
+        }
+        return false;
+      }
+
+      setIsSimulatingVariants(true);
+      setSimulationStatusMessage(
+        `${
+          domicileComparisonMode === "quick-estimate"
+            ? "Estimation rapide"
+            : "Simulation réelle"
+        } de ${getVariantDisplayLabel(domicileTargetVariant)} en cours...`
+      );
+
+      try {
+        const simulatedVariant =
+          domicileComparisonMode === "quick-estimate"
+            ? await runDomicileQuickEstimateVariant(referenceVariant, domicileTargetVariant)
+            : await runDomicileComparisonVariant(referenceVariant, domicileTargetVariant);
+
+        setDomicileModeRequiresRerun(false);
+        setVariants((current) =>
+          current.map((variant) => (variant.id === simulatedVariant.id ? simulatedVariant : variant))
+        );
+
+        autoSimulationStatusRef.current[simulatedVariant.id] = "done";
+        pendingDesktopSimulationDisplayRef.current[simulatedVariant.id] = Date.now();
+
+        if (options?.navigateToResults) {
+          setActiveSectionId("resultats");
+        }
+
+        if (options?.postSimulationScrollTarget) {
+          pendingPostSimulationScrollRef.current = options.postSimulationScrollTarget;
+        } else {
+          pendingPostSimulationScrollRef.current = null;
+        }
+
+        if (
+          options?.navigateToResults &&
+          !options?.postSimulationScrollTarget &&
+          typeof window !== "undefined"
+        ) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        return true;
+      } catch (error) {
+        pendingPostSimulationScrollRef.current = null;
+        console.error("Erreur lors de la simulation domicile TaxWare :", error);
+        alert(
+          domicileComparisonMode === "quick-estimate"
+            ? "Erreur lors de l'estimation rapide domicile."
+            : "Erreur lors de la simulation domicile."
+        );
+        return false;
+      } finally {
+        setIsSimulatingVariants(false);
+        setSimulationStatusMessage("");
+      }
+    }
+    const domicileValidationErrors: string[] = [];
+
+    if (domicileValidationErrors.length > 0) {
+      if (!options?.silentMissingRequirements) {
+        alert(domicileValidationErrors.join("\n"));
+      }
+      return false;
+    }
+
     setIsSimulatingVariants(true);
     setSimulationStatusMessage(
       readyVariants.length > 1
@@ -3993,7 +4979,6 @@ export default function App() {
         )
       );
 
-      const referenceVariant = variants[0] ?? readyVariants[0];
       const simulatedVariants: ScenarioVariant[] = [];
       let referenceSimulatedVariant: ScenarioVariant | null = null;
 
@@ -4012,23 +4997,6 @@ export default function App() {
           }
 
           simulatedVariant = await runDesktopChildrenTransitionVariant(
-            referenceVariant,
-            variant,
-            referenceSimulatedVariant
-          );
-        } else if (
-          activeDesktopCalculator === "changement-domicile" &&
-          referenceVariant &&
-          isDesktopDomicileComparisonCandidate(referenceVariant, variant)
-        ) {
-          if (!referenceSimulatedVariant) {
-            referenceSimulatedVariant =
-              referenceVariant.id === variant.id
-                ? null
-                : await runTaxSimulationForVariant(referenceVariant);
-          }
-
-          simulatedVariant = await runDomicileComparisonVariant(
             referenceVariant,
             variant,
             referenceSimulatedVariant
@@ -4545,19 +5513,15 @@ export default function App() {
       nextDossier
     );
 
-    const currentVariant = await runTaxSimulationForVariant(currentVariantDefinition);
     const nextVariant = isDesktopDomicileComparisonCandidate(
       currentVariantDefinition,
       nextVariantDefinition
     )
-      ? await runDomicileComparisonVariant(
-          currentVariantDefinition,
-          nextVariantDefinition,
-          currentVariant
-        )
+      ? await runDomicileComparisonVariant(currentVariantDefinition, nextVariantDefinition)
       : await runTaxSimulationForVariant(nextVariantDefinition);
 
-    const currentResult = getVariantDisplayedTaxResult(currentVariant);
+    const currentResult =
+      nextVariant.taxResultSansOptimisation ?? null;
     const nextResult = getVariantDisplayedTaxResult(nextVariant);
     const annualDelta =
       (currentResult?.normalized?.totalTax ?? 0) - (nextResult?.normalized?.totalTax ?? 0);
@@ -5297,6 +6261,8 @@ export default function App() {
     activeVariant.taxResult,
     activeVariant.taxResultSansOptimisation,
     activeVariant.taxResultAvecDeductionsEstime,
+    activeVariantIndex,
+    activeDesktopCalculator,
     isTaxSimulationReady,
     runAutoTaxSimulation,
   ]);
@@ -5536,50 +6502,172 @@ export default function App() {
         "Une vision plus claire de l'avenir et une meilleure capacité de décision.",
     },
   ];
-  const journeyNavigation = [
-    { id: "informations-generales", step: "1", label: "Situation" },
-    { id: "revenus", step: "2", label: "Revenus" },
-    { id: "fortune", step: "3", label: "Fortune" },
-    { id: "charges", step: "4", label: "Charges" },
-    { id: "fiscalite", step: "5", label: "Fiscalité" },
-    { id: "resultats", step: "6", label: "Résultats" },
-    { id: "recommandation", step: "7", label: "Recommandation" },
-  ];
+  const journeyNavigation = isDomicileRealSimulationMode
+    ? [
+        { id: "informations-generales", step: "1", label: "Situation" },
+        { id: "revenus", step: "2", label: "Revenus" },
+        { id: "fortune", step: "3", label: "Fortune" },
+        { id: "charges", step: "4", label: "Charges" },
+        { id: "fiscalite", step: "5", label: "Fiscalité" },
+        { id: "resultats", step: "6", label: "Résultats" },
+      ]
+    : [
+        { id: "informations-generales", step: "1", label: "Situation" },
+        { id: "revenus", step: "2", label: "Revenus" },
+        { id: "fortune", step: "3", label: "Fortune" },
+        { id: "charges", step: "4", label: "Charges" },
+        { id: "fiscalite", step: "5", label: "Fiscalité" },
+        { id: "resultats", step: "6", label: "Résultats" },
+        { id: "recommandation", step: "7", label: "Recommandation" },
+      ];
   const baseVariant = variants[0] ?? activeVariant;
   const activeClientDossier = dossier;
-  const activeClientDisplayName =
-    `${activeClientDossier.identite.prenom} ${activeClientDossier.identite.nom}`.trim() ||
-    "Client à renseigner";
-  const activeClientLocality =
-    `${activeClientDossier.identite.npa || "NPA à renseigner"} ${(
+  const isDomicileActiveCardMode =
+    activeDesktopCalculator === "changement-domicile" && isDesktopDomicileVariantLabel(activeVariant);
+  const activeDossierCardFiscalSource = isDomicileActiveCardMode
+    ? {
+        sourceName: "domicileTargetDisplayedBases",
+        sourceBusinessOrigin: "bases recalculées du flux domicile cible",
+        taxableIncomeFederal:
+          typeof domicileTargetDisplayedBases?.taxableIncomeFederal === "number"
+            ? domicileTargetDisplayedBases.taxableIncomeFederal
+            : null,
+        taxableIncomeCantonal:
+          typeof domicileTargetDisplayedBases?.taxableIncomeCantonal === "number"
+            ? domicileTargetDisplayedBases.taxableIncomeCantonal
+            : null,
+        taxableAssets:
+          typeof domicileTargetDisplayedBases?.taxableAssets === "number"
+            ? domicileTargetDisplayedBases.taxableAssets
+            : null,
+      }
+    : {
+        sourceName: "activeClientDossier.fiscalite",
+        sourceBusinessOrigin: "base fiscale locale du dossier actif",
+        taxableIncomeFederal: activeClientDossier.fiscalite.revenuImposableIfd || 0,
+        taxableIncomeCantonal: activeClientDossier.fiscalite.revenuImposable || 0,
+        taxableAssets: activeClientDossier.fiscalite.fortuneImposableActuelleSaisie || 0,
+      };
+  const activeDossierCardData = {
+    prenom: activeClientDossier.identite.prenom || "Non renseigné",
+    nom: activeClientDossier.identite.nom || "Non renseigné",
+    npaLocality: `${activeClientDossier.identite.npa || "NPA à renseigner"} ${(
       activeClientDossier.identite.communeFiscale ||
       activeClientDossier.identite.commune ||
       "Localité à renseigner"
-    ).trim()}`.trim();
+    ).trim()}`.trim(),
+    etatCivil: activeClientDossier.identite.etatCivil || "Non renseigné",
+    nombreEnfants: String(activeClientDossier.famille.nombreEnfants || 0),
+    revenuImposableIfd:
+      typeof activeDossierCardFiscalSource.taxableIncomeFederal === "number"
+        ? formatMontantCHFArrondi(activeDossierCardFiscalSource.taxableIncomeFederal)
+        : "En attente",
+    revenuImposableIcc:
+      typeof activeDossierCardFiscalSource.taxableIncomeCantonal === "number"
+        ? formatMontantCHFArrondi(activeDossierCardFiscalSource.taxableIncomeCantonal)
+        : "En attente",
+    fortuneImposable:
+      typeof activeDossierCardFiscalSource.taxableAssets === "number"
+        ? formatMontantCHFArrondi(activeDossierCardFiscalSource.taxableAssets)
+        : "En attente",
+    sourceMeta: {
+      npaLocality: {
+        variable: "activeClientDossier.identite.{npa, communeFiscale|commune}",
+        value: `${activeClientDossier.identite.npa || ""} ${
+          activeClientDossier.identite.communeFiscale || activeClientDossier.identite.commune || ""
+        }`.trim(),
+        origin: "identité de la variante active",
+      },
+      etatCivil: {
+        variable: "activeClientDossier.identite.etatCivil",
+        value: activeClientDossier.identite.etatCivil || "Non renseigné",
+        origin: "identité de la variante active",
+      },
+      nombreEnfants: {
+        variable: "activeClientDossier.famille.nombreEnfants",
+        value: activeClientDossier.famille.nombreEnfants || 0,
+        origin: "famille de la variante active",
+      },
+      revenuImposableIfd: {
+        variable: activeDossierCardFiscalSource.sourceName,
+        value: activeDossierCardFiscalSource.taxableIncomeFederal,
+        origin: activeDossierCardFiscalSource.sourceBusinessOrigin,
+      },
+      revenuImposableIcc: {
+        variable: activeDossierCardFiscalSource.sourceName,
+        value: activeDossierCardFiscalSource.taxableIncomeCantonal,
+        origin: activeDossierCardFiscalSource.sourceBusinessOrigin,
+      },
+      fortuneImposable: {
+        variable: activeDossierCardFiscalSource.sourceName,
+        value: activeDossierCardFiscalSource.taxableAssets,
+        origin: activeDossierCardFiscalSource.sourceBusinessOrigin,
+      },
+    },
+  };
+  const activeClientDisplayName =
+    `${activeClientDossier.identite.prenom} ${activeClientDossier.identite.nom}`.trim() ||
+    "Client à renseigner";
   const desktopActiveDossierFields = [
-    { label: "Prénom", value: activeClientDossier.identite.prenom || "Non renseigné" },
-    { label: "Nom", value: activeClientDossier.identite.nom || "Non renseigné" },
-    { label: "NPA / localité", value: activeClientLocality },
-    { label: "État civil", value: activeClientDossier.identite.etatCivil || "Non renseigné" },
+    { label: "Prénom", value: activeDossierCardData.prenom },
+    { label: "Nom", value: activeDossierCardData.nom },
+    { label: "NPA / localité", value: activeDossierCardData.npaLocality },
+    { label: "État civil", value: activeDossierCardData.etatCivil },
     {
       label: "Nombre d’enfants",
-      value: String(activeClientDossier.famille.nombreEnfants || 0),
+      value: activeDossierCardData.nombreEnfants,
     },
     {
       label: "Revenu imposable IFD",
-      value: formatMontantCHFArrondi(activeClientDossier.fiscalite.revenuImposableIfd || 0),
+      value: activeDossierCardData.revenuImposableIfd,
     },
     {
       label: "Revenu imposable ICC",
-      value: formatMontantCHFArrondi(activeClientDossier.fiscalite.revenuImposable || 0),
+      value: activeDossierCardData.revenuImposableIcc,
     },
     {
       label: "Fortune imposable",
-      value: formatMontantCHFArrondi(
-        activeClientDossier.fiscalite.fortuneImposableActuelleSaisie || 0
-      ),
+      value: activeDossierCardData.fortuneImposable,
     },
   ];
+  Object.entries(activeDossierCardData.sourceMeta).forEach(([field, metadata]) => {
+    console.info("[DOSSIER_ACTIF][field-source]", {
+      field,
+      variable: metadata.variable,
+      value: metadata.value,
+      origin: metadata.origin,
+    });
+  });
+  console.info("[DOSSIER_ACTIF][composed-card-data]", activeDossierCardData);
+  if (
+    isDomicileActiveCardMode &&
+    activeClientDossier.identite.npa === "2800" &&
+    (activeClientDossier.identite.communeFiscale || activeClientDossier.identite.commune) ===
+      "Delémont" &&
+    activeClientDossier.identite.etatCivil === "Marié" &&
+    activeClientDossier.famille.nombreEnfants === 2
+  ) {
+    const expected = {
+      taxableIncomeFederal: 159800,
+      taxableIncomeCantonal: 166160,
+      taxableAssets: 486000,
+    };
+    const actual = {
+      taxableIncomeFederal: activeDossierCardFiscalSource.taxableIncomeFederal,
+      taxableIncomeCantonal: activeDossierCardFiscalSource.taxableIncomeCantonal,
+      taxableAssets: activeDossierCardFiscalSource.taxableAssets,
+    };
+    console.info("[DOSSIER_ACTIF][expected-vs-actual]", {
+      expected,
+      actual,
+      diff: {
+        taxableIncomeFederal: (actual.taxableIncomeFederal ?? 0) - expected.taxableIncomeFederal,
+        taxableIncomeCantonal:
+          (actual.taxableIncomeCantonal ?? 0) - expected.taxableIncomeCantonal,
+        taxableAssets: (actual.taxableAssets ?? 0) - expected.taxableAssets,
+      },
+    });
+  }
   const reformeVariantIndex = getDesktopCalculatorVariantIndex("reforme-vl");
   const domicileVariantIndex = getDesktopCalculatorVariantIndex("changement-domicile");
   const enfantVariantIndex = getDesktopCalculatorVariantIndex("fin-deduction-enfant");
@@ -5626,9 +6714,9 @@ export default function App() {
       label: "Calculateur 3",
       title: "Changement de domicile",
       description:
-        "Duplique le dossier actif dans une variante dédiée pour modifier NPA, commune et bases fiscales sans toucher au socle.",
+        "Compare le domicile actuel et le domicile cible à partir des mêmes données économiques réelles du dossier actif.",
       helper:
-        "Conservez le dossier actif comme référence puis ajustez uniquement la variante de domicile.",
+        "Seules la commune et le canton cibles changent entre les deux appels TaxWare réels.",
       primaryLabel: "Ouvrir changement de domicile",
       status: domicileVariantIndex >= 0 ? "Disponible" : "À créer",
       currentVariant:
@@ -5741,6 +6829,8 @@ export default function App() {
     ? simulationStatusMessage
     : isSimulationAccessVerificationBlocking
       ? "Verification de l'acces premium en cours..."
+      : isDomicileRealSimulationMode
+        ? "Le mode Simulation réelle lance uniquement deux appels TaxWare: domicile actuel et domicile cible."
       : isGlobalTaxSimulationReady
         ? "Le calcul relance automatiquement toutes les variantes existantes."
         : taxSimulationMissingRequirementsMessage;
@@ -5756,6 +6846,12 @@ export default function App() {
   const activeJourneyProgressLabel = activeJourneyStep
     ? `Étape ${activeJourneyStep.step} sur ${journeyNavigation.length}`
     : "Introduction avant l’étape 1";
+  useEffect(() => {
+    if (isDomicileRealSimulationMode && activeSectionId === "recommandation") {
+      setActiveSectionId("resultats");
+    }
+  }, [activeSectionId, isDomicileRealSimulationMode]);
+  const domicileBaseHasEconomicInputs = hasDomicileEconomicInputs(activeVariant.dossier);
   const activeVariantTotalTax = getVariantTaxTotal(activeVariant);
   const activeVariantSavingsVsBase =
     typeof referenceVariantTotalTax === "number" && typeof activeVariantTotalTax === "number"
@@ -6178,65 +7274,33 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    const activeLabel = `${activeVariant.customLabel} ${activeVariant.label}`.toLowerCase();
     const isDomicileVariant =
       activeVariantIndex > 0 &&
-      (activeDesktopCalculator === "changement-domicile" || activeLabel.includes("domicile"));
-    const debugSource =
-      typeof taxResultAffiche?.raw?.debug?.source === "string"
-        ? taxResultAffiche.raw.debug.source
-        : "";
+      (activeDesktopCalculator === "changement-domicile" || isDesktopDomicileVariantLabel(activeVariant));
+    const hasAnyStoredResult = Boolean(
+      activeVariant.taxResult ||
+        activeVariant.taxResultAvecDeductionsEstime ||
+        activeVariant.comparisonTaxResults?.mixed
+    );
+    const hasFinalDomicileResult = Boolean(getDesktopDomicileFinalDisplayedResult(activeVariant));
 
-    if (
-      !isDomicileVariant ||
-      !debugSource.startsWith("domicile-reference-economic-payloads") ||
-      typeof taxResultAffiche?.normalized?.taxableIncomeFederal !== "number" ||
-      typeof taxResultAffiche?.normalized?.taxableIncomeCantonal !== "number" ||
-      typeof taxResultAffiche?.normalized?.taxableAssets !== "number"
-    ) {
+    if (!isDomicileVariant || !hasAnyStoredResult || hasFinalDomicileResult) {
       return;
     }
 
-    const nextIfd = Math.max(0, Math.round(taxResultAffiche.normalized.taxableIncomeFederal));
-    const nextCanton = Math.max(0, Math.round(taxResultAffiche.normalized.taxableIncomeCantonal));
-    const nextFortune = Math.max(0, Math.round(taxResultAffiche.normalized.taxableAssets));
-
-    if (
-      (activeVariant.dossier.fiscalite.revenuImposableIfd || 0) === nextIfd &&
-      (activeVariant.dossier.fiscalite.revenuImposable || 0) === nextCanton &&
-      (activeVariant.dossier.fiscalite.fortuneImposableActuelleSaisie || 0) === nextFortune
-    ) {
-      return;
-    }
+    delete autoSimulationStatusRef.current[activeVariant.id];
+    delete pendingDesktopSimulationDisplayRef.current[activeVariant.id];
 
     setVariants((current) =>
       current.map((variant, index) =>
-        index === activeVariantIndex
-          ? {
-              ...variant,
-              dossier: {
-                ...variant.dossier,
-                fiscalite: {
-                  ...variant.dossier.fiscalite,
-                  revenuImposableIfd: nextIfd,
-                  revenuImposable: nextCanton,
-                  fortuneImposableActuelleSaisie: nextFortune,
-                },
-              },
-            }
-          : variant
+        index === activeVariantIndex ? clearVariantSimulationOutputs(variant) : variant
       )
     );
   }, [
     activeDesktopCalculator,
-    activeVariant.customLabel,
-    activeVariant.dossier.fiscalite.fortuneImposableActuelleSaisie,
-    activeVariant.dossier.fiscalite.revenuImposable,
-    activeVariant.dossier.fiscalite.revenuImposableIfd,
+    activeVariant,
     activeVariant.id,
-    activeVariant.label,
     activeVariantIndex,
-    taxResultAffiche,
   ]);
 
   useEffect(() => {
@@ -6255,8 +7319,16 @@ export default function App() {
       dossierAssetIncome: Number(activeVariant.dossier.revenus.autresRevenus || 0),
       effectiveAssetIncome: getEffectiveTaxwareAssetIncome(activeVariant.dossier),
       payloadAssetIncome: Number(taxwarePayloadControle.AssetIncome || 0),
-      payloadZip: Number(taxwarePayloadControle.Zip || 0),
-      payloadCity: String(taxwarePayloadControle.City || ""),
+      payloadZip: String(
+        (taxwarePayloadControle as Record<string, unknown>).Zip ??
+          (taxwarePayloadControle as Record<string, unknown>).Municipality ??
+          ""
+      ),
+      payloadCity: String(
+        (taxwarePayloadControle as Record<string, unknown>).City ??
+          (taxwarePayloadControle as Record<string, unknown>).ShortnameCanton ??
+          ""
+      ),
       normalizedWealthTax: taxResultAffiche.normalized.wealthTax ?? null,
       normalizedTotalTax: taxResultAffiche.normalized.totalTax ?? null,
       renderedWealthTax: formatMontantTaxware(taxResultAffiche.normalized.wealthTax),
@@ -6286,6 +7358,215 @@ export default function App() {
     taxResultAffiche,
     taxwarePayloadControle,
     taxwareRawDisplayedResult,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    (window as any).__FIPLA_RUNTIME_SNAPSHOT__ = {
+      activeDesktopCalculator,
+      activeSectionId,
+      activeVariantId: activeVariant.id,
+      activeVariantLabel: getVariantDisplayLabel(activeVariant),
+      sourceTaxBase: {
+        ifd:
+          isDomicileComparison && typeof domicileReferenceDisplayedBases?.taxableIncomeFederal === "number"
+            ? domicileReferenceDisplayedBases.taxableIncomeFederal
+            : revenuImposableIfdReference,
+        cantonal:
+          isDomicileComparison && typeof domicileReferenceDisplayedBases?.taxableIncomeCantonal === "number"
+            ? domicileReferenceDisplayedBases.taxableIncomeCantonal
+            : revenuImposableReference,
+        wealth:
+          isDomicileComparison && typeof domicileReferenceDisplayedBases?.taxableAssets === "number"
+            ? domicileReferenceDisplayedBases.taxableAssets
+            : fortuneImposableReference,
+        source:
+          isDomicileComparison ? "domicileReferenceDisplayedBases" : "dossier.fiscalite",
+      },
+      simulationLevers: {
+        thirdPillar: dossier.fiscalite.troisiemePilierSimule || 0,
+        lppBuyback: dossier.fiscalite.rachatLpp || 0,
+        manualAdjustment: dossier.fiscalite.ajustementManuelRevenu || 0,
+      },
+      localSimulatedTaxBase: {
+        ifd:
+          isDomicileComparison && typeof domicileTargetDisplayedBases?.taxableIncomeFederal === "number"
+            ? domicileTargetDisplayedBases.taxableIncomeFederal
+            : revenuImposableIfdSimule,
+        cantonal:
+          isDomicileComparison && typeof domicileTargetDisplayedBases?.taxableIncomeCantonal === "number"
+            ? domicileTargetDisplayedBases.taxableIncomeCantonal
+            : revenuImposableCantonalSimule,
+        wealth:
+          isDomicileComparison && typeof domicileTargetDisplayedBases?.taxableAssets === "number"
+            ? domicileTargetDisplayedBases.taxableAssets
+            : fortuneImposableSimulee,
+        source:
+          isDomicileComparison ? "domicileTargetDisplayedBases" : "generic-local-simulation",
+      },
+      displayedTaxBaseSentToTaxware: {
+        ifd:
+          isDomicileComparison && typeof domicileTargetDisplayedBases?.taxableIncomeFederal === "number"
+            ? domicileTargetDisplayedBases.taxableIncomeFederal
+            : revenuImposableIfdApresSimulationCalcule,
+        cantonal:
+          isDomicileComparison && typeof domicileTargetDisplayedBases?.taxableIncomeCantonal === "number"
+            ? domicileTargetDisplayedBases.taxableIncomeCantonal
+            : revenuImposableApresSimulationCalcule,
+        wealth:
+          isDomicileComparison && typeof domicileTargetDisplayedBases?.taxableAssets === "number"
+            ? domicileTargetDisplayedBases.taxableAssets
+            : fortuneImposableApresSimulationCalcule,
+        source:
+          isDomicileComparison ? "domicileTargetDisplayedBases" : "displayed-local-simulation",
+      },
+      displayedTaxResult: taxResultAffiche?.normalized ?? null,
+      displayedTaxDebugSource:
+        typeof taxResultAffiche?.raw?.debug?.source === "string"
+          ? taxResultAffiche.raw.debug.source
+          : null,
+      displayedDomicileBases: isDomicileComparison
+        ? {
+            current: domicileReferenceDisplayedBases,
+            target: domicileTargetDisplayedBases,
+          }
+        : null,
+      domicileExpectedWitnessCase:
+        isDomicileComparison &&
+        getTaxwareMunicipalityIdentityForDossier((variants[0] ?? activeVariant).dossier)
+          .municipality === "Neuchâtel" &&
+        getTaxwareMunicipalityIdentityForDossier((variants[0] ?? activeVariant).dossier)
+          .shortnameCanton === "NE" &&
+        getTaxwareMunicipalityIdentityForDossier(activeVariant.dossier).municipality ===
+          "Delémont" &&
+        getTaxwareMunicipalityIdentityForDossier(activeVariant.dossier).shortnameCanton === "JU" &&
+        dossier.famille.aConjoint &&
+        dossier.famille.nombreEnfants === 2
+          ? {
+              expected: {
+                ifd: 159800,
+                icc: 166160,
+                fortune: 486000,
+              },
+              actual: {
+                ifd: domicileTargetDisplayedBases?.taxableIncomeFederal ?? null,
+                icc: domicileTargetDisplayedBases?.taxableIncomeCantonal ?? null,
+                fortune: domicileTargetDisplayedBases?.taxableAssets ?? null,
+              },
+              diff: {
+                ifd: (domicileTargetDisplayedBases?.taxableIncomeFederal ?? 0) - 159800,
+                icc: (domicileTargetDisplayedBases?.taxableIncomeCantonal ?? 0) - 166160,
+                fortune: (domicileTargetDisplayedBases?.taxableAssets ?? 0) - 486000,
+              },
+            }
+          : null,
+      displayedTaxPayloads: taxResultAffiche?.raw?.debug?.payloads ?? null,
+      displayedTaxBaselinePayloads: taxResultAffiche?.raw?.debug?.baselinePayloads ?? null,
+      displayedTaxRaw: {
+        baseline: taxResultAffiche?.raw?.baseline ?? null,
+        correctionIfd: taxResultAffiche?.raw?.correctionIfd ?? null,
+        correctionCanton: taxResultAffiche?.raw?.correctionCanton ?? null,
+        correctionFortune: taxResultAffiche?.raw?.correctionFortune ?? null,
+      },
+      variantCards: variantTotals.map((variant) => ({
+        id: variant.id,
+        label: variant.label,
+        customLabel: variant.customLabel,
+        totalTax: variant.totalTax,
+      })),
+    };
+
+    if (isDomicileComparison) {
+      console.info("[DOMICILE][UI][VARIABLE_READS]", {
+        dossierActifReconstruit: {
+          variable: "domicileReferenceDisplayedBases",
+          value: domicileReferenceDisplayedBases,
+          fallbackVariable:
+            "revenuImposableIfdReference / revenuImposableReference / fortuneImposableReference",
+        },
+        baseFiscaleSimulee: {
+          variable: "domicileTargetDisplayedBases",
+          value: {
+            ifd: domicileTargetDisplayedBases?.taxableIncomeFederal ?? null,
+            cantonal: domicileTargetDisplayedBases?.taxableIncomeCantonal ?? null,
+            wealth: domicileTargetDisplayedBases?.taxableAssets ?? null,
+          },
+          fallbackVariable:
+            "revenuImposableIfdSimule / revenuImposableCantonalSimule / fortuneImposableSimulee",
+        },
+        baseDomicileCibleTransmise: {
+          variable: "taxResultAffiche.raw.debug.targetPayload",
+          value: taxResultAffiche?.raw?.debug?.targetPayload ?? null,
+        },
+        jsonAfficheALecran: {
+          variable: "taxwarePayloadControle / taxwarePayloadJson",
+          value: taxwarePayloadControle,
+          prettyJson: taxwarePayloadJson,
+        },
+        displayedComparison: taxResultAffiche?.raw?.debug?.displayedComparison ?? null,
+        applicationCorrection: domicileTargetApplicationCorrection,
+      });
+      console.info("[DOMICILE][UI][DISPLAYED_VALUES]", {
+        targetLocation: domicileTargetLocationLabel,
+        payloadSentToTaxware: taxResultAffiche?.raw?.debug?.targetPayload ?? null,
+        rawTaxwareMetrics: taxResultAffiche?.raw?.debug?.targetMetrics ?? null,
+        displayedMetrics: domicileTargetDisplayedBases,
+        rawTaxwareNormalized: taxResultAffiche?.raw?.debug?.rawNormalized ?? null,
+        normalizedTaxware: taxResultAffiche?.normalized ?? null,
+        applicationCorrection: domicileTargetApplicationCorrection,
+        valueInjectedInUi: {
+          taxableIncomeFederal: revenuImposableIfdApresSimulationCalcule,
+          taxableIncomeCantonal: revenuImposableApresSimulationCalcule,
+          taxableAssets: fortuneImposableApresSimulationCalcule,
+          taxTotal: taxResultAffiche?.normalized?.totalTax ?? null,
+        },
+        valueSources: {
+          taxableIncomeFederal:
+            domicileTargetApplicationCorrection?.displayedValueSources?.taxableIncomeFederal ??
+            "taxware-raw",
+          taxableIncomeCantonal:
+            domicileTargetApplicationCorrection?.displayedValueSources?.taxableIncomeCantonal ??
+            "taxware-raw",
+          taxableAssets:
+            domicileTargetApplicationCorrection?.displayedValueSources?.taxableAssets ??
+            "taxware-raw",
+          taxTotal:
+            domicileTargetApplicationCorrection?.displayedValueSources?.taxTotal ?? "taxware-raw",
+        },
+      });
+    }
+  }, [
+    activeDesktopCalculator,
+    activeSectionId,
+    activeVariant,
+    dossier.fiscalite.ajustementManuelRevenu,
+    dossier.fiscalite.rachatLpp,
+    dossier.fiscalite.troisiemePilierSimule,
+    fortuneImposableApresSimulationCalcule,
+    fortuneImposableReference,
+    fortuneImposableSimulee,
+    revenuImposableApresSimulationCalcule,
+    revenuImposableCantonalSimule,
+    revenuImposableIfdApresSimulationCalcule,
+    revenuImposableIfdReference,
+    revenuImposableIfdSimule,
+    revenuImposableReference,
+    isDomicileComparison,
+    domicileReferenceDisplayedBases,
+    domicileReferenceApplicationCorrection,
+    domicileTargetDisplayedBases,
+    domicileTargetApplicationCorrection,
+    domicileTargetLocationLabel,
+    fortuneImposableApresSimulationCalcule,
+    revenuImposableApresSimulationCalcule,
+    revenuImposableIfdApresSimulationCalcule,
+    taxResultAffiche,
+    taxwarePayloadControle,
+    taxwarePayloadJson,
+    variantTotals,
   ]);
 
   useEffect(() => {
@@ -6732,35 +8013,6 @@ export default function App() {
     scrollToOptimisationSection();
   }, [isMobile, isSimulatingVariants, variants]);
 
-  useEffect(() => {
-    if (
-      loading ||
-      !user ||
-      isMobile ||
-      hasStartedClientEdit ||
-      !isDesktopClientCardPending ||
-      isPricingRoute ||
-      isCheckoutSuccessRoute ||
-      isCheckoutCancelRoute
-    ) {
-      setHasConfirmedClientStartModal(false);
-      setClientStartModalError("");
-      setShowClientStartModal(false);
-      return;
-    }
-
-    setShowClientStartModal(true);
-  }, [
-    hasStartedClientEdit,
-    isCheckoutCancelRoute,
-    isCheckoutSuccessRoute,
-    isDesktopClientCardPending,
-    isMobile,
-    isPricingRoute,
-    loading,
-    user,
-  ]);
-
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAuthError("");
@@ -7040,145 +8292,7 @@ export default function App() {
     </div>
   ) : null;
 
-  const clientStartModal = showClientStartModal ? (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="client-start-modal-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1190,
-        display: "grid",
-        placeItems: "center",
-        padding: isMobile ? "20px" : "32px",
-        background: "rgba(15, 23, 42, 0.38)",
-        backdropFilter: "blur(8px)",
-      }}
-    >
-      <div
-        style={{
-          width: "min(100%, 540px)",
-          borderRadius: isMobile ? "24px" : "28px",
-          padding: isMobile ? "24px" : "30px",
-          background: "rgba(255, 255, 255, 0.98)",
-          border: "1px solid rgba(148, 163, 184, 0.18)",
-          boxShadow: "0 32px 80px rgba(15, 23, 42, 0.18)",
-        }}
-      >
-        <div
-          style={{
-            color: "#1d4ed8",
-            fontSize: "12px",
-            fontWeight: 800,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            marginBottom: "8px",
-          }}
-        >
-          Démarrage du dossier
-        </div>
-        <h2
-          id="client-start-modal-title"
-          style={{
-            margin: "0 0 10px",
-            color: "#0f172a",
-            fontSize: isMobile ? "28px" : "32px",
-            lineHeight: 1.1,
-          }}
-        >
-          Commencez par renseigner les données client
-        </h2>
-        <p style={{ margin: 0, color: "#475569", lineHeight: 1.7, fontSize: "15px" }}>
-          Pour démarrer, cliquez sur le bouton <strong>Modifier</strong> puis complétez les
-          informations du client.
-        </p>
-
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "16px 18px",
-            borderRadius: "18px",
-            background:
-              "linear-gradient(135deg, rgba(239, 246, 255, 0.92), rgba(248, 250, 252, 0.98))",
-            border: "1px solid rgba(147, 197, 253, 0.28)",
-            color: "#334155",
-            fontSize: "14px",
-            lineHeight: 1.6,
-          }}
-        >
-          Munissez-vous aussi des éléments taxables de la dernière déclaration fiscale et
-          reportez-les dans <strong>Bases imposables à reporter</strong>. Une fois ces données
-          enregistrées, elles serviront de base aux calculateurs PC.
-        </div>
-
-        <label
-          style={{
-            marginTop: "18px",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "10px",
-            color: "#0f172a",
-            fontSize: "14px",
-            lineHeight: 1.5,
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={hasConfirmedClientStartModal}
-            onChange={(event) => {
-              setHasConfirmedClientStartModal(event.target.checked);
-              if (event.target.checked) {
-                setClientStartModalError("");
-              }
-            }}
-            style={{
-              marginTop: "2px",
-              width: "16px",
-              height: "16px",
-              accentColor: "#1d4ed8",
-            }}
-          />
-          <span>J&apos;ai compris</span>
-        </label>
-
-        {clientStartModalError ? (
-          <div
-            style={{
-              marginTop: "12px",
-              padding: "12px 14px",
-              borderRadius: "14px",
-              background: "rgba(254, 242, 242, 0.96)",
-              border: "1px solid rgba(248, 113, 113, 0.2)",
-              color: "#b91c1c",
-              fontSize: "14px",
-              lineHeight: 1.5,
-            }}
-          >
-            {clientStartModalError}
-          </div>
-        ) : null}
-
-        <div
-          style={{
-            marginTop: "22px",
-            display: "flex",
-            gap: "12px",
-            justifyContent: "flex-end",
-          }}
-        >
-          <button
-            type="button"
-            className="desktop-primary-button"
-            onClick={handleClientStartModalContinue}
-          >
-            Modifier maintenant
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+  const clientStartModal = null;
 
   if (loading || (user !== null && isProfileLoading)) {
     return (
@@ -7891,6 +9005,7 @@ export default function App() {
           </div>
         </details>
 
+        {!isDomicileRealSimulationMode && (
         <div ref={optimisationSectionRef}>
         <GuidedSection
           id="optimisation"
@@ -8351,31 +9466,31 @@ export default function App() {
                 <div style={{ display: "grid", gap: "12px" }}>
                   <div>
                     <label style={labelStyle}>Nombre de dossiers par mois</label>
-                    <input
-                      type="number"
+                    <StableNumberInput
                       value={roiDossiersParMois}
-                      onChange={(e) => setRoiDossiersParMois(Number(e.target.value || 0))}
+                      onValueChange={(value) => setRoiDossiersParMois(Math.max(0, value))}
+                      normalizeValue={(value) => Math.max(0, value)}
                       style={inputStyle}
                     />
                   </div>
 
                   <div>
                     <label style={labelStyle}>Temps moyen par dossier (heures)</label>
-                    <input
-                      type="number"
+                    <StableNumberInput
                       step="0.1"
                       value={roiTempsParDossier}
-                      onChange={(e) => setRoiTempsParDossier(Number(e.target.value || 0))}
+                      onValueChange={(value) => setRoiTempsParDossier(Math.max(0, value))}
+                      normalizeValue={(value) => Math.max(0, value)}
                       style={inputStyle}
                     />
                   </div>
 
                   <div>
                     <label style={labelStyle}>Taux horaire (CHF)</label>
-                    <input
-                      type="number"
+                    <StableNumberInput
                       value={roiTauxHoraire}
-                      onChange={(e) => setRoiTauxHoraire(Number(e.target.value || 0))}
+                      onValueChange={(value) => setRoiTauxHoraire(Math.max(0, value))}
+                      normalizeValue={(value) => Math.max(0, value)}
                       style={inputStyle}
                     />
                   </div>
@@ -8410,11 +9525,13 @@ export default function App() {
                 <div style={{ display: "grid", gap: "12px" }}>
                   <div>
                     <label style={labelStyle}>Temps moyen par dossier avec l’outil</label>
-                    <input
-                      type="number"
+                    <StableNumberInput
                       step="0.1"
                       value={roiTempsParDossierAvecOutil}
-                      onChange={(e) => setRoiTempsParDossierAvecOutil(Number(e.target.value || 0))}
+                      onValueChange={(value) =>
+                        setRoiTempsParDossierAvecOutil(Math.max(0, value))
+                      }
+                      normalizeValue={(value) => Math.max(0, value)}
                       style={inputStyle}
                     />
                   </div>
@@ -8688,6 +9805,7 @@ export default function App() {
         )}
         </GuidedSection>
         </div>
+        )}
 
         <div ref={activeStepViewportRef} className="active-step-viewport">
         {activeSectionId === "informations-generales" && (
@@ -8698,11 +9816,410 @@ export default function App() {
           description="Renseignez une situation patrimoniale et fiscale dans un format plus direct, avec une lecture immédiate des indicateurs simples. Les calculs fiscaux officiels restent inchangés dans le reste de l'application."
           
         >
+        {activeDesktopCalculator === "changement-domicile" && (
+          <div
+            style={{
+              marginBottom: "18px",
+              padding: "22px",
+              borderRadius: "22px",
+              border: "1px solid #cbd5e1",
+              background:
+                "linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(255,255,255,1) 48%, rgba(239,246,255,0.72) 100%)",
+              boxShadow: "0 20px 45px rgba(15,23,42,0.08)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "14px",
+                marginBottom: "18px",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    backgroundColor: "#dbeafe",
+                    color: "#1d4ed8",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Comparaison fiscale domicile
+                </div>
+                <h3 style={{ marginTop: "14px", marginBottom: "8px", color: "#0f172a" }}>
+                  Comparer votre fiscalité selon votre lieu de résidence
+                </h3>
+                <div style={{ color: "#475569", lineHeight: 1.7, fontSize: "14px", maxWidth: "760px" }}>
+                  Obtenez une estimation rapide ou une simulation réelle selon le canton choisi.
+                </div>
+              </div>
+              <div
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "14px",
+                  backgroundColor: "#0f172a",
+                  color: "#f8fafc",
+                  minWidth: "220px",
+                }}
+              >
+                <div style={{ fontSize: "12px", opacity: 0.78, textTransform: "uppercase" }}>
+                  Mode sélectionné
+                </div>
+                <div style={{ marginTop: "4px", fontSize: "18px", fontWeight: 700 }}>
+                  {domicileModeLabel}
+                </div>
+                <div style={{ marginTop: "4px", fontSize: "13px", lineHeight: 1.6, color: "#cbd5e1" }}>
+                  {domicileModeDescription}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: "16px",
+                marginBottom: "16px",
+              }}
+            >
+              <div
+                style={{
+                  ...subCardStyle,
+                  borderRadius: "18px",
+                  background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ marginBottom: "14px" }}>
+                  <div style={{ color: "#0f172a", fontSize: "18px", fontWeight: 700 }}>
+                    Situation actuelle
+                  </div>
+                  <div style={{ ...helperStyle, marginTop: "4px" }}>
+                    Conservez ici la même situation économique puis comparez seulement le lieu de résidence.
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                    gap: "12px",
+                  }}
+                >
+                  <div>
+                    <label style={labelStyle}>Année fiscale</label>
+                    <StableNumberInput
+                      value={dossier.fiscalite.anneeSimulation || new Date().getFullYear()}
+                      onValueChange={(value) =>
+                        setDossier({
+                          ...dossier,
+                          fiscalite: {
+                            ...dossier.fiscalite,
+                            anneeSimulation: Math.max(
+                              2000,
+                              Math.round(value || new Date().getFullYear())
+                            ),
+                          },
+                        })
+                      }
+                      normalizeValue={(value) => Math.max(2000, Math.round(value))}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>État civil</label>
+                    <input
+                      type="text"
+                      value={dossier.famille.aConjoint ? "Marié(e)" : "Célibataire"}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Nombre d’enfants</label>
+                    <input
+                      type="text"
+                      value={String(dossier.famille.nombreEnfants || 0)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Localité actuelle</label>
+                    <input
+                      type="text"
+                      value={domicileCurrentLocationLabel}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Revenus</label>
+                    <input
+                      type="text"
+                      value={formatMontantCHFArrondi(totalRevenusCalcule)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Immobilier</label>
+                    <input
+                      type="text"
+                      value={formatMontantCHFArrondi(fortuneImmobiliereTotaleCalculee)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Fortune</label>
+                    <input
+                      type="text"
+                      value={formatMontantCHFArrondi(fortuneBruteCalcule)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Dettes</label>
+                    <input
+                      type="text"
+                      value={formatMontantCHFArrondi(totalDettesCalcule)}
+                      readOnly
+                      style={inputReadOnlyStyle}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  ...subCardStyle,
+                  borderRadius: "18px",
+                  background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ marginBottom: "14px" }}>
+                  <div style={{ color: "#0f172a", fontSize: "18px", fontWeight: 700 }}>
+                    Choix du mode
+                  </div>
+                  <div style={{ ...helperStyle, marginTop: "4px" }}>
+                    Choisissez le niveau de détail avant de lancer la comparaison.
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  {[
+                    {
+                      id: "quick-estimate" as DomicileComparisonMode,
+                      title: "Estimation rapide",
+                      text: "Compare vos impôts entre cantons en conservant les mêmes bases fiscales.",
+                      buttonLabel: "Utiliser l’estimation rapide",
+                    },
+                    {
+                      id: "real-simulation" as DomicileComparisonMode,
+                      title: "Simulation réelle",
+                      text: "Recalcule votre situation fiscale complète selon les règles du canton choisi.",
+                      buttonLabel: "Utiliser la simulation réelle",
+                    },
+                  ].map((modeCard) => {
+                    const isSelected = domicileComparisonMode === modeCard.id;
+
+                    return (
+                      <div
+                        key={modeCard.id}
+                        style={{
+                          padding: "18px",
+                          borderRadius: "18px",
+                          border: isSelected ? "1px solid #1d4ed8" : "1px solid #dbeafe",
+                          background: isSelected
+                            ? "linear-gradient(180deg, #eff6ff 0%, #ffffff 100%)"
+                            : "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                          boxShadow: isSelected
+                            ? "0 16px 30px rgba(29,78,216,0.12)"
+                            : "0 10px 24px rgba(15,23,42,0.04)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "10px",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          <div style={{ color: "#0f172a", fontSize: "18px", fontWeight: 700 }}>
+                            {modeCard.title}
+                          </div>
+                          <span
+                            style={{
+                              padding: "4px 10px",
+                              borderRadius: "999px",
+                              backgroundColor: isSelected ? "#1d4ed8" : "#e2e8f0",
+                              color: isSelected ? "#ffffff" : "#475569",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {isSelected ? "Actif" : "Disponible"}
+                          </span>
+                        </div>
+                        <div style={{ color: "#475569", lineHeight: 1.7, fontSize: "14px" }}>
+                          {modeCard.text}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDomicileComparisonModeChange(modeCard.id)}
+                          style={{
+                            marginTop: "16px",
+                            width: "100%",
+                            border: "none",
+                            borderRadius: "12px",
+                            padding: "12px 14px",
+                            fontSize: "14px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            backgroundColor: isSelected ? "#0f172a" : "#1d4ed8",
+                            color: "#ffffff",
+                          }}
+                        >
+                          {modeCard.buttonLabel}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: "16px",
+              }}
+            >
+              <div
+                style={{
+                  ...subCardStyle,
+                  borderRadius: "18px",
+                  background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div style={{ marginBottom: "12px" }}>
+                  <div style={{ color: "#0f172a", fontSize: "18px", fontWeight: 700 }}>
+                    Localité cible
+                  </div>
+                  <div style={{ ...helperStyle, marginTop: "4px" }}>
+                    Modifiez le NPA et la commune dans le formulaire ci-dessous, le canton cible se met à jour automatiquement.
+                  </div>
+                </div>
+                <label style={labelStyle}>NPA / localité cible</label>
+                <input
+                  type="text"
+                  value={domicileTargetLocationLabel}
+                  readOnly
+                  style={inputReadOnlyStyle}
+                />
+                <span style={helperStyle}>Le domicile actuel reste inchangé pour la comparaison.</span>
+              </div>
+
+              <div
+                style={{
+                  ...subCardStyle,
+                  borderRadius: "18px",
+                  background: "linear-gradient(180deg, #0f172a 0%, #1e293b 100%)",
+                  border: "1px solid #1e293b",
+                  color: "#f8fafc",
+                }}
+              >
+                <div style={{ color: "#93c5fd", fontSize: "12px", fontWeight: 700, textTransform: "uppercase" }}>
+                  Explication du mode
+                </div>
+                <div style={{ marginTop: "10px", fontSize: "20px", fontWeight: 700 }}>
+                  {domicileModeLabel}
+                </div>
+                <div style={{ marginTop: "10px", color: "#cbd5e1", lineHeight: 1.7, fontSize: "14px" }}>
+                  {domicileModeDescription}
+                </div>
+              </div>
+            </div>
+
+            {domicileResultNeedsRefresh && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  lineHeight: 1.6,
+                  fontSize: "13px",
+                }}
+              >
+                Les résultats affichés ont été calculés en mode {domicileDisplayedModeLabel}. Relancez la comparaison pour actualiser l’écran avec le mode {domicileModeLabel}.
+              </div>
+            )}
+
+            {domicileShouldShowModeChangedNotice && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #bfdbfe",
+                  color: "#1d4ed8",
+                  lineHeight: 1.6,
+                  fontSize: "13px",
+                }}
+              >
+                Mode changé, relancez la simulation pour afficher les résultats en {domicileModeLabel}.
+              </div>
+            )}
+
+            {domicileComparisonMode === "real-simulation" && !domicileBaseHasEconomicInputs && (
+              <div
+                style={{
+                  marginTop: "12px",
+                  padding: "12px 14px",
+                  borderRadius: "12px",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #fde68a",
+                  color: "#92400e",
+                  lineHeight: 1.6,
+                  fontSize: "13px",
+                }}
+              >
+                Au moins une donnée économique est requise pour lancer les deux appels TaxWare :
+                revenus, immobilier, fortune, dettes ou intérêts.
+              </div>
+            )}
+          </div>
+        )}
         <SituationEntryScreen
           analysisMode={analysisMode}
           canLaunchSimulation={
             isGlobalTaxSimulationReady && !isSimulationAccessVerificationBlocking
           }
+          disableTaxableBaseInputs={activeDesktopCalculator === "changement-domicile"}
           dossier={dossier}
           identitySectionRef={identitySectionRef}
           totalCharges={totalChargesCalcule}
@@ -8710,10 +10227,16 @@ export default function App() {
           launchHelper={simulationPrimaryHelper}
           onDossierChange={setDossier}
           onLaunchSimulation={() => {
-            void handleTaxSimulation({
-              navigateToResults: true,
-              postSimulationScrollTarget: "optimisation",
-            });
+            void handleTaxSimulation(
+              activeDesktopCalculator === "changement-domicile"
+                ? {
+                    navigateToResults: true,
+                  }
+                : {
+                    navigateToResults: true,
+                    postSimulationScrollTarget: "optimisation",
+                  }
+            );
           }}
           onNpaChange={handleNpaChange}
           formatCurrency={formatMontantCHFArrondi}
@@ -8742,92 +10265,301 @@ export default function App() {
 
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 1fr 1fr",
-              gap: "15px",
+              marginBottom: "18px",
+              padding: "16px 18px",
+              borderRadius: "14px",
+              background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)",
+              border: "1px solid #dbeafe",
+              color: "#475569",
+              lineHeight: 1.7,
             }}
           >
-            <div>
-              <label style={labelStyle}>Salaire</label>
-              <input
-                type="number"
-                value={dossier.revenus.salaire}
-                onChange={(e) =>
-                  setDossier({
-                    ...dossier,
-                    revenus: {
-                      ...dossier.revenus,
-                      salaire: numberValue(e.target.value),
-                    },
-                  })
-                }
-                style={inputStyle}
-              />
+            Les revenus saisis ici alimentent directement la préparation du payload TaxWare.
+            <strong> Salaire</strong> et <strong>Salaire conjoint</strong> alimentent les
+            <strong> NetWages</strong>; les autres revenus détaillés sont regroupés dans
+            <strong> MiscIncome</strong>. La logique <strong>Habitation propre</strong> et
+            <strong> Biens de rendement</strong> reste inchangée et continue d’être gérée
+            séparément dans le bloc immobilier ci-dessous. En calculateur domicile, un revenu
+            conjoint non salarial ou accessoire doit être saisi dans
+            <strong> Autres revenus conjoint</strong>, sinon TaxWare applique automatiquement des
+            déductions professionnelles et de conjoint sur <strong>Salaire conjoint</strong>.
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: dossier.famille.aConjoint
+                ? "repeat(2, minmax(0, 1fr))"
+                : "minmax(0, 1fr)",
+              gap: "16px",
+              alignItems: "stretch",
+            }}
+          >
+            <div style={subCardStyle}>
+              <h3 style={{ marginTop: 0, marginBottom: "12px", color: "#0f172a" }}>
+                Personne principale
+              </h3>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "15px",
+                }}
+              >
+                <div>
+                  <label style={labelStyle}>Salaire</label>
+                  <StableNumberInput
+                    value={dossier.revenus.salaire}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        revenus: {
+                          ...dossier.revenus,
+                          salaire: value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>AVS</label>
+                  <StableNumberInput
+                    value={dossier.revenus.avs}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        revenus: {
+                          ...dossier.revenus,
+                          avs: value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>LPP</label>
+                  <StableNumberInput
+                    value={dossier.revenus.lpp}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        revenus: {
+                          ...dossier.revenus,
+                          lpp: value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Autres revenus du foyer</label>
+                  <StableNumberInput
+                    value={dossier.revenus.autresRevenus}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        revenus: {
+                          ...dossier.revenus,
+                          autresRevenus: value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                  <span style={helperStyle}>
+                    Revenus complémentaires hors salaire, AVS et LPP.
+                  </span>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Revenu de la fortune</label>
+                  <StableNumberInput
+                    value={dossier.revenus.revenuFortune}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        revenus: {
+                          ...dossier.revenus,
+                          revenuFortune: value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                  <span style={helperStyle}>Regroupé dans le champ `MiscIncome`.</span>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Dividendes privilégiés</label>
+                  <StableNumberInput
+                    value={dossier.revenus.dividendesPriviligies}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        revenus: {
+                          ...dossier.revenus,
+                          dividendesPriviligies: value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                  <span style={helperStyle}>Regroupés dans le champ `MiscIncome`.</span>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Participations privilégiées</label>
+                  <StableNumberInput
+                    value={dossier.revenus.participationsPriviligiees}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        revenus: {
+                          ...dossier.revenus,
+                          participationsPriviligiees: value,
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                  <span style={helperStyle}>Regroupées dans le champ `MiscIncome`.</span>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label style={labelStyle}>AVS</label>
-              <input
-                type="number"
-                value={dossier.revenus.avs}
-                onChange={(e) =>
-                  setDossier({
-                    ...dossier,
-                    revenus: {
-                      ...dossier.revenus,
-                      avs: numberValue(e.target.value),
-                    },
-                  })
-                }
-                style={inputStyle}
-              />
-            </div>
+            {dossier.famille.aConjoint ? (
+              <div style={subCardStyle}>
+                <h3 style={{ marginTop: 0, marginBottom: "12px", color: "#0f172a" }}>
+                  Conjoint / conjointe
+                </h3>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                    gap: "15px",
+                  }}
+                >
+                  <div>
+                    <label style={labelStyle}>Salaire conjoint</label>
+                    <StableNumberInput
+                      value={dossier.revenus.salaireConjoint}
+                      onValueChange={(value) =>
+                        setDossier({
+                          ...dossier,
+                          revenus: {
+                            ...dossier.revenus,
+                            salaireConjoint: value,
+                          },
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                    <span style={helperStyle}>
+                      À réserver au revenu salarial net du conjoint transmis à
+                      `PersonSecond.NetWages`.
+                    </span>
+                  </div>
 
-            <div>
-              <label style={labelStyle}>LPP</label>
-              <input
-                type="number"
-                value={dossier.revenus.lpp}
-                onChange={(e) =>
-                  setDossier({
-                    ...dossier,
-                    revenus: {
-                      ...dossier.revenus,
-                      lpp: numberValue(e.target.value),
-                    },
-                  })
-                }
-                style={inputStyle}
-              />
-            </div>
+                  <div>
+                    <label style={labelStyle}>AVS conjoint</label>
+                    <StableNumberInput
+                      value={dossier.revenus.avsConjoint}
+                      onValueChange={(value) =>
+                        setDossier({
+                          ...dossier,
+                          revenus: {
+                            ...dossier.revenus,
+                            avsConjoint: value,
+                          },
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
 
-            <div>
-              <label style={labelStyle}>Autres revenus</label>
-              <input
-                type="number"
-                value={dossier.revenus.autresRevenus}
-                onChange={(e) =>
-                  setDossier({
-                    ...dossier,
-                    revenus: {
-                      ...dossier.revenus,
-                      autresRevenus: numberValue(e.target.value),
-                    },
-                  })
-                }
-                style={inputStyle}
-              />
-            </div>
+                  <div>
+                    <label style={labelStyle}>LPP conjoint</label>
+                    <StableNumberInput
+                      value={dossier.revenus.lppConjoint}
+                      onValueChange={(value) =>
+                        setDossier({
+                          ...dossier,
+                          revenus: {
+                            ...dossier.revenus,
+                            lppConjoint: value,
+                          },
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
 
-            <div>
-              <label style={labelStyle}>Total revenus</label>
+                  <div>
+                    <label style={labelStyle}>Autres revenus conjoint</label>
+                    <StableNumberInput
+                      value={dossier.revenus.autresRevenusConjoint}
+                      onValueChange={(value) =>
+                        setDossier({
+                          ...dossier,
+                          revenus: {
+                            ...dossier.revenus,
+                            autresRevenusConjoint: value,
+                          },
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                    <span style={helperStyle}>
+                      Utiliser ce champ pour l activité accessoire ou tout revenu conjoint non
+                      salarial regroupé dans `MiscIncome`.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            style={{
+              marginTop: "16px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "16px",
+              alignItems: "stretch",
+            }}
+          >
+            <div style={subCardStyle}>
+              <label style={labelStyle}>Total revenus du foyer</label>
               <input
                 type="text"
                 value={formatMontantCHFArrondi(totalRevenusCalcule)}
                 readOnly
                 style={inputReadOnlyStyle}
               />
-              <span style={helperStyle}>Calcul automatique</span>
+              <span style={helperStyle}>Calcul automatique incluant, si présent, le conjoint.</span>
+            </div>
+
+            <div style={subCardStyle}>
+              <label style={labelStyle}>Lecture TaxWare</label>
+              <input
+                type="text"
+                value={
+                  dossier.famille.aConjoint
+                    ? "PersonLeading + PersonSecond"
+                    : "PersonLeading uniquement"
+                }
+                readOnly
+                style={inputReadOnlyStyle}
+              />
+              <span style={helperStyle}>
+                Les données de revenus du foyer alimentent automatiquement les branches personnes du payload.
+              </span>
             </div>
           </div>
 
@@ -8940,15 +10672,14 @@ export default function App() {
                   <div style={immobilierFieldsGridStyle}>
                     <div style={immobilierFieldCardStyle}>
                       <label style={labelStyle}>Valeur locative</label>
-                      <input
-                        type="number"
+                      <StableNumberInput
                         value={dossier.immobilier.valeurLocativeHabitationPropre}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDossier({
                             ...dossier,
                             immobilier: {
                               ...dossier.immobilier,
-                              valeurLocativeHabitationPropre: numberValue(e.target.value),
+                              valeurLocativeHabitationPropre: value,
                             },
                           })
                         }
@@ -8961,15 +10692,14 @@ export default function App() {
 
                     <div style={immobilierFieldCardStyle}>
                       <label style={labelStyle}>Intérêts hypothécaires habitation propre</label>
-                      <input
-                        type="number"
+                      <StableNumberInput
                         value={dossier.immobilier.interetsHypothecairesHabitationPropre}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDossier({
                             ...dossier,
                             immobilier: {
                               ...dossier.immobilier,
-                              interetsHypothecairesHabitationPropre: numberValue(e.target.value),
+                              interetsHypothecairesHabitationPropre: value,
                             },
                           })
                         }
@@ -8983,15 +10713,14 @@ export default function App() {
 
                     <div style={immobilierWideFieldCardStyle}>
                       <label style={labelStyle}>Frais d’entretien habitation propre</label>
-                      <input
-                        type="number"
+                      <StableNumberInput
                         value={dossier.immobilier.fraisEntretienHabitationPropre}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDossier({
                             ...dossier,
                             immobilier: {
                               ...dossier.immobilier,
-                              fraisEntretienHabitationPropre: numberValue(e.target.value),
+                              fraisEntretienHabitationPropre: value,
                             },
                           })
                         }
@@ -9054,15 +10783,14 @@ export default function App() {
                   <div style={immobilierFieldsGridStyle}>
                     <div style={immobilierFieldCardStyle}>
                       <label style={labelStyle}>Loyers encaissés</label>
-                      <input
-                        type="number"
+                      <StableNumberInput
                         value={dossier.immobilier.loyersBiensRendement}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDossier({
                             ...dossier,
                             immobilier: {
                               ...dossier.immobilier,
-                              loyersBiensRendement: numberValue(e.target.value),
+                              loyersBiensRendement: value,
                             },
                           })
                         }
@@ -9075,15 +10803,14 @@ export default function App() {
 
                     <div style={immobilierFieldCardStyle}>
                       <label style={labelStyle}>Intérêts hypothécaires biens de rendement</label>
-                      <input
-                        type="number"
+                      <StableNumberInput
                         value={dossier.immobilier.interetsHypothecairesBiensRendement}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDossier({
                             ...dossier,
                             immobilier: {
                               ...dossier.immobilier,
-                              interetsHypothecairesBiensRendement: numberValue(e.target.value),
+                              interetsHypothecairesBiensRendement: value,
                             },
                           })
                         }
@@ -9096,15 +10823,14 @@ export default function App() {
 
                     <div style={immobilierFieldCardStyle}>
                       <label style={labelStyle}>Valeur fiscale biens de rendement</label>
-                      <input
-                        type="number"
+                      <StableNumberInput
                         value={dossier.immobilier.valeurFiscaleBiensRendement}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDossier({
                             ...dossier,
                             immobilier: {
                               ...dossier.immobilier,
-                              valeurFiscaleBiensRendement: numberValue(e.target.value),
+                              valeurFiscaleBiensRendement: value,
                             },
                           })
                         }
@@ -9118,15 +10844,14 @@ export default function App() {
 
                     <div style={immobilierFieldCardStyle}>
                       <label style={labelStyle}>Dette hypothécaire biens de rendement</label>
-                      <input
-                        type="number"
+                      <StableNumberInput
                         value={dossier.immobilier.detteHypothecaireBiensRendement}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDossier({
                             ...dossier,
                             immobilier: {
                               ...dossier.immobilier,
-                              detteHypothecaireBiensRendement: numberValue(e.target.value),
+                              detteHypothecaireBiensRendement: value,
                             },
                           })
                         }
@@ -9139,15 +10864,14 @@ export default function App() {
 
                     <div style={immobilierWideFieldCardStyle}>
                       <label style={labelStyle}>Frais d’entretien biens de rendement</label>
-                      <input
-                        type="number"
+                      <StableNumberInput
                         value={dossier.immobilier.fraisEntretienBiensRendement}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           setDossier({
                             ...dossier,
                             immobilier: {
                               ...dossier.immobilier,
-                              fraisEntretienBiensRendement: numberValue(e.target.value),
+                              fraisEntretienBiensRendement: value,
                             },
                           })
                         }
@@ -9206,15 +10930,14 @@ export default function App() {
           >
             <div style={fortuneFieldCardStyle}>
               <label style={labelStyle}>Liquidités de départ</label>
-              <input
-                type="number"
+              <StableNumberInput
                 value={dossier.fortune.liquidites}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setDossier({
                     ...dossier,
                     fortune: {
                       ...dossier.fortune,
-                      liquidites: numberValue(e.target.value),
+                      liquidites: value,
                     },
                   })
                 }
@@ -9238,15 +10961,14 @@ export default function App() {
 
             <div style={fortuneFieldCardStyle}>
               <label style={labelStyle}>Fortune mobilière (compte, portefeuille, titre, autre)</label>
-              <input
-                type="number"
+              <StableNumberInput
                 value={dossier.fortune.titres}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setDossier({
                     ...dossier,
                     fortune: {
                       ...dossier.fortune,
-                      titres: numberValue(e.target.value),
+                      titres: value,
                     },
                   })
                 }
@@ -9257,15 +10979,14 @@ export default function App() {
 
             <div style={fortuneFieldCardStyle}>
               <label style={labelStyle}>3e pilier</label>
-              <input
-                type="number"
+              <StableNumberInput
                 value={dossier.fortune.troisiemePilier}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setDossier({
                     ...dossier,
                     fortune: {
                       ...dossier.fortune,
-                      troisiemePilier: numberValue(e.target.value),
+                      troisiemePilier: value,
                     },
                   })
                 }
@@ -9280,15 +11001,14 @@ export default function App() {
 
             <div style={fortuneFieldCardStyle}>
               <label style={labelStyle}>Fortune LPP actuelle</label>
-              <input
-                type="number"
+              <StableNumberInput
                 value={dossier.fortune.fortuneLppActuelle}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setDossier({
                     ...dossier,
                     fortune: {
                       ...dossier.fortune,
-                      fortuneLppActuelle: numberValue(e.target.value),
+                      fortuneLppActuelle: value,
                     },
                   })
                 }
@@ -9303,15 +11023,14 @@ export default function App() {
 
             <div style={fortuneFieldCardStyle}>
               <label style={labelStyle}>Immobilier</label>
-              <input
-                type="number"
+              <StableNumberInput
                 value={dossier.fortune.immobilier}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setDossier({
                     ...dossier,
                     fortune: {
                       ...dossier.fortune,
-                      immobilier: numberValue(e.target.value),
+                      immobilier: value,
                     },
                   })
                 }
@@ -9387,15 +11106,14 @@ export default function App() {
           >
             <div>
               <label style={labelStyle}>Hypothèques</label>
-              <input
-                type="number"
+              <StableNumberInput
                 value={dossier.dettes.hypotheques}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setDossier({
                     ...dossier,
                     dettes: {
                       ...dossier.dettes,
-                      hypotheques: numberValue(e.target.value),
+                      hypotheques: value,
                     },
                   })
                 }
@@ -9405,15 +11123,14 @@ export default function App() {
 
             <div>
               <label style={labelStyle}>Autres dettes</label>
-              <input
-                type="number"
+              <StableNumberInput
                 value={dossier.dettes.autresDettes}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   setDossier({
                     ...dossier,
                     dettes: {
                       ...dossier.dettes,
-                      autresDettes: numberValue(e.target.value),
+                      autresDettes: value,
                     },
                   })
                 }
@@ -9771,10 +11488,9 @@ export default function App() {
                         <input
                           type="text"
                           value={formatMontantCHF(
-                            Number(taxwarePayloadControle.PersonLeading?.NetWages || 0) +
-                            Number(taxwarePayloadControle.PersonLeading?.PensionIncome || 0) +
-                            Number(taxwarePayloadControle.AssetIncome || 0) +
-                            Number(taxwarePayloadControle.MiscIncome || 0) +
+                            Number(taxwarePayloadPersonLeading?.NetWages || 0) +
+                            Number(taxwarePayloadPersonSecond?.NetWages || 0) +
+                            Number(taxwarePayloadRecord.MiscIncome || 0) +
                             revenusImmobiliersTaxware
                           )}
                           readOnly
@@ -9824,53 +11540,59 @@ export default function App() {
                     }}
                   >
                     <div>
-                      <strong>NPA envoye :</strong> {taxwarePayloadControle.Zip || "-"}
+                      <strong>
+                        {isDomicileComparison ? "Commune envoyee :" : "NPA envoye :"}
+                      </strong>{" "}
+                      {String(
+                        (taxwarePayloadControle as Record<string, unknown>).Zip ??
+                          (taxwarePayloadControle as Record<string, unknown>).Municipality ??
+                          "-"
+                      )}
                     </div>
 
                     <div>
-                      <strong>Ville envoyee :</strong> {taxwarePayloadControle.City || "-"}
+                      <strong>
+                        {isDomicileComparison ? "Canton envoye :" : "Ville envoyee :"}
+                      </strong>{" "}
+                      {String(
+                        (taxwarePayloadControle as Record<string, unknown>).City ??
+                          (taxwarePayloadControle as Record<string, unknown>).ShortnameCanton ??
+                          "-"
+                      )}
                     </div>
 
                     <div>
                       <strong>Revenu avant deductions :</strong>{" "}
                       {formatMontantCHF(
-                        Number(taxwarePayloadControle.PersonLeading?.NetWages || 0) +
-                        Number(taxwarePayloadControle.PersonLeading?.PensionIncome || 0) +
-                        Number(taxwarePayloadControle.AssetIncome || 0) +
-                        Number(taxwarePayloadControle.MiscIncome || 0) +
+                        Number(taxwarePayloadPersonLeading?.NetWages || 0) +
+                        Number(taxwarePayloadPersonSecond?.NetWages || 0) +
+                        Number(taxwarePayloadRecord.MiscIncome || 0) +
                         revenusImmobiliersTaxware
                       )}
                     </div>
 
                     <div>
-                      <strong>Rentes transmises :</strong>{" "}
-                      {formatMontantCHF(
-                        Number(taxwarePayloadControle.PersonLeading?.PensionIncome || 0)
-                      )}
-                    </div>
-
-                    <div>
-                      <strong>Revenu de fortune transmis :</strong>{" "}
-                      {formatMontantCHF(Number(taxwarePayloadControle.AssetIncome || 0))}
+                      <strong>Autres revenus transmis via MiscIncome :</strong>{" "}
+                      {formatMontantCHF(Number(taxwarePayloadRecord.MiscIncome || 0))}
                     </div>
 
                     <div>
                       <strong>3e pilier transmis :</strong>{" "}
                       {formatMontantCHF(
-                        Number(taxwarePayloadControle.PersonLeading?.ThirdPillarContribution || 0)
+                        Number(taxwarePayloadPersonLeading?.ThirdPillarContribution || 0)
                       )}
                     </div>
 
                     <div>
                       <strong>Rachat LPP transmis :</strong>{" "}
                       {formatMontantCHF(
-                        Number(taxwarePayloadControle.PersonLeading?.LobContributions || 0)
+                        Number(taxwarePayloadPersonLeading?.LobContributions || 0)
                       )}
                     </div>
 
                     <div>
                       <strong>Assets transmis :</strong>{" "}
-                      {formatMontantCHF(Number(taxwarePayloadControle.Assets || 0))}
+                      {formatMontantCHF(Number(taxwarePayloadRecord.Assets || 0))}
                     </div>
 
                     <div>
@@ -9910,8 +11632,10 @@ export default function App() {
                   <div>Fortune fiscale → `Assets`</div>
                   <div>Dettes → `Debts`</div>
                   <div>Salaire → `PersonLeading.NetWages`</div>
-                  <div>AVS + LPP → `PersonLeading.PensionIncome`</div>
-                  <div>Autres revenus patrimoniaux → `AssetIncome`</div>
+                  <div>Salaire conjoint → `PersonSecond.NetWages`</div>
+                  <div>
+                    AVS, LPP, autres revenus du foyer et autres revenus conjoint → `MiscIncome`
+                  </div>
                   <div>Habitation propre / rendement → `RealEstates[].RentalIncome`</div>
                   <div>Frais d’entretien immobiliers → `RealEstates[].EffectiveExpenses`</div>
                   <div>3e pilier simulé → `PersonLeading.ThirdPillarContribution`</div>
@@ -10014,15 +11738,14 @@ export default function App() {
             <div style={chargeCardStyle}>
               <label style={labelStyle}>Logement</label>
               <div style={chargeFieldStackStyle}>
-                <input
-                  type="number"
+                <StableNumberInput
                   value={dossier.charges.logement}
-                  onChange={(e) =>
+                  onValueChange={(value) =>
                     setDossier({
                       ...dossier,
                       charges: {
                         ...dossier.charges,
-                        logement: numberValue(e.target.value),
+                        logement: value,
                       },
                     })
                   }
@@ -10048,21 +11771,24 @@ export default function App() {
             <div style={chargeCardStyle}>
               <label style={labelStyle}>Primes maladie</label>
               <div style={chargeFieldStackStyle}>
-                <input
-                  type="number"
+                <StableNumberInput
                   value={dossier.charges.primesMaladie}
-                  onChange={(e) =>
+                  onValueChange={(value) =>
                     setDossier({
                       ...dossier,
                       charges: {
                         ...dossier.charges,
-                        primesMaladie: numberValue(e.target.value),
+                        primesMaladie: value,
                       },
                     })
                   }
                   style={inputStyle}
                 />
-                <span style={helperStyle}>Saisie manuelle</span>
+                <span style={helperStyle}>
+                  {activeDesktopCalculator === "changement-domicile"
+                    ? "Saisie budgétaire. Pour le calcul fiscal domicile, la part transmise à TaxWare est plafonnée au maximum déductible."
+                    : "Saisie manuelle"}
+                </span>
               </div>
               <div style={chargeFooterPlaceholderStyle} />
             </div>
@@ -10102,15 +11828,14 @@ export default function App() {
             <div style={chargeCardStyle}>
               <label style={labelStyle}>Frais de vie</label>
               <div style={chargeFieldStackStyle}>
-                <input
-                  type="number"
+                <StableNumberInput
                   value={dossier.charges.fraisVie}
-                  onChange={(e) =>
+                  onValueChange={(value) =>
                     setDossier({
                       ...dossier,
                       charges: {
                         ...dossier.charges,
-                        fraisVie: numberValue(e.target.value),
+                        fraisVie: value,
                       },
                     })
                   }
@@ -10124,15 +11849,14 @@ export default function App() {
             <div style={chargeCardStyle}>
               <label style={labelStyle}>Autres charges</label>
               <div style={chargeFieldStackStyle}>
-                <input
-                  type="number"
+                <StableNumberInput
                   value={dossier.charges.autresCharges}
-                  onChange={(e) =>
+                  onValueChange={(value) =>
                     setDossier({
                       ...dossier,
                       charges: {
                         ...dossier.charges,
-                        autresCharges: numberValue(e.target.value),
+                        autresCharges: value,
                       },
                     })
                   }
@@ -10209,7 +11933,11 @@ export default function App() {
           id="fiscalite"
           step="5"
           title="Fiscalité et simulation"
-          description="Saisissez la base fiscale actuelle du client, puis laissez l’application mesurer l’impact du changement de régime immobilier et des leviers de simulation sans reconstruire la fiscalité depuis zéro."
+          description={
+            activeDesktopCalculator === "changement-domicile"
+              ? "Pour le changement de domicile, cette étape conserve uniquement les leviers de simulation utiles, notamment le 3e pilier simulé et le rachat LPP."
+              : "Saisissez la base fiscale actuelle du client, puis laissez l’application mesurer l’impact du changement de régime immobilier et des leviers de simulation sans reconstruire la fiscalité depuis zéro."
+          }
         >
         <div style={sectionCardStyle}>
           <h2 style={{ marginTop: 0, marginBottom: "20px", color: "#0f172a" }}>
@@ -10234,98 +11962,209 @@ export default function App() {
             }}
           >
             <strong style={{ color: "#0f172a" }}>Remarque importante</strong>
-            <div>
-              La base fiscale actuelle saisie représente déjà la situation fiscale réelle du client.
-            </div>
-            <div>
-              Elle inclut déjà le traitement immobilier actuel, notamment la valeur locative,
-              les intérêts hypothécaires admis et les frais d’entretien admis.
-            </div>
-            <div>
-              Les champs immobiliers servent uniquement à simuler l’écart entre le régime actuel
-              et le régime réformé.
-            </div>
+            {activeDesktopCalculator === "changement-domicile" ? (
+              <>
+                <div>
+                  Dans le calculateur <strong>Changement de domicile</strong>, la base n’est pas reprise depuis
+                  `Revenu IFD`, `Revenu ICC` ou `Fortune imposable`.
+                </div>
+                <div>
+                  Le calcul se reconstruit uniquement depuis les données des étapes 2, 3, 4 et 5 :
+                  revenus, revenu de la fortune, dividendes, charges, primes maladie, intérêts,
+                  fortune, dettes, 3e pilier simulé et rachat LPP.
+                </div>
+                <div>
+                  Les champs immobiliers conservent leur logique actuelle et restent pris en compte
+                  tels quels.
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  La base fiscale actuelle saisie représente déjà la situation fiscale réelle du client.
+                </div>
+                <div>
+                  Elle inclut déjà le traitement immobilier actuel, notamment la valeur locative,
+                  les intérêts hypothécaires admis et les frais d’entretien admis.
+                </div>
+                <div>
+                  Les champs immobiliers servent uniquement à simuler l’écart entre le régime actuel
+                  et le régime réformé.
+                </div>
+              </>
+            )}
           </div>
 
-          <div
-            style={{
-              marginBottom: "16px",
-              padding: "18px",
-              borderRadius: "14px",
-              backgroundColor: "#ffffff",
-              border: "1px solid #dbeafe",
-            }}
-          >
-            <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
-              Base fiscale actuelle
-            </h3>
-            <span style={helperStyle}>
-              Ces montants représentent la situation fiscale actuelle du client et incluent déjà le traitement immobilier actuel.
-            </span>
+          {activeDesktopCalculator === "changement-domicile" ? (
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "14px",
-                marginTop: "18px",
+                marginBottom: "16px",
+                padding: "18px",
+                borderRadius: "14px",
+                backgroundColor: "#fffbeb",
+                border: "1px solid #fed7aa",
+                color: "#92400e",
+                lineHeight: 1.7,
               }}
             >
-              <div>
-                <label style={labelStyle}>Revenu imposable IFD</label>
-                <input
-                  type="number"
-                  value={dossier.fiscalite.revenuImposableIfd || 0}
-                  onChange={(e) =>
-                    setDossier({
-                      ...dossier,
-                      fiscalite: {
-                        ...dossier.fiscalite,
-                        revenuImposableIfd: Math.max(0, numberValue(e.target.value)),
-                      },
-                    })
-                  }
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Revenu imposable Canton / Commune</label>
-                <input
-                  type="number"
-                  value={dossier.fiscalite.revenuImposable || 0}
-                  onChange={(e) =>
-                    setDossier({
-                      ...dossier,
-                      fiscalite: {
-                        ...dossier.fiscalite,
-                        revenuImposable: Math.max(0, numberValue(e.target.value)),
-                      },
-                    })
-                  }
-                  style={inputStyle}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>Fortune imposable</label>
-                <input
-                  type="number"
-                  value={dossier.fiscalite.fortuneImposableActuelleSaisie || 0}
-                  onChange={(e) =>
-                    setDossier({
-                      ...dossier,
-                      fiscalite: {
-                        ...dossier.fiscalite,
-                        fortuneImposableActuelleSaisie: Math.max(
-                          0,
-                          numberValue(e.target.value)
-                        ),
-                      },
-                    })
-                  }
-                  style={inputStyle}
-                />
+              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#9a3412" }}>
+                Base fiscale actuelle masquée
+              </h3>
+              <span style={{ ...helperStyle, color: "#92400e" }}>
+                Dans <strong>Changement de domicile</strong>, les champs
+                <strong> Revenu imposable IFD</strong>,
+                <strong> Revenu imposable Canton / Commune</strong> et
+                <strong> Fortune imposable</strong> ne sont pas utilisés.
+              </span>
+              <div style={{ marginTop: "10px" }}>
+                La simulation repart uniquement des données économiques saisies aux étapes 2, 3,
+                4 et 5.
               </div>
             </div>
-          </div>
+          ) : (
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "18px",
+                borderRadius: "14px",
+                backgroundColor: "#ffffff",
+                border: "1px solid #dbeafe",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
+                Base fiscale actuelle
+              </h3>
+              <span style={helperStyle}>
+                Ces montants représentent la situation fiscale actuelle du client et incluent déjà
+                le traitement immobilier actuel.
+              </span>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: "14px",
+                  marginTop: "18px",
+                }}
+              >
+                <div>
+                  <label style={labelStyle}>Revenu imposable IFD</label>
+                  <StableNumberInput
+                    value={dossier.fiscalite.revenuImposableIfd || 0}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        fiscalite: {
+                          ...dossier.fiscalite,
+                          revenuImposableIfd: Math.max(0, value),
+                        },
+                      })
+                    }
+                    normalizeValue={(value) => Math.max(0, value)}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Revenu imposable Canton / Commune</label>
+                  <StableNumberInput
+                    value={dossier.fiscalite.revenuImposable || 0}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        fiscalite: {
+                          ...dossier.fiscalite,
+                          revenuImposable: Math.max(0, value),
+                        },
+                      })
+                    }
+                    normalizeValue={(value) => Math.max(0, value)}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle}>Fortune imposable</label>
+                  <StableNumberInput
+                    value={dossier.fiscalite.fortuneImposableActuelleSaisie || 0}
+                    onValueChange={(value) =>
+                      setDossier({
+                        ...dossier,
+                        fiscalite: {
+                          ...dossier.fiscalite,
+                          fortuneImposableActuelleSaisie: Math.max(0, value),
+                        },
+                      })
+                    }
+                    normalizeValue={(value) => Math.max(0, value)}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeDesktopCalculator === "changement-domicile" && (
+            <div
+              style={{
+                marginBottom: "16px",
+                padding: "18px",
+                borderRadius: "14px",
+                backgroundColor: "#ffffff",
+                border: "1px solid #dbeafe",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
+                Exécution domicile V1
+              </h3>
+              <div style={{ color: "#475569", lineHeight: 1.7 }}>
+                Ce module n’utilise ni base simulée, ni delta interne, ni recalcul fiscal local.
+                Il envoie deux payloads détaillés V1 à TaxWare avec les mêmes données économiques.
+              </div>
+              <div
+                style={{
+                  marginTop: "16px",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: "14px",
+                }}
+              >
+                <div style={subCardStyle}>
+                  <label style={labelStyle}>Payload actuel</label>
+                  <input
+                    type="text"
+                    value="V1 détaillé unique"
+                    readOnly
+                    style={inputReadOnlyStyle}
+                  />
+                  <span style={helperStyle}>Même structure économique que la cible.</span>
+                </div>
+                <div style={subCardStyle}>
+                  <label style={labelStyle}>Payload cible</label>
+                  <input
+                    type="text"
+                    value="V1 détaillé unique"
+                    readOnly
+                    style={inputReadOnlyStyle}
+                  />
+                  <span style={helperStyle}>Seules `Municipality` et `ShortnameCanton` changent.</span>
+                </div>
+                <div style={subCardStyle}>
+                  <label style={labelStyle}>Lecture des résultats</label>
+                  <input
+                    type="text"
+                    value="Valeurs brutes TaxWare"
+                    readOnly
+                    style={inputReadOnlyStyle}
+                  />
+                  <span style={helperStyle}>
+                    Affichage limité à `TaxableIncomeFederal`, `TaxableIncomeCanton`,
+                    `TaxableAssets` et `TaxTotal`.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeDesktopCalculator !== "changement-domicile" && (
+            <>
 
           <div
             style={{
@@ -10432,35 +12271,35 @@ export default function App() {
             >
               <div>
                 <label style={labelStyle}>3e pilier simulé</label>
-                <input
-                  type="number"
-                  value={dossier.fiscalite.troisiemePilierSimule || 0}
-                  onChange={(e) =>
+                <StableNumberInput
+                  value={dossier.fiscalite.troisiemePilierSimule}
+                  onValueChange={(value) =>
                     setDossier({
                       ...dossier,
                       fiscalite: {
                         ...dossier.fiscalite,
-                        troisiemePilierSimule: Math.max(0, numberValue(e.target.value)),
+                        troisiemePilierSimule: Math.max(0, value),
                       },
                     })
                   }
+                  normalizeValue={(value) => Math.max(0, value)}
                   style={inputStyle}
                 />
               </div>
               <div>
                 <label style={labelStyle}>Rachat LPP</label>
-                <input
-                  type="number"
-                  value={dossier.fiscalite.rachatLpp || 0}
-                  onChange={(e) =>
+                <StableNumberInput
+                  value={dossier.fiscalite.rachatLpp}
+                  onValueChange={(value) =>
                     setDossier({
                       ...dossier,
                       fiscalite: {
                         ...dossier.fiscalite,
-                        rachatLpp: Math.max(0, numberValue(e.target.value)),
+                        rachatLpp: Math.max(0, value),
                       },
                     })
                   }
+                  normalizeValue={(value) => Math.max(0, value)}
                   style={inputStyle}
                 />
               </div>
@@ -10507,7 +12346,9 @@ export default function App() {
               Base fiscale simulée
             </h3>
             <span style={helperStyle}>
-              Lecture seule: base actuelle saisie +/- ajustements de simulation.
+              {isDomicileComparison
+                ? "Lecture seule: base fiscale reconstruite depuis les données source du domicile cible, avant affichage et comparaison."
+                : "Lecture seule: base actuelle saisie +/- ajustements de simulation."}
             </span>
             <div
               style={{
@@ -10521,7 +12362,12 @@ export default function App() {
                 <label style={labelStyle}>Revenu imposable IFD simulé</label>
                 <input
                   type="text"
-                  value={formatMontantCHFArrondi(revenuImposableIfdSimule)}
+                  value={formatMontantCHFArrondi(
+                    isDomicileComparison &&
+                      typeof domicileTargetDisplayedBases?.taxableIncomeFederal === "number"
+                      ? domicileTargetDisplayedBases.taxableIncomeFederal
+                      : revenuImposableIfdApresSimulationCalcule
+                  )}
                   readOnly
                   style={inputReadOnlyStyle}
                 />
@@ -10530,7 +12376,12 @@ export default function App() {
                 <label style={labelStyle}>Revenu imposable canton / commune simulé</label>
                 <input
                   type="text"
-                  value={formatMontantCHFArrondi(revenuImposableApresSimulationCalcule)}
+                  value={formatMontantCHFArrondi(
+                    isDomicileComparison &&
+                      typeof domicileTargetDisplayedBases?.taxableIncomeCantonal === "number"
+                      ? domicileTargetDisplayedBases.taxableIncomeCantonal
+                      : revenuImposableApresSimulationCalcule
+                  )}
                   readOnly
                   style={inputReadOnlyStyle}
                 />
@@ -10539,7 +12390,12 @@ export default function App() {
                 <label style={labelStyle}>Fortune imposable simulée</label>
                 <input
                   type="text"
-                  value={formatMontantCHFArrondi(fortuneImposableApresSimulationCalcule)}
+                  value={formatMontantCHFArrondi(
+                    isDomicileComparison &&
+                      typeof domicileTargetDisplayedBases?.taxableAssets === "number"
+                      ? domicileTargetDisplayedBases.taxableAssets
+                      : fortuneImposableApresSimulationCalcule
+                  )}
                   readOnly
                   style={inputReadOnlyStyle}
                 />
@@ -10552,7 +12408,9 @@ export default function App() {
               Résultat fiscal TaxWare
             </h3>
             <span style={helperStyle}>
-              Les sorties ci-dessous proviennent des appels TaxWare construits à partir de la base fiscale simulée, elle-même calculée par écart depuis la base actuelle.
+              {isDomicileComparison
+                ? "Les sorties ci-dessous proviennent des 2 appels municipaux TaxWare construits depuis les données source détaillées, sans reprise des anciennes bases imposables."
+                : "Les sorties ci-dessous proviennent des appels TaxWare construits à partir de la base fiscale simulée, elle-même calculée par écart depuis la base actuelle."}
             </span>
 
             {String(
@@ -11169,6 +13027,8 @@ export default function App() {
               </div>
             )}
 
+            {!isDomicileRealSimulationMode && (
+            <>
             <div
               style={{
                 display: "grid",
@@ -11180,14 +13040,19 @@ export default function App() {
             >
               <div style={subCardStyle}>
                 <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
-                  Base actuelle saisie
+                  {isDomicileComparison ? "Dossier actif reconstruit" : "Base actuelle saisie"}
                 </h4>
                 <div style={{ display: "grid", gap: "10px" }}>
                   <div>
                     <label style={labelStyle}>Revenu imposable IFD</label>
                     <input
                       type="text"
-                      value={formatMontantCHFArrondi(revenuImposableIfdReference)}
+                      value={formatMontantCHFArrondi(
+                        isDomicileComparison &&
+                          typeof domicileReferenceDisplayedBases?.taxableIncomeFederal === "number"
+                          ? domicileReferenceDisplayedBases.taxableIncomeFederal
+                          : revenuImposableIfdReference
+                      )}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -11196,7 +13061,12 @@ export default function App() {
                     <label style={labelStyle}>Revenu imposable Canton / Commune</label>
                     <input
                       type="text"
-                      value={formatMontantCHFArrondi(revenuImposableReference)}
+                      value={formatMontantCHFArrondi(
+                        isDomicileComparison &&
+                          typeof domicileReferenceDisplayedBases?.taxableIncomeCantonal === "number"
+                          ? domicileReferenceDisplayedBases.taxableIncomeCantonal
+                          : revenuImposableReference
+                      )}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -11205,7 +13075,12 @@ export default function App() {
                     <label style={labelStyle}>Fortune imposable</label>
                     <input
                       type="text"
-                      value={formatMontantCHFArrondi(fortuneImposableReference)}
+                      value={formatMontantCHFArrondi(
+                        isDomicileComparison &&
+                          typeof domicileReferenceDisplayedBases?.taxableAssets === "number"
+                          ? domicileReferenceDisplayedBases.taxableAssets
+                          : fortuneImposableReference
+                      )}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -11215,14 +13090,19 @@ export default function App() {
 
               <div style={subCardStyle}>
                 <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
-                  Base simulée transmise
+                  {isDomicileComparison ? "Base domicile cible transmise" : "Base simulée transmise"}
                 </h4>
                 <div style={{ display: "grid", gap: "10px" }}>
                   <div>
                     <label style={labelStyle}>Revenu imposable IFD simulé</label>
                     <input
                       type="text"
-                      value={formatMontantCHFArrondi(revenuImposableIfdApresSimulationCalcule)}
+                      value={formatMontantCHFArrondi(
+                        isDomicileComparison &&
+                          typeof domicileTargetDisplayedBases?.taxableIncomeFederal === "number"
+                          ? domicileTargetDisplayedBases.taxableIncomeFederal
+                          : revenuImposableIfdApresSimulationCalcule
+                      )}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -11231,7 +13111,12 @@ export default function App() {
                     <label style={labelStyle}>Revenu imposable Canton / Commune simulé</label>
                     <input
                       type="text"
-                      value={formatMontantCHFArrondi(revenuImposableApresSimulationCalcule)}
+                      value={formatMontantCHFArrondi(
+                        isDomicileComparison &&
+                          typeof domicileTargetDisplayedBases?.taxableIncomeCantonal === "number"
+                          ? domicileTargetDisplayedBases.taxableIncomeCantonal
+                          : revenuImposableApresSimulationCalcule
+                      )}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -11240,7 +13125,12 @@ export default function App() {
                     <label style={labelStyle}>Fortune imposable simulée</label>
                     <input
                       type="text"
-                      value={formatMontantCHFArrondi(fortuneImposableApresSimulationCalcule)}
+                      value={formatMontantCHFArrondi(
+                        isDomicileComparison &&
+                          typeof domicileTargetDisplayedBases?.taxableAssets === "number"
+                          ? domicileTargetDisplayedBases.taxableAssets
+                          : fortuneImposableApresSimulationCalcule
+                      )}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -11493,6 +13383,8 @@ export default function App() {
                 </div>
               </div>
             )}
+            </>
+            )}
           </div>
 
           <div
@@ -11512,7 +13404,7 @@ export default function App() {
             </span>
           </div>
 
-          {taxResultReferenceBrute?.normalized && (
+          {!isDomicileRealSimulationMode && taxResultReferenceBrute?.normalized && (
             <div
               style={{
                 marginTop: "20px",
@@ -11759,7 +13651,398 @@ export default function App() {
             </div>
           </div>
 
-          {taxResultSansOptimisation?.normalized && taxResultAffiche?.normalized && (
+          {isDomicileComparison &&
+            taxResultSansOptimisation?.normalized &&
+            taxResultAffiche?.normalized && (
+              <div
+                style={{
+                  marginTop: "20px",
+                  padding: "20px",
+                  background: "linear-gradient(180deg, #f8fafc 0%, #eef6ff 100%)",
+                  borderRadius: "12px",
+                  border: "1px solid #dbeafe",
+                  boxShadow: "0 10px 24px rgba(15, 23, 42, 0.05)",
+                }}
+              >
+                <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
+                  Comparaison fiscale domicile actuel / cible
+                </h3>
+                <span style={helperStyle}>
+                  Deux calculs TaxWare réels ont été exécutés avec le même payload économique, en
+                  changeant uniquement la commune et le canton.
+                </span>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #bfdbfe",
+                    color: "#0f172a",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <div style={{ color: "#1d4ed8", fontSize: "13px", fontWeight: "bold" }}>
+                    Différence totale
+                  </div>
+                  <div style={{ fontSize: "28px", fontWeight: "bold" }}>
+                    {comparisonDeltaFormatter(
+                      taxResultSansOptimisation.normalized.totalTax,
+                      taxResultAffiche.normalized.totalTax
+                    )}
+                  </div>
+                  <div style={{ marginTop: "6px", color: "#475569", fontSize: "14px" }}>
+                    {domicileFavorableLabel}
+                  </div>
+                </div>
+
+                {domicileRealEstateDebug?.ownerOccupied?.active ? (
+                  <div
+                    style={{
+                      marginTop: "16px",
+                      padding: "16px",
+                      borderRadius: "12px",
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #bfdbfe",
+                    }}
+                  >
+                    <h4 style={{ marginTop: 0, marginBottom: "10px", color: "#1e293b" }}>
+                      Habitation propre injectée dans les 2 calculs
+                    </h4>
+                    <div style={{ color: "#475569", lineHeight: 1.6, fontSize: "14px" }}>
+                      Revenu immobilier net retenu =
+                      {" "}
+                      valeur locative
+                      {" "}
+                      - intérêts hypothécaires
+                      {" "}
+                      - charges d’entretien déductibles.
+                    </div>
+                    <div
+                      style={{
+                        marginTop: "14px",
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                        gap: "12px",
+                      }}
+                    >
+                      <div>
+                        <label style={labelStyle}>Valeur locative injectée</label>
+                        <input
+                          type="text"
+                          value={formatMontantCHFArrondi(
+                            domicileRealEstateDebug.ownerOccupied.valeurLocativeInjected
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Intérêts hypothécaires injectés</label>
+                        <input
+                          type="text"
+                          value={formatMontantCHFArrondi(
+                            domicileRealEstateDebug.ownerOccupied.debtInterestsInjected
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Charges d’entretien injectées</label>
+                        <input
+                          type="text"
+                          value={formatMontantCHFArrondi(
+                            domicileRealEstateDebug.ownerOccupied.deductibleExpensesInjected
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Revenu immobilier net calculé</label>
+                        <input
+                          type="text"
+                          value={formatMontantCHFArrondi(
+                            domicileRealEstateDebug.ownerOccupied.netIncomeReconstructed
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Valeur fiscale du bien</label>
+                        <input
+                          type="text"
+                          value={formatMontantCHFArrondi(
+                            domicileRealEstateDebug.ownerOccupied.taxableValue
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                    gap: "16px",
+                  }}
+                >
+                  <div style={subCardStyle}>
+                    <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Domicile actuel
+                    </h4>
+                    <div style={{ marginBottom: "12px", color: "#475569", fontWeight: 600 }}>
+                      {domicileCurrentLocationLabel}
+                    </div>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>Revenu imposable cantonal</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            taxResultSansOptimisation.normalized.taxableIncomeCantonal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Revenu imposable fédéral</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            taxResultSansOptimisation.normalized.taxableIncomeFederal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Fortune imposable</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            taxResultSansOptimisation.normalized.taxableAssets
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Impôt sur le revenu</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            sumFiniteNumbers(
+                              taxResultSansOptimisation.normalized.federalTax,
+                              taxResultSansOptimisation.normalized.cantonalCommunalTax
+                            )
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Impôt sur la fortune</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            taxResultSansOptimisation.normalized.wealthTax
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Total fiscal</label>
+                        <input
+                          type="text"
+                          value={formatMontantCHFArrondi(
+                            taxResultSansOptimisation.normalized.totalTax
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={subCardStyle}>
+                    <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Domicile cible
+                    </h4>
+                    <div style={{ marginBottom: "12px", color: "#475569", fontWeight: 600 }}>
+                      {domicileTargetLocationLabel}
+                    </div>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>Revenu imposable cantonal</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            taxResultAffiche.normalized.taxableIncomeCantonal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Revenu imposable fédéral</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            taxResultAffiche.normalized.taxableIncomeFederal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Fortune imposable</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(taxResultAffiche.normalized.taxableAssets)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Impôt sur le revenu</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            sumFiniteNumbers(
+                              taxResultAffiche.normalized.federalTax,
+                              taxResultAffiche.normalized.cantonalCommunalTax
+                            )
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Impôt sur la fortune</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(taxResultAffiche.normalized.wealthTax)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Total fiscal</label>
+                        <input
+                          type="text"
+                          value={formatMontantCHFArrondi(taxResultAffiche.normalized.totalTax)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={subCardStyle}>
+                    <h4 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Différence
+                    </h4>
+                    <div style={{ marginBottom: "12px", color: "#475569", fontWeight: 600 }}>
+                      Actuel moins cible
+                    </div>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>Revenu imposable cantonal</label>
+                        <input
+                          type="text"
+                          value={comparisonDeltaFormatter(
+                            taxResultSansOptimisation.normalized.taxableIncomeCantonal,
+                            taxResultAffiche.normalized.taxableIncomeCantonal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Revenu imposable fédéral</label>
+                        <input
+                          type="text"
+                          value={comparisonDeltaFormatter(
+                            taxResultSansOptimisation.normalized.taxableIncomeFederal,
+                            taxResultAffiche.normalized.taxableIncomeFederal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Fortune imposable</label>
+                        <input
+                          type="text"
+                          value={comparisonDeltaFormatter(
+                            taxResultSansOptimisation.normalized.taxableAssets,
+                            taxResultAffiche.normalized.taxableAssets
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Impôt sur le revenu</label>
+                        <input
+                          type="text"
+                          value={comparisonDeltaFormatter(
+                            sumFiniteNumbers(
+                              taxResultSansOptimisation.normalized.federalTax,
+                              taxResultSansOptimisation.normalized.cantonalCommunalTax
+                            ),
+                            sumFiniteNumbers(
+                              taxResultAffiche.normalized.federalTax,
+                              taxResultAffiche.normalized.cantonalCommunalTax
+                            )
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Impôt sur la fortune</label>
+                        <input
+                          type="text"
+                          value={comparisonDeltaFormatter(
+                            taxResultSansOptimisation.normalized.wealthTax,
+                            taxResultAffiche.normalized.wealthTax
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Différence totale</label>
+                        <input
+                          type="text"
+                          value={comparisonDeltaFormatter(
+                            taxResultSansOptimisation.normalized.totalTax,
+                            taxResultAffiche.normalized.totalTax
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {!isDomicileRealSimulationMode &&
+            taxResultSansOptimisation?.normalized &&
+            taxResultAffiche?.normalized && (
             <div
               style={{
                 marginTop: "20px",
@@ -11773,6 +14056,8 @@ export default function App() {
               <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
                 {isEnfantTransitionComparison
                   ? "Comparaison fiscale avant / après changement"
+                  : isDomicileComparison
+                    ? "Comparaison fiscale domicile actuel / cible"
                   : "Comparaison fiscale avant / après optimisation"}
               </h3>
               <span style={helperStyle}>
@@ -11853,7 +14138,11 @@ export default function App() {
                       <label style={labelStyle}>Impôt total</label>
                       <input
                         type="text"
-                        value={formatMontantTaxware(taxResultSansOptimisation.normalized.totalTax)}
+                        value={
+                          shouldRoundComparisonTotals
+                            ? formatMontantCHFArrondi(taxResultSansOptimisation.normalized.totalTax)
+                            : formatMontantTaxware(taxResultSansOptimisation.normalized.totalTax)
+                        }
                         readOnly
                         style={inputReadOnlyStyle}
                       />
@@ -11906,7 +14195,11 @@ export default function App() {
                       <label style={labelStyle}>Impôt total</label>
                       <input
                         type="text"
-                        value={formatMontantTaxware(taxResultAffiche.normalized.totalTax)}
+                        value={
+                          shouldRoundComparisonTotals
+                            ? formatMontantCHFArrondi(taxResultAffiche.normalized.totalTax)
+                            : formatMontantTaxware(taxResultAffiche.normalized.totalTax)
+                        }
                         readOnly
                         style={inputReadOnlyStyle}
                       />
@@ -12143,6 +14436,8 @@ export default function App() {
               </div>
             </div>
           )}
+            </>
+          )}
         </div>
         </GuidedSection>
         )}
@@ -12154,6 +14449,279 @@ export default function App() {
           title="Résultats consolidés"
           description="Retrouvez ici les indicateurs de synthèse et le résumé client du scénario actif. Cette lecture réunit les mêmes valeurs métier dans une présentation plus directe pour la restitution."
         >
+          {activeDesktopCalculator === "changement-domicile" ? (
+            <>
+              {activeDomicileValidationMessage && (
+                <div
+                  style={{
+                    marginBottom: "18px",
+                    padding: "14px 16px",
+                    borderRadius: "14px",
+                    border: "1px solid #fecaca",
+                    background: "linear-gradient(180deg, #fff1f2 0%, #ffffff 100%)",
+                    color: "#991b1b",
+                    lineHeight: 1.7,
+                  }}
+                >
+                  {activeDomicileValidationMessage}
+                </div>
+              )}
+
+              {domicileShouldShowModeChangedNotice && (
+                <div
+                  style={{
+                    marginBottom: "18px",
+                    padding: "14px 16px",
+                    borderRadius: "14px",
+                    border: "1px solid #bfdbfe",
+                    background: "linear-gradient(180deg, #eff6ff 0%, #ffffff 100%)",
+                    color: "#1d4ed8",
+                    lineHeight: 1.7,
+                  }}
+                >
+                  Mode changé, relancez la simulation pour afficher des résultats cohérents avec {domicileModeLabel}.
+                </div>
+              )}
+
+              <div style={sectionCardStyle}>
+                <h2 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>
+                  Comparer votre fiscalité selon votre lieu de résidence
+                </h2>
+                <span style={helperStyle}>
+                  {domicileModeDescription}
+                </span>
+
+                <div
+                  style={{
+                    marginTop: "16px",
+                    marginBottom: "18px",
+                    padding: "14px 16px",
+                    borderRadius: "12px",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #bfdbfe",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div>
+                      <div style={{ color: "#1d4ed8", fontSize: "13px", fontWeight: "bold" }}>
+                        Mode actif
+                      </div>
+                      <div style={{ color: "#0f172a", fontSize: "20px", fontWeight: "bold" }}>
+                        {domicileModeLabel}
+                      </div>
+                    </div>
+                    <div style={{ minWidth: "220px" }}>
+                      <div style={{ color: "#1d4ed8", fontSize: "13px", fontWeight: "bold" }}>
+                        Contrôle payload
+                      </div>
+                      <div style={{ color: "#0f172a", fontSize: "20px", fontWeight: "bold" }}>
+                        {domicilePayloadsMatchOutsideLocation
+                          ? "Payloads identiques hors localisation"
+                          : "Écart détecté hors localisation"}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: "10px", color: "#475569", lineHeight: 1.7 }}>
+                    {domicileModeDescription}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                    gap: "16px",
+                  }}
+                >
+                  <div style={subCardStyle}>
+                    <h3 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Domicile actuel
+                    </h3>
+                    <div style={{ marginBottom: "12px", color: "#475569", fontWeight: 600 }}>
+                      {domicileCurrentLocationLabel}
+                    </div>
+                    {domicileReferenceApplicationCorrection?.shouldApplyCorrection ? (
+                      <div
+                        style={{
+                          marginBottom: "12px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          background: "#fff7ed",
+                          color: "#9a3412",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Correction applicative primes maladie active sur les bases affichées.
+                      </div>
+                    ) : null}
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>TaxableIncomeFederal</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            domicileReferenceDisplayedBases?.taxableIncomeFederal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>TaxableIncomeCanton</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            domicileReferenceDisplayedBases?.taxableIncomeCantonal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>TaxableAssets</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            domicileReferenceDisplayedBases?.taxableAssets
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>TaxTotal</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(domicileReferenceDisplayedBases?.taxTotal)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={subCardStyle}>
+                    <h3 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Domicile cible
+                    </h3>
+                    <div style={{ marginBottom: "12px", color: "#475569", fontWeight: 600 }}>
+                      {domicileTargetLocationLabel}
+                    </div>
+                    {domicileTargetApplicationCorrection?.shouldApplyCorrection ? (
+                      <div
+                        style={{
+                          marginBottom: "12px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          background: "#fff7ed",
+                          color: "#9a3412",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Correction applicative primes maladie active sur les bases et l'impot affiches.
+                      </div>
+                    ) : null}
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>TaxableIncomeFederal</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            domicileTargetDisplayedBases?.taxableIncomeFederal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>TaxableIncomeCanton</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            domicileTargetDisplayedBases?.taxableIncomeCantonal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>TaxableAssets</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(
+                            domicileTargetDisplayedBases?.taxableAssets
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>TaxTotal</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(domicileTargetDisplayedBases?.taxTotal)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={subCardStyle}>
+                    <h3 style={{ marginTop: 0, marginBottom: "12px", color: "#1e293b" }}>
+                      Différence
+                    </h3>
+                    <div style={{ marginBottom: "12px", color: "#475569", fontWeight: 600 }}>
+                      {domicileFavorableLabel}
+                    </div>
+                    <div style={{ display: "grid", gap: "10px" }}>
+                      <div>
+                        <label style={labelStyle}>Impôt actuel</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(domicileReferenceDisplayedBases?.taxTotal)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Impôt cible</label>
+                        <input
+                          type="text"
+                          value={formatMontantTaxware(domicileTargetDisplayedBases?.taxTotal)}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Économie / surcoût annuel</label>
+                        <input
+                          type="text"
+                          value={comparisonDeltaFormatter(
+                            domicileReferenceDisplayedBases?.taxTotal,
+                            domicileTargetDisplayedBases?.taxTotal
+                          )}
+                          readOnly
+                          style={inputReadOnlyStyle}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
           {lectureImmobiliereSynthese.length > 0 && (
             <div
               style={{
@@ -12169,6 +14737,22 @@ export default function App() {
               {lectureImmobiliereSynthese.map((item, index) => (
                 <div key={index}>• {item}</div>
               ))}
+            </div>
+          )}
+
+          {activeDomicileValidationMessage && (
+            <div
+              style={{
+                marginBottom: "18px",
+                padding: "14px 16px",
+                borderRadius: "14px",
+                border: "1px solid #fecaca",
+                background: "linear-gradient(180deg, #fff1f2 0%, #ffffff 100%)",
+                color: "#991b1b",
+                lineHeight: 1.7,
+              }}
+            >
+              {activeDomicileValidationMessage}
             </div>
           )}
 
@@ -12430,10 +15014,12 @@ export default function App() {
               ))}
             </div>
           </div>
+            </>
+          )}
         </GuidedSection>
         )}
 
-        {activeSectionId === "recommandation" && (
+        {!isDomicileRealSimulationMode && activeSectionId === "recommandation" && (
         <GuidedSection
           id="recommandation"
           step="7"
@@ -12602,10 +15188,16 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  void handleTaxSimulation({
-                    navigateToResults: true,
-                    postSimulationScrollTarget: "optimisation",
-                  });
+                  void handleTaxSimulation(
+                    isDomicileComparison
+                      ? {
+                          navigateToResults: true,
+                        }
+                      : {
+                          navigateToResults: true,
+                          postSimulationScrollTarget: "optimisation",
+                        }
+                  );
                 }}
                 disabled={isSimulationActionDisabled}
                 className="sticky-sim-footer__primary"
