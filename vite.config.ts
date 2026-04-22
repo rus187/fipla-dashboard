@@ -13,7 +13,15 @@ export default defineConfig({
         changeOrigin: true,
       },
       "/api/taxware": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/api/runtime-debug": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+      "/api/advisor": {
+        target: "http://localhost:3000",
         changeOrigin: true,
       },
     },

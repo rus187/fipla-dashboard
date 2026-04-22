@@ -41,5 +41,17 @@ dist-ssr
 .billing-e2e-*.json
 .ui-*.png
 
+# Temporary QA artifacts & proofs (Step 0 — technical hygiene)
+.tmp-*
+.tmp-proof/
+.tmp-runtime-*/
+qa/.tmp-*
+qa/proof-*.png
+
 *.env
 src/server/.env
+
+.env
+.env.*
+server/.env
+server/.env.*
