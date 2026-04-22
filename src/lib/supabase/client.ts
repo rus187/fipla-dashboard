@@ -1,8 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const getEnvVar = (name: string): string | undefined => {
-  if (typeof process !== 'undefined' && process.env && process.env[name]) {
-    return process.env[name];
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  if (proc && proc.env && proc.env[name]) {
+    return proc.env[name];
   }
   // Vite env in client-side
   // @ts-ignore

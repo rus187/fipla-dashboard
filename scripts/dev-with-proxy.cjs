@@ -126,7 +126,6 @@ function shutdown(exitCode = 0) {
 ensureNodePortAvailable(stripeBackendPort, "le backend Stripe");
 ensureNodePortAvailable(vitePort, "le serveur Vite");
 
-spawnProcess(nodeCommand, ["src/server/taxwareProxy.js"], "le proxy TaxWare");
 spawnProcess(nodeCommand, ["server/index.js"], "le backend Stripe");
 console.log(`Démarrage du serveur Vite sur http://${viteHost}:${vitePort}`);
 spawnProcess(

@@ -25,9 +25,18 @@ export type ClientFamille = {
 };
 
 export type ClientRevenus = {
+  revenuPersonne1: number;
+  revenuPersonne2: number;
   salaire: number;
   avs: number;
   lpp: number;
+  salaireConjoint: number;
+  avsConjoint: number;
+  lppConjoint: number;
+  autresRevenusConjoint: number;
+  revenuFortune: number;
+  dividendesPriviligies: number;
+  participationsPriviligiees: number;
   autresRevenus: number;
   totalRevenus: number;
 };
@@ -75,6 +84,7 @@ export type ClientCharges = {
 };
 
 export type ClientFiscalite = {
+  anneeSimulation: number;
   revenuImposableIfd: number;
   revenuImposable: number;
   fortuneImposableActuelleSaisie: number;

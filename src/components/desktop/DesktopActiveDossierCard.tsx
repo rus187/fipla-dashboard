@@ -1,3 +1,5 @@
+import CantonBadge from "../atoms/CantonBadge";
+
 type DesktopActiveDossierField = {
   label: string;
   value: string;
@@ -12,6 +14,8 @@ type DesktopActiveDossierCardProps = {
   onNewDossier: () => void;
   onReset: () => void;
   showSecondaryActions?: boolean;
+  cantonFiscal?: string;
+  communeFiscale?: string;
 };
 
 export default function DesktopActiveDossierCard({
@@ -22,6 +26,8 @@ export default function DesktopActiveDossierCard({
   onNewDossier,
   onReset,
   showSecondaryActions = true,
+  cantonFiscal,
+  communeFiscale,
 }: DesktopActiveDossierCardProps) {
   const fieldRows = [fields.slice(0, 2), fields.slice(2, 5), fields.slice(5, 8)].filter(
     (row) => row.length > 0
@@ -32,6 +38,11 @@ export default function DesktopActiveDossierCard({
       <div className="desktop-active-dossier__header">
         <div className="desktop-active-dossier__eyebrow">Dossier actif</div>
         <h2 className="desktop-active-dossier__title">{title}</h2>
+        {cantonFiscal ? (
+          <div style={{ marginTop: "8px" }}>
+            <CantonBadge code={cantonFiscal} commune={communeFiscale} size="sm" />
+          </div>
+        ) : null}
         <p className="desktop-active-dossier__subtitle">{subtitle}</p>
       </div>
 

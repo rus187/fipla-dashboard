@@ -1,9 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { calculateTaxware } from "./taxwareProxy.js";
+import taxwareRouter from "./routes/taxware.js";
+import advisorRouter from "./routes/advisor.js";
 
-dotenv.config({ path: './src/server/.env' });
+dotenv.config({ path: './server/.env' });
 
 const { stripe, supabase } = await import("./stripe/stripeClient.js");
 
@@ -22,6 +23,9 @@ app.use((req, res, next) => {
 
   return jsonParser(req, res, next);
 });
+
+app.use(taxwareRouter);
+app.use(advisorRouter);
 
 const formatStripeTimestamp = (value) =>
   value ? new Date(value * 1000).toISOString() : null;
@@ -3730,42 +3734,6 @@ app.post("/api/stripe/consume-simulation-credit", async (req, res) => {
   });
 });
 
-app.post("/api/taxware/calculate", async (req, res) => {
-  try {
-    const data = await calculateTaxware(req.body);
-    res.json(data);
-  } catch (error) {
-    res.status(error.status || 500).json({
-      error: error.message || "Erreur serveur",
-      ...(error.details ? { details: error.details } : {}),
-    });
-  }
-});
-
-app.post("/api/taxware/simulate", async (req, res) => {
-  const payload = req.body;
-  const hasPayload = payload !== null && payload !== undefined;
-
-  console.info("[taxware] simulate request received", {
-    hasPayload,
-    zip: typeof payload?.Zip === "number" ? payload.Zip : null,
-    year: typeof payload?.Year === "number" ? payload.Year : null,
-    partnership: typeof payload?.Partnership === "string" ? payload.Partnership : null,
-    childrenCount: typeof payload?.NumChildren === "number" ? payload.NumChildren : null,
-  });
-
-  try {
-    const data = await calculateTaxware(payload);
-    console.info("[taxware] simulate success");
-    res.json(data);
-  } catch (error) {
-    console.error("[taxware] simulate error", serializeOperationalError(error));
-    res.status(error.status || 500).json({
-      error: error.message || "Erreur serveur",
-      ...(error.details ? { details: error.details } : {}),
-    });
-  }
-});
 
 app.post("/api/stripe/create-checkout-session", async (req, res) => {
   try {

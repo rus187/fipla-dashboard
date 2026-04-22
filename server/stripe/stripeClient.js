@@ -9,7 +9,7 @@ if (!stripeSecretKey) {
   throw new Error('STRIPE_SECRET_KEY is required');
 }
 if (!supabaseUrl || !supabaseServiceRoleKey) {
-  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for Supabase server-side operations');
 }
 
 export const stripe = new Stripe(stripeSecretKey, { apiVersion: '2026-03-25.dahlia' });
