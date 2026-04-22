@@ -1,0 +1,126 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildTaxwarePayload — cas de référence > BE Biel/Bienne — couple, 2 enfants, rachat LPP, revenus mobiliers 1`] = `
+{
+  "AssetIncome": 3500,
+  "Assets": 250000,
+  "City": "Biel/Bienne",
+  "DebtInterests": 800,
+  "Debts": 50000,
+  "MiscExpenses": 0,
+  "MiscIncome": 0,
+  "NumChildren": 2,
+  "Partnership": "Marriage",
+  "PersonLeading": {
+    "HasLobContributions": true,
+    "HasOasiPensions": false,
+    "LobContributions": 15000,
+    "NetWages": 120000,
+    "OtherIncome": 0,
+    "PensionIncome": 0,
+    "ThirdPillarContribution": 7056,
+  },
+  "PersonSecond": {
+    "HasLobContributions": false,
+    "HasOasiPensions": false,
+    "LobContributions": 0,
+    "NetWages": 65000,
+    "OtherIncome": 0,
+    "PensionIncome": 0,
+    "ThirdPillarContribution": 5000,
+  },
+  "Year": 2026,
+  "Zip": 2500,
+}
+`;
+
+exports[`buildTaxwarePayload — cas de référence > NE Le Locle — personne seule, revenu simple, sans immobilier 1`] = `
+{
+  "AssetIncome": 0,
+  "Assets": 45000,
+  "City": "Le Locle",
+  "DebtInterests": 0,
+  "Debts": 0,
+  "MiscExpenses": 0,
+  "MiscIncome": 0,
+  "NumChildren": 0,
+  "Partnership": "Single",
+  "PersonLeading": {
+    "HasLobContributions": false,
+    "HasOasiPensions": false,
+    "LobContributions": 0,
+    "NetWages": 85000,
+    "OtherIncome": 0,
+    "PensionIncome": 0,
+    "ThirdPillarContribution": 7056,
+  },
+  "Year": 2026,
+  "Zip": 2400,
+}
+`;
+
+exports[`buildTaxwarePayload — cas de référence > VD Lausanne — couple, 1 enfant, immobilier locatif 1`] = `
+{
+  "AssetIncome": 0,
+  "Assets": 800000,
+  "City": "Lausanne",
+  "DebtInterests": 18000,
+  "Debts": 600000,
+  "MiscExpenses": 0,
+  "MiscIncome": 0,
+  "NumChildren": 1,
+  "Partnership": "Marriage",
+  "PersonLeading": {
+    "HasLobContributions": false,
+    "HasOasiPensions": false,
+    "LobContributions": 0,
+    "NetWages": 140000,
+    "OtherIncome": 0,
+    "PensionIncome": 0,
+    "ThirdPillarContribution": 7056,
+  },
+  "PersonSecond": {
+    "HasLobContributions": false,
+    "HasOasiPensions": false,
+    "LobContributions": 0,
+    "NetWages": 40000,
+    "OtherIncome": 0,
+    "PensionIncome": 0,
+    "ThirdPillarContribution": 3500,
+  },
+  "RealEstates": [
+    {
+      "EffectiveExpenses": 6000,
+      "RentalIncome": 24000,
+      "TaxableValue": 850000,
+    },
+  ],
+  "Year": 2026,
+  "Zip": 1003,
+}
+`;
+
+exports[`buildTaxwarePayload — cas de référence > ZG Zug — retraité seul, rente AVS, fortune importante 1`] = `
+{
+  "AssetIncome": 12000,
+  "Assets": 1200000,
+  "City": "Zug",
+  "DebtInterests": 0,
+  "Debts": 0,
+  "MiscExpenses": 0,
+  "MiscIncome": 0,
+  "NumChildren": 0,
+  "Partnership": "Single",
+  "PersonLeading": {
+    "HasLobContributions": false,
+    "HasOasiPensions": true,
+    "LobContributions": 0,
+    "NetWages": 0,
+    "OtherIncome": 0,
+    "PensionIncome": 55000,
+    "ThirdPillarContribution": 0,
+  },
+  "Year": 2026,
+  "Zip": 6300,
+}
+`;
