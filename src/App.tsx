@@ -1594,7 +1594,11 @@ export default function App() {
     (dossier.revenus.salaire || 0) +
     (dossier.revenus.avs || 0) +
     (dossier.revenus.lpp || 0) +
-    (dossier.revenus.autresRevenus || 0);
+    (dossier.revenus.autresRevenus || 0) +
+    (dossier.revenus.salaireConjoint || 0) +
+    (dossier.revenus.avsConjoint || 0) +
+    (dossier.revenus.lppConjoint || 0) +
+    (dossier.revenus.autresRevenusConjoint || 0);
   const totalRevenusEtape2 =
     (dossier.revenus.salaire || 0) +
     (dossier.revenus.avs || 0) +
@@ -1804,7 +1808,7 @@ export default function App() {
     typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number";
 
   const revenuImposableApresSimulationCalcule =
-    isDomicileTaxwareResult
+    typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number"
       ? taxResultAffiche.normalized.taxableIncomeCantonal
       : revenuImposableCantonalSimule;
   const fortuneImposableApresSimulationCalcule =
@@ -1829,6 +1833,18 @@ export default function App() {
   const fortuneImposableCorrige = fortuneImposableTaxware;
   const revenuControleApresDeductions = revenuImposableIfdApresSimulationCalcule;
   const impotFederalDirect = taxResultAffiche?.normalized?.federalTax ?? 0;
+
+  useEffect(() => {
+    const isDev = typeof process !== "undefined" && process.env?.NODE_ENV === "development";
+    if (isDev) {
+      console.log("[APP] === TRACE ICC ===");
+      console.log("[APP] revenuImposableApresSimulationCalcule =", revenuImposableApresSimulationCalcule);
+      console.log("[APP] isDomicileTaxwareResult =", isDomicileTaxwareResult);
+      console.log("[APP] taxResultAffiche?.normalized?.taxableIncomeCantonal =", taxResultAffiche?.normalized?.taxableIncomeCantonal);
+      console.log("[APP] revenuImposableTaxwareCanton (final) =", revenuImposableTaxwareCanton);
+      console.log("[APP] === FIN TRACE ICC ===");
+    }
+  }, [revenuImposableApresSimulationCalcule, isDomicileTaxwareResult, taxResultAffiche?.normalized?.taxableIncomeCantonal, revenuImposableTaxwareCanton]);
 
   const isDevelopmentEnvironment =
     typeof process !== "undefined" && process.env?.NODE_ENV === "development";
@@ -2676,10 +2692,12 @@ export default function App() {
     miscIncome: 0,
     miscExpenses: chargesDeductiblesTaxware,
     debtInterests: interetsHypothecairesDeductibles,
-    spouseNetWages: 0,
-    spousePensionIncome: 0,
-    spouseHasOasiPensions: false,
-    spouseOtherIncome: 0,
+    spouseNetWages: Math.max(0, Number(dossier.revenus.salaireConjoint || 0)),
+    spousePensionIncome:
+      Math.max(0, Number(dossier.revenus.avsConjoint || 0)) +
+      Math.max(0, Number(dossier.revenus.lppConjoint || 0)),
+    spouseHasOasiPensions: Math.max(0, Number(dossier.revenus.avsConjoint || 0)) > 0,
+    spouseOtherIncome: Math.max(0, Number(dossier.revenus.autresRevenusConjoint || 0)),
     spouseThirdPillar: 0,
     spouseLppBuyback: 0,
     assets: fortuneFiscaleCalcule || 0,
@@ -2771,20 +2789,25 @@ export default function App() {
         | "Marriage"
         | "Single",
       childrenCount: dossierForSimulation.famille.nombreEnfants,
-      netWages: 0,
-      pensionIncome: 0,
-      hasOasiPensions: false,
-      otherIncome: 0,
+      netWages: Math.max(0, Number(dossierForSimulation.revenus.salaire || 0)),
+      pensionIncome:
+        Math.max(0, Number(dossierForSimulation.revenus.avs || 0)) +
+        Math.max(0, Number(dossierForSimulation.revenus.lpp || 0)),
+      hasOasiPensions: Math.max(0, Number(dossierForSimulation.revenus.avs || 0)) > 0,
+      otherIncome: Math.max(0, Number(dossierForSimulation.revenus.autresRevenus || 0)),
       thirdPillar: 0,
       lppBuyback: 0,
       assetIncome: getEffectiveTaxwareAssetIncome(dossierForSimulation),
       miscIncome: Math.max(0, Math.round(params.miscIncome)),
       miscExpenses: 0,
       debtInterests: 0,
-      spouseNetWages: 0,
-      spousePensionIncome: 0,
-      spouseHasOasiPensions: false,
-      spouseOtherIncome: 0,
+      spouseNetWages: Math.max(0, Number(dossierForSimulation.revenus.salaireConjoint || 0)),
+      spousePensionIncome:
+        Math.max(0, Number(dossierForSimulation.revenus.avsConjoint || 0)) +
+        Math.max(0, Number(dossierForSimulation.revenus.lppConjoint || 0)),
+      spouseHasOasiPensions:
+        Math.max(0, Number(dossierForSimulation.revenus.avsConjoint || 0)) > 0,
+      spouseOtherIncome: Math.max(0, Number(dossierForSimulation.revenus.autresRevenusConjoint || 0)),
       spouseThirdPillar: 0,
       spouseLppBuyback: 0,
       assets: Math.max(0, Math.round(params.assets)),
@@ -4082,6 +4105,35 @@ export default function App() {
     },
   ];
 
+  const getMobileDomicileResultMetrics = (result: any) => {
+    const rate = result?.normalized?.marginalTaxRate;
+    return [
+      ...getMobileResultMetrics(result),
+      ...(typeof rate === "number"
+        ? [{ label: "Taux marginal d'imposition", value: `${rate.toFixed(1)} %` }]
+        : []),
+    ];
+  };
+
+  const getDomicileCardVerdict = (
+    ownResult: any,
+    otherResult: any
+  ): "Plus avantageux" | "Moins avantageux" | "Neutre" => {
+    const own = ownResult?.normalized?.totalTax ?? null;
+    const other = otherResult?.normalized?.totalTax ?? null;
+    if (typeof own === "number" && typeof other === "number") {
+      if (own < other) return "Plus avantageux";
+      if (own > other) return "Moins avantageux";
+    }
+    const ownRate = ownResult?.normalized?.marginalTaxRate ?? null;
+    const otherRate = otherResult?.normalized?.marginalTaxRate ?? null;
+    if (typeof ownRate === "number" && typeof otherRate === "number") {
+      if (ownRate < otherRate) return "Plus avantageux";
+      if (ownRate > otherRate) return "Moins avantageux";
+    }
+    return "Neutre";
+  };
+
   const runMobileSimulation = async (
     payload: MobileSimulationPayload
   ): Promise<MobileSimulationResult> => {
@@ -4411,6 +4463,25 @@ export default function App() {
     const monthlyDelta = annualDelta / 12;
     const verdict = getMobileVerdict(annualDelta);
 
+    const currentLocName = currentDossier.identite.communeFiscale || currentDossier.identite.commune;
+    const nextLocName = nextDossier.identite.communeFiscale || nextDossier.identite.commune;
+    const currentRate = currentResult?.normalized?.marginalTaxRate ?? null;
+    const nextRate = nextResult?.normalized?.marginalTaxRate ?? null;
+    let synthesis: string;
+    if (annualDelta > 0) {
+      synthesis = `En vous domiciliant à ${nextLocName}, vous économisez ${formatMontantCHFArrondi(annualDelta)} par an`;
+    } else if (annualDelta < 0) {
+      synthesis = `Le déménagement vers ${nextLocName} représente un surcoût de ${formatMontantCHFArrondi(Math.abs(annualDelta))} par an`;
+    } else {
+      synthesis = `La charge fiscale est identique entre ${currentLocName} et ${nextLocName}`;
+    }
+    if (typeof currentRate === "number" && typeof nextRate === "number" && Math.abs(nextRate - currentRate) >= 0.05) {
+      const rateDelta = nextRate - currentRate;
+      const sign = rateDelta < 0 ? "−" : "+";
+      synthesis += `. Taux marginal : ${currentRate.toFixed(1)} % → ${nextRate.toFixed(1)} % (${sign}${Math.abs(rateDelta).toFixed(1)} %)`;
+    }
+    synthesis += ".";
+
     await registerSuccessfulSimulationUsage();
 
     return {
@@ -4418,13 +4489,15 @@ export default function App() {
         label: "Domicile actuel",
         value: currentDossier.identite.communeFiscale || currentDossier.identite.commune,
         helper: "Situation fiscale actuelle.",
-        metrics: getMobileResultMetrics(currentResult),
+        metrics: getMobileDomicileResultMetrics(currentResult),
+        verdict: getDomicileCardVerdict(currentResult, nextResult),
       },
       next: {
         label: "Nouveau domicile",
         value: nextDossier.identite.communeFiscale || nextDossier.identite.commune,
         helper: "Projection pour le domicile cible.",
-        metrics: getMobileResultMetrics(nextResult),
+        metrics: getMobileDomicileResultMetrics(nextResult),
+        verdict: getDomicileCardVerdict(nextResult, currentResult),
       },
       difference: {
         label: "Différence",
@@ -4499,6 +4572,7 @@ export default function App() {
           ],
         },
       ],
+      synthesis,
     };
   };
 
@@ -6028,8 +6102,7 @@ export default function App() {
   useEffect(() => {
     const activeLabel = `${activeVariant.customLabel} ${activeVariant.label}`.toLowerCase();
     const isDomicileVariant =
-      activeVariantIndex > 0 &&
-      (activeDesktopCalculator === "changement-domicile" || activeLabel.includes("domicile"));
+      activeDesktopCalculator === "changement-domicile" || activeLabel.includes("domicile");
     const debugSource =
       typeof taxResultAffiche?.raw?.debug?.source === "string"
         ? taxResultAffiche.raw.debug.source
@@ -6379,8 +6452,6 @@ export default function App() {
       setShowClientStartModal(false);
       return;
     }
-
-    setShowClientStartModal(true);
   }, [
     hasStartedClientEdit,
     isCheckoutCancelRoute,
@@ -10165,6 +10236,50 @@ export default function App() {
               marginBottom: "16px",
               padding: "18px",
               borderRadius: "14px",
+              background: "#fff8dc",
+              border: "2px solid #ff6b6b",
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#d63031" }}>
+              🔴 DEBUG - Revenus du dossier
+            </h3>
+            <div style={{ fontSize: '0.85em', lineHeight: 1.6, fontFamily: 'monospace' }}>
+              <div><strong>Personne 1:</strong></div>
+              <div>&nbsp;&nbsp;salaire: {dossier.revenus.salaire || 0}</div>
+              <div>&nbsp;&nbsp;avs: {dossier.revenus.avs || 0}</div>
+              <div>&nbsp;&nbsp;lpp: {dossier.revenus.lpp || 0}</div>
+              <div>&nbsp;&nbsp;autresRevenus: {dossier.revenus.autresRevenus || 0}</div>
+              <div style={{ marginTop: '8px' }}><strong>Conjoint:</strong></div>
+              <div>&nbsp;&nbsp;salaireConjoint: {dossier.revenus.salaireConjoint || 0}</div>
+              <div>&nbsp;&nbsp;avsConjoint: {dossier.revenus.avsConjoint || 0}</div>
+              <div>&nbsp;&nbsp;lppConjoint: {dossier.revenus.lppConjoint || 0}</div>
+              <div>&nbsp;&nbsp;autresRevenusConjoint: {dossier.revenus.autresRevenusConjoint || 0}</div>
+              <div style={{ marginTop: '8px' }}><strong>Mariage:</strong> {dossier.famille.aConjoint ? 'OUI' : 'NON'}</div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "16px",
+              borderRadius: "10px",
+              background: "#f0f0f0",
+              border: "1px solid #999",
+              fontSize: '0.9em',
+            }}
+          >
+            <strong>💡 Instrumentation:</strong> Ouvre la console du navigateur (F12 → Onglet Console) et cherche les logs:
+            <div style={{ marginTop: '8px', fontSize: '0.85em', fontFamily: 'monospace' }}>
+              <div><code>[TAXWARE] PAYLOAD ENVOYÉ =</code> → montre les revenus envoyés à TaxWare</div>
+              <div><code>[TAXWARE] RÉPONSE BRUTE =</code> → montre le TaxableIncomeCanton retourné</div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "18px",
+              borderRadius: "14px",
               background: "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)",
               border: "1px solid #bfdbfe",
             }}
@@ -10199,6 +10314,19 @@ export default function App() {
                   value={formatMontantCHFArrondi(revenuImposableApresSimulationCalcule)}
                   readOnly
                   style={inputReadOnlyStyle}
+                />
+              </div>
+              <div>
+                <label style={{...labelStyle, color: '#666', fontSize: '0.9em'}}>
+                  🔍 TaxWare taxableIncomeCantonal (debug)
+                </label>
+                <input
+                  type="text"
+                  value={taxResultAffiche?.normalized?.taxableIncomeCantonal ? 
+                    formatMontantCHFArrondi(taxResultAffiche.normalized.taxableIncomeCantonal) : 
+                    'N/A'}
+                  readOnly
+                  style={{...inputReadOnlyStyle, backgroundColor: '#f0f8ff', border: '1px dashed #ccc'}}
                 />
               </div>
               <div>
@@ -10900,6 +11028,19 @@ export default function App() {
                       value={formatMontantCHFArrondi(revenuImposableApresSimulationCalcule)}
                       readOnly
                       style={inputReadOnlyStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={{...labelStyle, color: '#666', fontSize: '0.9em'}}>
+                      🔍 TaxWare taxableIncomeCantonal (debug)
+                    </label>
+                    <input
+                      type="text"
+                      value={taxResultAffiche?.normalized?.taxableIncomeCantonal ? 
+                        formatMontantCHFArrondi(taxResultAffiche.normalized.taxableIncomeCantonal) : 
+                        'N/A'}
+                      readOnly
+                      style={{...inputReadOnlyStyle, backgroundColor: '#f0f8ff', border: '1px dashed #ccc'}}
                     />
                   </div>
                   <div>

@@ -69,6 +69,7 @@ exports[`normalizeTaxwareResponse — cas de référence > applique cantonRule '
     },
   },
   "federalTax": 7000,
+  "marginalTaxRate": null,
   "municipality": "Lausanne",
   "raw": {
     "Canton": "VD",
@@ -158,6 +159,7 @@ exports[`normalizeTaxwareResponse — cas de référence > calcule le cantonalCo
     },
   },
   "federalTax": 480,
+  "marginalTaxRate": null,
   "municipality": "Zug",
   "raw": {
     "Canton": "ZG",
@@ -249,6 +251,7 @@ exports[`normalizeTaxwareResponse — cas de référence > déballe le wrapper \
     },
   },
   "federalTax": 5200,
+  "marginalTaxRate": null,
   "municipality": "Biel/Bienne",
   "raw": {
     "data": {
@@ -342,6 +345,7 @@ exports[`normalizeTaxwareResponse — cas de référence > extrait les champs pl
     },
   },
   "federalTax": 950,
+  "marginalTaxRate": null,
   "municipality": "Le Locle",
   "raw": {
     "Canton": "NE",
@@ -433,6 +437,7 @@ exports[`normalizeTaxwareResponse — cas de référence > retourne une structur
     },
   },
   "federalTax": null,
+  "marginalTaxRate": null,
   "municipality": null,
   "raw": null,
   "taxableAssets": null,

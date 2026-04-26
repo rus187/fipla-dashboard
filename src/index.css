@@ -52,3 +52,6 @@ h4 {
 p {
   margin: 0;
 }
+
+.value--positive { color: #15803d; }
+.value--negative { color: #b91c1c; }

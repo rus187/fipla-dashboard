@@ -60,6 +60,23 @@ describe("normalizeTaxwareResponse — cas de référence", () => {
     expect(normalized).toMatchSnapshot();
   });
 
+  it("extrait TaxesIncome.MarginalTaxRate quand présent", () => {
+    const raw = {
+      Canton: "GE",
+      Municipality: "Genève",
+      TaxesIncome: { MarginalTaxRate: 35.4 },
+      FederalTax: 1200,
+      TotalTax: 9000,
+    };
+    const normalized = normalizeTaxwareResponse(raw);
+    expect(normalized.marginalTaxRate).toBe(35.4);
+  });
+
+  it("retourne null pour marginalTaxRate quand absent de la réponse", () => {
+    const raw = { Canton: "NE", TotalTax: 5000 };
+    expect(normalizeTaxwareResponse(raw).marginalTaxRate).toBeNull();
+  });
+
   it("calcule le cantonalCommunalTax et le totalTax par fallback de somme — ZG Zug", () => {
     const raw = {
       Canton: "ZG",

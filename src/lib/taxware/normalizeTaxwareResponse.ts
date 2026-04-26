@@ -10,6 +10,7 @@ export type TaxwareNormalizedResponse = {
   cantonalCommunalTax: number | null;
   wealthTax: number | null;
   totalTax: number | null;
+  marginalTaxRate: number | null;
   cantonalBreakdown: {
     principalCantonalTax: number | null;
     principalCommunalTax: number | null;
@@ -293,6 +294,13 @@ export function normalizeTaxwareResponse(
       "Summary.TaxesAssets.CantonMunicipalityParishTaxTotal",
     ]);
 
+  const marginalTaxRate = firstNumber(source, [
+    "TaxesIncome.MarginalTaxRate",
+    "MarginalTaxRate",
+    "Result.TaxesIncome.MarginalTaxRate",
+    "Summary.TaxesIncome.MarginalTaxRate",
+  ]);
+
   const exactTotalTax = firstNumberWithMatchedPath(source, [
       "TotalTax",
       "TaxTotal",
@@ -425,6 +433,7 @@ export function normalizeTaxwareResponse(
     cantonalCommunalTax: rawCantonalCommunalTax,
     wealthTax,
     totalTax,
+    marginalTaxRate,
     cantonalBreakdown: {
       principalCantonalTax: rawCantonalTax,
       principalCommunalTax: rawCommunalTax,

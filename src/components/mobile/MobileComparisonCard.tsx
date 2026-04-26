@@ -1,29 +1,40 @@
 import type { MobileResultMetric } from "./MobileResultCard";
 
+type CardVerdict = "Plus avantageux" | "Moins avantageux" | "Neutre";
+
 type MobileComparisonBlock = {
   label: string;
   value: string;
   helper: string;
   metrics: MobileResultMetric[];
+  verdict?: CardVerdict;
 };
 
 type MobileComparisonCardProps = {
   current: MobileComparisonBlock;
   next: MobileComparisonBlock;
-  difference: MobileComparisonBlock & {
+  difference: Omit<MobileComparisonBlock, "verdict"> & {
     verdict: "Favorable" | "Neutre" | "Défavorable";
   };
 };
 
-function getVerdictClassName(verdict: MobileComparisonCardProps["difference"]["verdict"]) {
+function getDifferenceVerdictClassName(verdict: "Favorable" | "Neutre" | "Défavorable") {
   if (verdict === "Favorable") {
     return "mobile-comparison-badge mobile-comparison-badge--favorable";
   }
-
   if (verdict === "Défavorable") {
     return "mobile-comparison-badge mobile-comparison-badge--defavorable";
   }
+  return "mobile-comparison-badge mobile-comparison-badge--neutre";
+}
 
+function getCardVerdictClassName(verdict: CardVerdict) {
+  if (verdict === "Plus avantageux") {
+    return "mobile-comparison-badge mobile-comparison-badge--favorable";
+  }
+  if (verdict === "Moins avantageux") {
+    return "mobile-comparison-badge mobile-comparison-badge--defavorable";
+  }
   return "mobile-comparison-badge mobile-comparison-badge--neutre";
 }
 
@@ -32,11 +43,15 @@ function ComparisonBlock({
   value,
   helper,
   metrics,
+  verdict,
 }: MobileComparisonBlock) {
   return (
     <article className="mobile-comparison-card">
       <div className="mobile-comparison-card__label">{label}</div>
       <div className="mobile-comparison-card__value">{value}</div>
+      {verdict && (
+        <div className={getCardVerdictClassName(verdict)}>{verdict}</div>
+      )}
       <div className="mobile-comparison-card__helper">{helper}</div>
       <div className="mobile-result-grid">
         {metrics.map((metric) => (
@@ -63,7 +78,7 @@ export default function MobileComparisonCard({
         <div className="mobile-comparison-card__label">{difference.label}</div>
         <div className="mobile-comparison-card__value">{difference.value}</div>
         <div className="mobile-comparison-card__helper">{difference.helper}</div>
-        <div className={getVerdictClassName(difference.verdict)}>{difference.verdict}</div>
+        <div className={getDifferenceVerdictClassName(difference.verdict)}>{difference.verdict}</div>
         <div className="mobile-result-grid">
           {difference.metrics.map((metric) => (
             <div key={metric.label} className="mobile-result-row">

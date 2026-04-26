@@ -32,12 +32,14 @@ export type MobileDomicileResult = {
     value: string;
     helper: string;
     metrics: Array<{ label: string; value: string }>;
+    verdict?: "Plus avantageux" | "Moins avantageux" | "Neutre";
   };
   next: {
     label: string;
     value: string;
     helper: string;
     metrics: Array<{ label: string; value: string }>;
+    verdict?: "Plus avantageux" | "Moins avantageux" | "Neutre";
   };
   difference: {
     label: string;
@@ -47,6 +49,7 @@ export type MobileDomicileResult = {
     metrics: Array<{ label: string; value: string }>;
   };
   detailSections: Array<{ title: string; rows: Array<{ label: string; value: string }> }>;
+  synthesis: string;
 };
 
 type MobileDomicileFlowProps = {
@@ -456,6 +459,9 @@ export default function MobileDomicileFlow({
       {stepIndex === 4 && result ? (
         <>
           <MobileComparisonCard current={result.current} next={result.next} difference={result.difference} />
+          <article className="mobile-comparison-card">
+            <div className="mobile-comparison-card__helper">{result.synthesis}</div>
+          </article>
           <div className="mobile-secondary-row">
             <button type="button" className="mobile-secondary-action" onClick={() => setStepIndex(5)}>
               Voir le détail

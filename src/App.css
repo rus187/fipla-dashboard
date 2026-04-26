@@ -264,6 +264,24 @@
   border: 1px solid #bfdbfe;
 }
 
+.desktop-calculator-card__status--ok {
+  background: #dcfce7;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.desktop-calculator-card__status--pending {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.desktop-calculator-card__status--error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
 .desktop-calculator-card__title {
   color: #0f172a;
   font-size: 24px;

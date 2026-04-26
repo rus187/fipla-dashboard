@@ -22,6 +22,12 @@ type DesktopCalculatorHubProps = {
   onOpenSection: (calculatorId: string, sectionId: string) => void;
 };
 
+function statusBadge(status: string): { icon: string; mod: string } {
+  if (/prêt|disponible/i.test(status)) return { icon: "✔", mod: "desktop-calculator-card__status--ok" };
+  if (/erreur/i.test(status)) return { icon: "✕", mod: "desktop-calculator-card__status--error" };
+  return { icon: "⏳", mod: "desktop-calculator-card__status--pending" };
+}
+
 export default function DesktopCalculatorHub({
   calculators,
   activeCalculatorId,
@@ -50,6 +56,8 @@ export default function DesktopCalculatorHub({
         {calculators.map((calculator) => {
           const isActive = calculator.id === activeCalculatorId;
 
+          const badge = statusBadge(calculator.status);
+
           return (
             <button
               key={calculator.id}
@@ -61,7 +69,7 @@ export default function DesktopCalculatorHub({
             >
               <div className="desktop-calculator-card__topline">
                 <span className="desktop-calculator-card__label">{calculator.label}</span>
-                <span className="desktop-calculator-card__status">{calculator.status}</span>
+                <span className={`desktop-calculator-card__status ${badge.mod}`}>{badge.icon} {calculator.status}</span>
               </div>
               <div className="desktop-calculator-card__title">{calculator.title}</div>
               <p className="desktop-calculator-card__description">{calculator.description}</p>

@@ -1,6 +1,12 @@
 import type { DossierClient } from "../../types";
 import { buildTaxwarePayload } from "./buildTaxwarePayload";
 import { callTaxware } from "./callTaxware";
+import { callTaxwareFromBases, type CallTaxwareFromBasesParams } from "./callTaxwareFromBases";
+
+export type DomicilePilotV2Bases = Pick<
+  CallTaxwareFromBasesParams,
+  "taxableIncomeFederal" | "taxableIncomeCanton" | "taxableAssets" | "basesSource"
+>;
 
 type DomicilePilotLocation = {
   zip: string;
@@ -314,6 +320,10 @@ export async function runDomicilePilotSimulation(params: {
   targetDossier: DossierClient;
   currentIncludeFortune?: boolean;
   targetIncludeFortune?: boolean;
+  useV2FromBases?: {
+    current?: DomicilePilotV2Bases;
+    target?: DomicilePilotV2Bases;
+  };
 }) {
   const current = buildDomicilePilotPayloadFromDossier(params.currentDossier, undefined, {
     includeFortune: params.currentIncludeFortune ?? true,
@@ -321,14 +331,37 @@ export async function runDomicilePilotSimulation(params: {
   const target = buildDomicilePilotPayloadFromDossier(params.targetDossier, undefined, {
     includeFortune: params.targetIncludeFortune ?? true,
   });
-  const currentResult = attachDomicilePilotFortuneReliability(
-    await callTaxware(current.params),
-    current.trace.fortuneWorkFallback
-  );
-  const targetResult = attachDomicilePilotFortuneReliability(
-    await callTaxware(target.params),
-    target.trace.fortuneWorkFallback
-  );
+
+  const v2Current = params.useV2FromBases?.current;
+  const v2Target = params.useV2FromBases?.target;
+
+  const currentResult = v2Current
+    ? await callTaxwareFromBases({
+        zip: current.params.zip,
+        city: current.params.city,
+        year: current.params.year ?? 2026,
+        partnership: current.params.partnership,
+        numChildren: current.params.childrenCount,
+        ...v2Current,
+      })
+    : attachDomicilePilotFortuneReliability(
+        await callTaxware(current.params),
+        current.trace.fortuneWorkFallback
+      );
+
+  const targetResult = v2Target
+    ? await callTaxwareFromBases({
+        zip: target.params.zip,
+        city: target.params.city,
+        year: target.params.year ?? 2026,
+        partnership: target.params.partnership,
+        numChildren: target.params.childrenCount,
+        ...v2Target,
+      })
+    : attachDomicilePilotFortuneReliability(
+        await callTaxware(target.params),
+        target.trace.fortuneWorkFallback
+      );
 
   return {
     currentPayload: current.payload,

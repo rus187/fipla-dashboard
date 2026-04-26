@@ -43,6 +43,10 @@ export async function callTaxware(params: CallTaxwareParams) {
   }
   const payload = buildTaxwarePayload(params);
 
+  if (isDebugLogsEnabled) {
+    console.log("[TAXWARE] PAYLOAD ENVOYÉ =", JSON.stringify(payload, null, 2));
+  }
+
   try {
     const response = await fetch("/api/taxware/simulate", {
       method: "POST",
@@ -65,9 +69,10 @@ export async function callTaxware(params: CallTaxwareParams) {
     const normalized = normalizeTaxwareResponse(data);
 
     if (isDebugLogsEnabled) {
-      console.log("DATA RECUE PAR callTaxware =", data);
-      console.log("DATA RECUE PAR callTaxware JSON =", JSON.stringify(data, null, 2));
-      console.log("NORMALIZED PRODUIT =", normalized);
+      console.log("[TAXWARE] RÉPONSE BRUTE =", JSON.stringify(data, null, 2));
+      console.log("[TAXWARE] NORMALISÉE =", normalized);
+      console.log("[TAXWARE] TaxableIncomeCantonal brut =", data?.TaxableIncomeCanton || data?.IncomeTaxResult?.TaxableIncomeCanton);
+      console.log("[TAXWARE] TaxableIncomeCantonal normalisé =", normalized?.taxableIncomeCantonal);
     }
 
     return {

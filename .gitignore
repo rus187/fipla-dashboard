@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+build/
 dist-ssr
 *.local
 .env
@@ -37,6 +38,7 @@ dist-ssr
 **/.served-*/
 **/.simulation-*.png
 **/simulation-*-proof.png
+.claude/
 .tmp-taxware-test/
 .billing-e2e-*.json
 .ui-*.png
@@ -45,6 +47,7 @@ dist-ssr
 .tmp-*
 .tmp-proof/
 .tmp-runtime-*/
+qa/tmp-*/
 qa/.tmp-*
 qa/proof-*.png
 
