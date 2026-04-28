@@ -63,6 +63,9 @@ export type ClientFortune = {
   immobilier: number;
   autresActifs: number;
   fortuneTotale: number;
+  // Valeur fiscale estimée des participations privées / entreprises non cotées,
+  // destinée à la fortune imposable cantonale.
+  valeurFiscaleEntrepriseParticipation?: number;
 };
 
 export type ClientDettes = {
@@ -91,6 +94,14 @@ export type ClientFiscalite = {
   revenuFortuneBE: number;
   troisiemePilierSimule: number;
   rachatLpp: number;
+  // Phase 8.1 — Champs optionnels 3a / rachat LPP par personne (couple).
+  // Si non renseignés : fallback vers troisiemePilierSimule / rachatLpp pour P1, 0 pour P2.
+  troisiemePilierPersonne1?: number;
+  troisiemePilierPersonne2?: number;
+  rachatLppPersonne1?: number;
+  rachatLppPersonne2?: number;
+  aLppActifPersonne1?: boolean;
+  aLppActifPersonne2?: boolean;
   ajustementManuelRevenu: number;
   correctionFiscaleManuelleIfd: number;
   correctionFiscaleManuelleCanton: number;

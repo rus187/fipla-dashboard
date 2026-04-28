@@ -5,7 +5,8 @@ import {
   emptyActiveClientDossier,
   type MobileActiveClientDossier,
 } from "./activeClientDossier";
-import MobileDomicileFlow, {
+import DomicilePremiumHub from "./DomicilePremiumHub";
+import {
   type MobileDomicilePayload,
   type MobileDomicileResult,
 } from "./MobileDomicileFlow";
@@ -140,7 +141,7 @@ export default function MobileApp({
               />
             ) : null}
             {module === "domicile" ? (
-              <MobileDomicileFlow
+              <DomicilePremiumHub
                 onBack={() => setModule("home")}
                 onResolveLocation={onResolveLocation}
                 onRun={onRunDomicile}

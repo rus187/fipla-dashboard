@@ -24,6 +24,7 @@ export type MobileDomicilePayload = {
   troisiemePilier: number;
   rachatLpp: number;
   fortuneImposable: number;
+  salaireNet: number;
 };
 
 export type MobileDomicileResult = {
@@ -84,6 +85,7 @@ function createInitialState(activeDossier: MobileActiveClientDossier): MobileDom
     troisiemePilier: activeDossier.troisiemePilier,
     rachatLpp: activeDossier.rachatLpp,
     fortuneImposable: activeDossier.fortuneImposable,
+    salaireNet: 0,
   };
 }
 
@@ -397,6 +399,21 @@ export default function MobileDomicileFlow({
       {stepIndex === 3 ? (
         <>
           <div className="mobile-form-grid">
+            <label className="mobile-field">
+              <span className="mobile-field__label">Salaire net (après AVS et LPP)</span>
+              <input
+                className="mobile-field__input"
+                type="number"
+                inputMode="numeric"
+                value={form.salaireNet}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    salaireNet: Number(event.target.value || 0),
+                  }))
+                }
+              />
+            </label>
             {[
               ["Revenu imposable IFD", "revenuImposableIfd"],
               ["Revenu imposable ICC", "revenuImposableIcc"],

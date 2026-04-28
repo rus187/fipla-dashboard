@@ -20,6 +20,7 @@ type DesktopCalculatorHubProps = {
   onOpen: (calculatorId: string) => void;
   onOpenResults: (calculatorId: string) => void;
   onOpenSection: (calculatorId: string, sectionId: string) => void;
+  onOpenPremium?: (calculatorId: string) => void;
 };
 
 function statusBadge(status: string): { icon: string; mod: string } {
@@ -35,6 +36,7 @@ export default function DesktopCalculatorHub({
   onOpen,
   onOpenResults,
   onOpenSection,
+  onOpenPremium,
 }: DesktopCalculatorHubProps) {
   const activeCalculator =
     calculators.find((calculator) => calculator.id === activeCalculatorId) ?? calculators[0] ?? null;
@@ -105,6 +107,16 @@ export default function DesktopCalculatorHub({
             >
               Voir les résultats
             </button>
+            {activeCalculator.id === "changement-domicile" && onOpenPremium ? (
+              <button
+                type="button"
+                className="desktop-primary-button"
+                style={{ background: "linear-gradient(135deg, #163046 0%, #28455f 100%)" }}
+                onClick={() => onOpenPremium(activeCalculator.id)}
+              >
+                Analyse domicile premium
+              </button>
+            ) : null}
           </div>
 
           <div className="desktop-calculator-focus__sections">

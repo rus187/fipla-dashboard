@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import {
   Bar,
@@ -22,6 +22,8 @@ import { generatePremiumPdf } from "./lib/pdf/generatePremiumPdf";
 import { buildTaxwarePayload } from "./lib/taxware/buildTaxwarePayload";
 import { isBernAssetIncomeEnabled } from "./lib/taxware/bernAssetIncome";
 import { callTaxware } from "./lib/taxware/callTaxware";
+import { normalizeTaxwareResponse } from "./lib/taxware/normalizeTaxwareResponse";
+
 import { runDomicilePilotSimulation } from "./lib/taxware/domicilePilot";
 import { getComparisonScenarios } from "./lib/multicriteriaComparison";
 import {
@@ -41,8 +43,10 @@ import StableNumberInput from "./components/StableNumberInput";
 import StripeCheckoutCard from "./components/StripeCheckoutCard";
 import DesktopActiveDossierCard from "./components/desktop/DesktopActiveDossierCard";
 import DesktopCalculatorHub from "./components/desktop/DesktopCalculatorHub";
+import DesktopPremiumDomicilePanel from "./components/desktop/DesktopPremiumDomicilePanel";
 import MobileApp from "./components/mobile/MobileApp";
 import type { MobileDomicilePayload, MobileDomicileResult } from "./components/mobile/MobileDomicileFlow";
+import type { PremiumDomicilePayload } from "./components/mobile/PremiumDomicileForm";
 import type {
   MobileEnfantTransitionPayload,
   MobileEnfantTransitionResult,
@@ -51,6 +55,15 @@ import type { MobileReformePayload, MobileReformeResult } from "./components/mob
 import type { MobileSimulationPayload, MobileSimulationResult } from "./components/mobile/MobileSimulationFlow";
 import { buildDynamicAdvisoryPreview } from "./lib/advisory/recommendationEngine";
 import ClaudeAdvisorPanel from "./components/ClaudeAdvisorPanel";
+import OptimizationsPanel from "./components/optimization/OptimizationsPanel";
+import {
+  calculateThreePillarOptimization,
+  simulateThreePillarProjection,
+} from "./lib/taxPlanning/threePillarOptimization";
+import { simulateLPPBuybackOptimization } from "./lib/taxPlanning/lppBuybackOptimization";
+import { applyCantonalRules } from "./lib/taxEngine/applyCantonalRules";
+import { calculateCompanyValuation } from "./lib/businessValuation/companyValuation";
+import type { SwissCanton } from "./lib/taxRules/cantonalRules";
 import { supabaseClient } from "./lib/supabase/client";
 import { ensureCurrentUserProfile } from "./lib/supabase/profiles";
 import type { Profile } from "./lib/supabase/types";
@@ -1097,6 +1110,7 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < 768 : false
   );
+  const [showDesktopPremiumDomicile, setShowDesktopPremiumDomicile] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState(INTRO_SECTION_ID);
   const [isRoiConseillerOpen, setIsRoiConseillerOpen] = useState(false);
   const [roiDossiersParMois, setRoiDossiersParMois] = useState(0);
@@ -1110,6 +1124,7 @@ export default function App() {
     setSimulationStatusMessage,
   } = useSimulation();
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isRecalculatingBase, setIsRecalculatingBase] = useState(false);
   const [hasStartedClientEdit, setHasStartedClientEdit] = useState(false);
   const [showClientStartModal, setShowClientStartModal] = useState(false);
   const [hasConfirmedClientStartModal, setHasConfirmedClientStartModal] = useState(false);
@@ -1121,6 +1136,40 @@ export default function App() {
   const { variants, setVariants, activeVariantIndex, setActiveVariantIndex, activeVariant } =
     useVariants();
   const [isDesktopWorkspaceHydrated, setIsDesktopWorkspaceHydrated] = useState(false);
+
+  // Phase 6.3 — Saisie valorisation entreprise indicative (état local, non injecté dans TaxWare)
+  const [companyValuationProfitYear1, setCompanyValuationProfitYear1] = useState(0);
+  const [companyValuationProfitYear2, setCompanyValuationProfitYear2] = useState(0);
+  const [companyValuationProfitYear3, setCompanyValuationProfitYear3] = useState(0);
+  const [companyValuationIntrinsicValue, setCompanyValuationIntrinsicValue] = useState(0);
+  const [companyValuationCapitalizationRate, setCompanyValuationCapitalizationRate] = useState(0.08);
+  const [companyValuationOwnershipPercentage, setCompanyValuationOwnershipPercentage] = useState(1);
+  // Phase 6.4 — confirmation locale d'injection (non transmis à TaxWare)
+  const [companyValuationInjectConfirmed, setCompanyValuationInjectConfirmed] = useState(false);
+
+  // Placé ici (avant tout return conditionnel) pour respecter la règle des hooks React.
+  const companyValuationResult = useMemo(
+    () =>
+      calculateCompanyValuation({
+        profits: [
+          companyValuationProfitYear1,
+          companyValuationProfitYear2,
+          companyValuationProfitYear3,
+        ],
+        intrinsicValue: companyValuationIntrinsicValue,
+        capitalizationRate: companyValuationCapitalizationRate,
+        ownershipPercentage: companyValuationOwnershipPercentage,
+      }),
+    [
+      companyValuationProfitYear1,
+      companyValuationProfitYear2,
+      companyValuationProfitYear3,
+      companyValuationIntrinsicValue,
+      companyValuationCapitalizationRate,
+      companyValuationOwnershipPercentage,
+    ]
+  );
+
   const isDomicilePilotEnabled = import.meta.env.VITE_ENABLE_DOMICILE_PILOT === "true";
   const normalizedPathname =
     typeof window !== "undefined" ? window.location.pathname.replace(/\/+$/, "") || "/" : "/";
@@ -1816,7 +1865,10 @@ export default function App() {
       ? taxResultAffiche.normalized.taxableAssets
       : fortuneImposableSimulee;
 
-  const revenuImposableIfdApresSimulationCalcule = revenuImposableIfdSimule;
+  const revenuImposableIfdApresSimulationCalcule =
+    typeof taxResultAffiche?.normalized?.taxableIncomeFederal === "number"
+      ? taxResultAffiche.normalized.taxableIncomeFederal
+      : revenuImposableIfdSimule;
 
   const revenuImposableTaxwareCanton =
     typeof taxResultAffiche?.normalized?.taxableIncomeCantonal === "number"
@@ -2183,8 +2235,9 @@ export default function App() {
     interetsHabitationDeductibles +
     interetsBiensRendementDeductibles;
 
-  const chargesDeductiblesTaxware =
-    chargesDeductiblesGeneriques + fraisHabitationDeductibles + fraisBiensRendementDeductibles;
+  // fraisHabitationDeductibles et fraisBiensRendementDeductibles vont dans
+  // RealEstates.EffectiveExpenses — ne pas les remettre aussi dans MiscExpenses.
+  const chargesDeductiblesTaxware = chargesDeductiblesGeneriques;
 
   const realEstatesTaxware = [
     ...(habitationPropreActive && !reformeValeurLocativeHabitationAppliquee
@@ -2675,6 +2728,37 @@ export default function App() {
             .join(", ")}.`
       : "Renseignez au moins le NPA et la commune fiscale avant de lancer la simulation fiscale.";
 
+  // Phase 8.1 — Lecture 3e pilier / rachat LPP par personne, avec fallback.
+  // P1 = nouveau champ ?? ancien champ ménage ?? 0
+  // P2 = nouveau champ ?? 0
+  // Protection : NaN, undefined, négatif → 0
+  const sanitizePositiveContribution = (value: unknown): number => {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return 0;
+    return value;
+  };
+  const thirdPillarP1 = sanitizePositiveContribution(
+    dossier.fiscalite.troisiemePilierPersonne1 ??
+      dossier.fiscalite.troisiemePilierSimule ??
+      0
+  );
+  const thirdPillarP2 = sanitizePositiveContribution(
+    dossier.fiscalite.troisiemePilierPersonne2 ?? 0
+  );
+  const lppBuybackP1 = sanitizePositiveContribution(
+    dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0
+  );
+  const lppBuybackP2 = sanitizePositiveContribution(
+    dossier.fiscalite.rachatLppPersonne2 ?? 0
+  );
+  const hasLobP1 =
+    dossier.fiscalite.aLppActifPersonne1 !== undefined
+      ? dossier.fiscalite.aLppActifPersonne1
+      : (dossier.revenus.salaire || 0) > 0 || lppBuybackP1 > 0;
+  const hasLobP2 =
+    dossier.fiscalite.aLppActifPersonne2 !== undefined
+      ? dossier.fiscalite.aLppActifPersonne2
+      : (dossier.revenus.salaireConjoint || 0) > 0 || lppBuybackP2 > 0;
+
   const taxwarePayloadControle = buildTaxwarePayload({
     realEstates: realEstatesTaxware,
     zip: zipForTaxwareControle,
@@ -2686,8 +2770,8 @@ export default function App() {
     pensionIncome: (dossier.revenus.avs || 0) + (dossier.revenus.lpp || 0),
     hasOasiPensions: (dossier.revenus.avs || 0) > 0,
     otherIncome: 0,
-    thirdPillar: dossier.fiscalite.troisiemePilierSimule || 0,
-    lppBuyback: dossier.fiscalite.rachatLpp || 0,
+    thirdPillar: thirdPillarP1,
+    lppBuyback: lppBuybackP1,
     assetIncome: getEffectiveTaxwareAssetIncome(dossier),
     miscIncome: 0,
     miscExpenses: chargesDeductiblesTaxware,
@@ -2698,13 +2782,97 @@ export default function App() {
       Math.max(0, Number(dossier.revenus.lppConjoint || 0)),
     spouseHasOasiPensions: Math.max(0, Number(dossier.revenus.avsConjoint || 0)) > 0,
     spouseOtherIncome: Math.max(0, Number(dossier.revenus.autresRevenusConjoint || 0)),
-    spouseThirdPillar: 0,
-    spouseLppBuyback: 0,
+    spouseThirdPillar: thirdPillarP2,
+    spouseLppBuyback: lppBuybackP2,
+    hasLobP1,
+    hasLobP2,
     assets: fortuneFiscaleCalcule || 0,
     debts: totalDettesCalcule || 0,
   });
 
   const taxwarePayloadJson = JSON.stringify(taxwarePayloadControle, null, 2);
+
+  const handleRecalculerBaseDepuisTaxware = async () => {
+    setIsRecalculatingBase(true);
+    try {
+      const response = await fetch("/api/taxware/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(taxwarePayloadControle),
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+      console.log("[RecalculerBase] Réponse brute TaxWare:", data);
+      const normalized = normalizeTaxwareResponse(data);
+      console.log("[RecalculerBase] taxableIncomeFederal =", normalized.taxableIncomeFederal);
+      console.log("[RecalculerBase] taxableIncomeCantonal =", normalized.taxableIncomeCantonal);
+      if (
+        typeof normalized.taxableIncomeFederal === "number" &&
+        typeof normalized.taxableIncomeCantonal === "number"
+      ) {
+        setDossier({
+          ...dossier,
+          fiscalite: {
+            ...dossier.fiscalite,
+            revenuImposableIfd: Math.round(normalized.taxableIncomeFederal),
+            revenuImposable: Math.round(normalized.taxableIncomeCantonal),
+            ...(typeof normalized.taxableAssets === "number"
+              ? { fortuneImposableActuelleSaisie: Math.round(normalized.taxableAssets) }
+              : {}),
+          },
+        });
+        console.log("[RecalculerBase] Dossier mis à jour — IFD:", Math.round(normalized.taxableIncomeFederal), "ICC:", Math.round(normalized.taxableIncomeCantonal), "Fortune:", normalized.taxableAssets);
+      } else {
+        console.warn("[RecalculerBase] Valeurs nulles — réponse inattendue:", normalized);
+      }
+    } catch (error) {
+      console.error("[RecalculerBase] Erreur fetch TaxWare:", error);
+    } finally {
+      setIsRecalculatingBase(false);
+    }
+  };
+
+  // Trace instrumentée : chemin complet du revenu vers TaxWare
+  // Actif uniquement si VITE_SHOW_TAXWARE_DEBUG=true pour ne pas polluer la console en production
+  if (import.meta.env.VITE_SHOW_TAXWARE_DEBUG === "true") {
+    console.group("[TAXWARE TRACE] Chemin revenu → payload contrôle");
+    console.log("── SAISIE BRUTE ──────────────────────────────────────────");
+    console.log("  dossier.revenus.salaire     =", dossier.revenus.salaire);
+    console.log("  dossier.revenus.avs         =", dossier.revenus.avs);
+    console.log("  dossier.revenus.lpp         =", dossier.revenus.lpp);
+    console.log("  dossier.revenus.autresRevenus =", dossier.revenus.autresRevenus);
+    console.log("  dossier.revenus.totalRevenus (champ stocké) =", dossier.revenus.totalRevenus);
+    console.log("  totalRevenusCalcule (calculé UI) =", totalRevenusCalcule);
+    console.log("── SANITATION ────────────────────────────────────────────");
+    console.log("  netWages après || 0         =", dossier.revenus.salaire || 0);
+    console.log("  thirdPillarP1 (déduit du revenu imposable, PAS de NetWages) =", thirdPillarP1);
+    console.log("  lppBuybackP1  (déduit du revenu imposable, PAS de NetWages) =", lppBuybackP1);
+    console.log("── PAYLOAD CONTRÔLE ─────────────────────────────────────");
+    console.log("  PersonLeading.NetWages      =", taxwarePayloadControle.PersonLeading?.NetWages);
+    console.log("  PersonLeading.PensionIncome =", taxwarePayloadControle.PersonLeading?.PensionIncome);
+    console.log("  PersonLeading.OtherIncome   =", (taxwarePayloadControle.PersonLeading as Record<string, unknown>)?.OtherIncome);
+    console.log("  PersonLeading.ThirdPillarContribution =", taxwarePayloadControle.PersonLeading?.ThirdPillarContribution);
+    console.log("  PersonLeading.LobContributions =", taxwarePayloadControle.PersonLeading?.LobContributions);
+    const p2 = (taxwarePayloadControle as Record<string, any>).PersonSecond;
+    if (p2) {
+      console.log("  PersonSecond.NetWages       =", p2.NetWages);
+      console.log("  PersonSecond.PensionIncome  =", p2.PensionIncome);
+      console.log("  Total foyer (P1+P2 NetWages+Pension) =",
+        (taxwarePayloadControle.PersonLeading?.NetWages || 0) +
+        (taxwarePayloadControle.PersonLeading?.PensionIncome || 0) +
+        (p2.NetWages || 0) +
+        (p2.PensionIncome || 0)
+      );
+    } else {
+      console.log("  PersonSecond : absent (célibataire)");
+    }
+    console.log("  AssetIncome (root)          =", taxwarePayloadControle.AssetIncome);
+    console.log("  Payload JSON complet PersonLeading:", JSON.stringify(taxwarePayloadControle.PersonLeading, null, 2));
+    console.log("── NOTE : pour voir le payload réellement envoyé ─────────");
+    console.log("  Chercher [TAXWARE] PAYLOAD ENVOYÉ = dans la console (DEV mode)");
+    console.groupEnd();
+  }
+
   const vaudPayloadChildrenCountSent = getFirstDefinedValueByPaths(
     taxwarePayloadControle as Record<string, any>,
     ["NumChildren", "ChildrenCount"]
@@ -4407,6 +4575,163 @@ export default function App() {
       throw new Error("Vous avez utilisé vos 2 simulations gratuites.");
     }
 
+    // ── V2 TEST BRANCH — NE (2000) ↔ GE (1200) ──────────────────────────
+    // Temporaire : injecte les bases Office validées via la route V2.
+    // Actif pour les deux sens : GE→NE et NE→GE.
+    // Référence TaxWare validée : NE 44'026 CHF | GE 25'763 CHF.
+    {
+      const currentZip = payload.currentZip.trim();
+      const newZip = payload.newZip.trim();
+      const isNeGeTest =
+        (currentZip === "2000" && newZip === "1200") ||
+        (currentZip === "1200" && newZip === "2000");
+
+      if (isNeGeTest) {
+        console.log("[DOMICILE][V2_FROM_BASES][ACTIVE]");
+
+        const mapPartnership = (etatCivil: string): "Single" | "Marriage" =>
+          /mari[eé]/i.test(etatCivil) ? "Marriage" : "Single";
+
+        const partnership = mapPartnership(payload.etatCivil);
+        const numChildren = payload.enfants ?? 0;
+
+        // Direction de la comparaison
+        const isCurrentNe = currentZip === "2000";
+
+        // Appels parallèles — TaxWare calcule les bases canton-spécifiques
+        // à partir du salaire net (après AVS et LPP).
+        // Chaque canton applique ses propres déductions professionnelles.
+        const salaireNet = Math.max(0, Math.round(payload.salaireNet));
+        const fortune = Math.max(0, Math.round(payload.fortuneImposable));
+
+        const commonV1Params = {
+          partnership,
+          childrenCount: numChildren,
+          netWages: salaireNet,
+          thirdPillar: Math.max(0, Math.round(payload.troisiemePilier)),
+          lppBuyback: Math.max(0, Math.round(payload.rachatLpp)),
+          assets: fortune,
+          debts: 0,
+        };
+
+        const [neV2, geV2] = await Promise.all([
+          callTaxware({ ...commonV1Params, zip: "2000", city: "Neuchâtel" }),
+          callTaxware({ ...commonV1Params, zip: "1200", city: "Genève" }),
+        ]);
+
+        // Assigner current/next selon le sens de la comparaison
+        const currentV2 = isCurrentNe ? neV2 : geV2;
+        const nextV2 = isCurrentNe ? geV2 : neV2;
+        const currentName = isCurrentNe ? "Neuchâtel (NE)" : "Genève (GE)";
+        const nextName = isCurrentNe ? "Genève (GE)" : "Neuchâtel (NE)";
+
+        const cN = currentV2.normalized;
+        const nN = nextV2.normalized;
+
+        const buildV2Metrics = (n: typeof cN) => {
+          const rows: Array<{ label: string; value: string }> = [
+            { label: "Impôt total", value: formatMontantCHF(n.totalTax ?? 0) },
+            { label: "Impôt fédéral direct", value: formatMontantCHF(n.federalTax ?? 0) },
+            { label: "Impôt cantonal / communal", value: formatMontantCHF(n.cantonalCommunalTax ?? 0) },
+          ];
+          if ((n.wealthTax ?? 0) > 0) {
+            rows.push({ label: "Impôt fortune", value: formatMontantCHF(n.wealthTax ?? 0) });
+          }
+          if (typeof n.marginalTaxRate === "number") {
+            rows.push({ label: "Taux marginal d'imposition", value: `${n.marginalTaxRate.toFixed(1)} %` });
+          }
+          return rows;
+        };
+
+        const makeV2Wrapper = (n: typeof cN) => ({
+          normalized: { totalTax: n.totalTax, marginalTaxRate: n.marginalTaxRate },
+        });
+
+        const annualDelta = (cN.totalTax ?? 0) - (nN.totalTax ?? 0);
+        const monthlyDelta = annualDelta / 12;
+        const verdict = getMobileVerdict(annualDelta);
+
+        const fmtSigned = (v: number) => {
+          const prefix = v >= 0 ? "+" : "";
+          return `${prefix}${formatMontantCHF(v)}`;
+        };
+
+        let synthesis: string;
+        if (annualDelta > 0) {
+          synthesis = `En vous domiciliant à ${nextName}, vous économisez ${formatMontantCHF(annualDelta)} par an. Bases Office validées — flux V2.`;
+        } else if (annualDelta < 0) {
+          synthesis = `Le déménagement vers ${nextName} représente un surcoût de ${formatMontantCHF(Math.abs(annualDelta))} par an. Bases Office validées — flux V2.`;
+        } else {
+          synthesis = `La charge fiscale est identique entre ${currentName} et ${nextName}. Bases Office validées — flux V2.`;
+        }
+
+        await registerSuccessfulSimulationUsage();
+
+        return {
+          current: {
+            label: "Domicile actuel",
+            value: currentName,
+            helper: "Bases Office validées — flux V2.",
+            metrics: buildV2Metrics(cN),
+            verdict: getDomicileCardVerdict(makeV2Wrapper(cN), makeV2Wrapper(nN)),
+          },
+          next: {
+            label: "Nouveau domicile",
+            value: nextName,
+            helper: "Bases Office validées — flux V2.",
+            metrics: buildV2Metrics(nN),
+            verdict: getDomicileCardVerdict(makeV2Wrapper(nN), makeV2Wrapper(cN)),
+          },
+          difference: {
+            label: "Différence",
+            value: fmtSigned(annualDelta),
+            helper: "Écart annuel calculé sur bases Office validées (V2).",
+            verdict,
+            metrics: [
+              { label: "Économie ou surcoût annuel", value: fmtSigned(annualDelta) },
+              { label: "Économie ou surcoût mensuel", value: fmtSigned(monthlyDelta) },
+              { label: "Verdict synthétique", value: verdict },
+            ],
+          },
+          detailSections: [
+            {
+              title: "Données économiques transmises",
+              rows: [
+                { label: "Salaire net (AVS/LPP déduits)", value: formatMontantCHFArrondi(salaireNet) },
+                { label: "Fortune brute", value: formatMontantCHFArrondi(fortune) },
+                { label: "3e pilier", value: formatMontantCHFArrondi(payload.troisiemePilier) },
+              ],
+            },
+            {
+              title: `Bases calculées par TaxWare — ${currentName}`,
+              rows: [
+                { label: "Revenu IFD", value: formatMontantCHFArrondi(cN.taxableIncomeFederal ?? 0) },
+                { label: "Revenu ICC / canton", value: formatMontantCHFArrondi(cN.taxableIncomeCantonal ?? 0) },
+                { label: "Fortune imposable", value: formatMontantCHFArrondi(cN.taxableAssets ?? 0) },
+              ],
+            },
+            {
+              title: `Bases calculées par TaxWare — ${nextName}`,
+              rows: [
+                { label: "Revenu IFD", value: formatMontantCHFArrondi(nN.taxableIncomeFederal ?? 0) },
+                { label: "Revenu ICC / canton", value: formatMontantCHFArrondi(nN.taxableIncomeCantonal ?? 0) },
+                { label: "Fortune imposable", value: formatMontantCHFArrondi(nN.taxableAssets ?? 0) },
+              ],
+            },
+            {
+              title: "Synthèse — Flux V2",
+              rows: [
+                { label: "Source", value: "office-aligned — V2 from-bases" },
+                { label: "Verdict", value: verdict },
+              ],
+            },
+          ],
+          synthesis,
+        };
+      }
+    }
+    // ── END V2 TEST BRANCH ───────────────────────────────────────────────
+
     const commonParams = {
       prenom: payload.prenom,
       nom: payload.nom,
@@ -4575,6 +4900,166 @@ export default function App() {
       synthesis,
     };
   };
+
+  // ── PREMIUM DOMICILE — branche enrichie indépendante ──────────────────────
+  // Utilise les données économiques brutes (salaires, immeuble, fortune) pour
+  // que TaxWare calcule les bases imposables canton-spécifiques.
+  // Ne touche pas à runMobileDomicile ni à MobileDomicileFlow.
+  const runPremiumDomicile = async (
+    payload: PremiumDomicilePayload
+  ): Promise<MobileDomicileResult> => {
+    if (!canStartSimulationAttempt()) {
+      throw new Error("Vous avez utilisé vos 2 simulations gratuites.");
+    }
+
+    const mapPartnership = (etatCivil: string): "Single" | "Marriage" =>
+      /mari[eé]/i.test(etatCivil) ? "Marriage" : "Single";
+
+    const partnership = mapPartnership(payload.etatCivil);
+    const isMarried = partnership === "Marriage";
+
+    const commonParams = {
+      partnership,
+      childrenCount: payload.enfants,
+      netWages: Math.max(0, Math.round(payload.salaireNetContribuable)),
+      spouseNetWages: isMarried ? Math.max(0, Math.round(payload.salaireNetConjoint)) : undefined,
+      thirdPillar: Math.max(0, Math.round(payload.troisiemePilier)),
+      lppBuyback: Math.max(0, Math.round(payload.rachatLpp)),
+      assets: Math.max(0, Math.round(payload.fortuneMobiliere)),
+      debts: Math.max(0, Math.round(payload.dettes)),
+      debtInterests: payload.interetsHypothecaires > 0
+        ? Math.max(0, Math.round(payload.interetsHypothecaires))
+        : undefined,
+      realEstates:
+        payload.estProprietaire && payload.valeurFiscaleImmeuble > 0
+          ? [
+              {
+                taxableValue: Math.max(0, Math.round(payload.valeurFiscaleImmeuble)),
+                rentalIncome: Math.max(0, Math.round(payload.valeurLocative)),
+                effectiveExpenses: Math.max(0, Math.round(payload.fraisEntretienImmeuble)),
+              },
+            ]
+          : undefined,
+    };
+
+    const [currentResult, nextResult] = await Promise.all([
+      callTaxware({ ...commonParams, zip: payload.currentZip, city: payload.currentLocality }),
+      callTaxware({ ...commonParams, zip: payload.newZip, city: payload.newLocality }),
+    ]);
+
+    const cN = currentResult.normalized;
+    const nN = nextResult.normalized;
+
+    const annualDelta = (cN.totalTax ?? 0) - (nN.totalTax ?? 0);
+    const monthlyDelta = annualDelta / 12;
+    const verdict = getMobileVerdict(annualDelta);
+
+    const fmtSigned = (v: number) => {
+      const prefix = v >= 0 ? "+" : "";
+      return `${prefix}${formatMontantCHFArrondi(v)}`;
+    };
+
+    const buildMetrics = (n: typeof cN) => {
+      const rows: Array<{ label: string; value: string }> = [
+        { label: "Impôt total", value: formatMontantCHFArrondi(n.totalTax ?? 0) },
+        { label: "Impôt fédéral direct", value: formatMontantCHFArrondi(n.federalTax ?? 0) },
+        { label: "Impôt cantonal / communal", value: formatMontantCHFArrondi(n.cantonalCommunalTax ?? 0) },
+      ];
+      if ((n.wealthTax ?? 0) > 0) {
+        rows.push({ label: "Impôt fortune", value: formatMontantCHFArrondi(n.wealthTax ?? 0) });
+      }
+      if (typeof n.marginalTaxRate === "number") {
+        rows.push({ label: "Taux marginal", value: `${n.marginalTaxRate.toFixed(1)} %` });
+      }
+      return rows;
+    };
+
+    const makeWrapper = (n: typeof cN) => ({
+      normalized: { totalTax: n.totalTax, marginalTaxRate: n.marginalTaxRate },
+    });
+
+    const currentName = `${payload.currentLocality} (${payload.currentZip})`;
+    const nextName = `${payload.newLocality} (${payload.newZip})`;
+
+    let synthesis: string;
+    if (annualDelta > 0) {
+      synthesis = `En vous domiciliant à ${nextName}, vous économisez ${formatMontantCHFArrondi(annualDelta)} par an.`;
+    } else if (annualDelta < 0) {
+      synthesis = `Le déménagement vers ${nextName} représente un surcoût de ${formatMontantCHFArrondi(Math.abs(annualDelta))} par an.`;
+    } else {
+      synthesis = `La charge fiscale est identique entre ${currentName} et ${nextName}.`;
+    }
+
+    await registerSuccessfulSimulationUsage();
+
+    return {
+      current: {
+        label: "Domicile actuel",
+        value: currentName,
+        helper: "TaxWare — bases calculées depuis données économiques réelles.",
+        metrics: buildMetrics(cN),
+        verdict: getDomicileCardVerdict(makeWrapper(cN), makeWrapper(nN)),
+      },
+      next: {
+        label: "Nouveau domicile",
+        value: nextName,
+        helper: "TaxWare — bases calculées depuis données économiques réelles.",
+        metrics: buildMetrics(nN),
+        verdict: getDomicileCardVerdict(makeWrapper(nN), makeWrapper(cN)),
+      },
+      difference: {
+        label: "Différence",
+        value: fmtSigned(annualDelta),
+        helper: "Écart annuel — bases TaxWare canton-spécifiques.",
+        verdict,
+        metrics: [
+          { label: "Économie ou surcoût annuel", value: fmtSigned(annualDelta) },
+          { label: "Économie ou surcoût mensuel", value: fmtSigned(monthlyDelta) },
+          { label: "Verdict", value: verdict },
+        ],
+      },
+      detailSections: [
+        {
+          title: "Données économiques transmises",
+          rows: [
+            { label: "Salaire net contribuable", value: formatMontantCHFArrondi(payload.salaireNetContribuable) },
+            ...(isMarried
+              ? [{ label: "Salaire net conjoint", value: formatMontantCHFArrondi(payload.salaireNetConjoint) }]
+              : []),
+            { label: "3e pilier", value: formatMontantCHFArrondi(payload.troisiemePilier) },
+            { label: "Rachat LPP", value: formatMontantCHFArrondi(payload.rachatLpp) },
+            { label: "Fortune mobilière (brut)", value: formatMontantCHFArrondi(payload.fortuneMobiliere) },
+            ...(payload.estProprietaire
+              ? [
+                  { label: "Valeur fiscale immeuble", value: formatMontantCHFArrondi(payload.valeurFiscaleImmeuble) },
+                  { label: "Valeur locative", value: formatMontantCHFArrondi(payload.valeurLocative) },
+                  { label: "Frais d'entretien", value: formatMontantCHFArrondi(payload.fraisEntretienImmeuble) },
+                  { label: "Intérêts hypothécaires", value: formatMontantCHFArrondi(payload.interetsHypothecaires) },
+                ]
+              : []),
+          ],
+        },
+        {
+          title: `Bases calculées par TaxWare — ${currentName}`,
+          rows: [
+            { label: "Revenu IFD", value: formatMontantCHFArrondi(cN.taxableIncomeFederal ?? 0) },
+            { label: "Revenu ICC / canton", value: formatMontantCHFArrondi(cN.taxableIncomeCantonal ?? 0) },
+            { label: "Fortune imposable", value: formatMontantCHFArrondi(cN.taxableAssets ?? 0) },
+          ],
+        },
+        {
+          title: `Bases calculées par TaxWare — ${nextName}`,
+          rows: [
+            { label: "Revenu IFD", value: formatMontantCHFArrondi(nN.taxableIncomeFederal ?? 0) },
+            { label: "Revenu ICC / canton", value: formatMontantCHFArrondi(nN.taxableIncomeCantonal ?? 0) },
+            { label: "Fortune imposable", value: formatMontantCHFArrondi(nN.taxableAssets ?? 0) },
+          ],
+        },
+      ],
+      synthesis,
+    };
+  };
+  // ── FIN PREMIUM DOMICILE ─────────────────────────────────────────────────
 
   // LOCKED ROMAND CANTONS - CHILD DEDUCTION / FIN DE DEDUCTION ENFANT
   // Protected mobile flow for GE, VD, FR, NE, JU, VS.
@@ -5861,10 +6346,22 @@ export default function App() {
     },
     currentSituation: {
       revenus: [
-        { label: "Salaire", value: formatMontantCHF(referenceDossier.revenus.salaire) },
-        { label: "AVS", value: formatMontantCHF(referenceDossier.revenus.avs) },
-        { label: "LPP", value: formatMontantCHF(referenceDossier.revenus.lpp) },
-        { label: "Autres revenus", value: formatMontantCHF(referenceDossier.revenus.autresRevenus) },
+        { label: referenceDossier.famille.aConjoint ? "Salaire P1" : "Salaire", value: formatMontantCHF(referenceDossier.revenus.salaire) },
+        ...(referenceDossier.famille.aConjoint
+          ? [{ label: "Salaire P2", value: formatMontantCHF(referenceDossier.revenus.salaireConjoint) }]
+          : []),
+        { label: referenceDossier.famille.aConjoint ? "AVS P1" : "AVS", value: formatMontantCHF(referenceDossier.revenus.avs) },
+        ...(referenceDossier.famille.aConjoint
+          ? [{ label: "AVS P2", value: formatMontantCHF(referenceDossier.revenus.avsConjoint) }]
+          : []),
+        { label: referenceDossier.famille.aConjoint ? "LPP P1" : "LPP", value: formatMontantCHF(referenceDossier.revenus.lpp) },
+        ...(referenceDossier.famille.aConjoint
+          ? [{ label: "LPP P2", value: formatMontantCHF(referenceDossier.revenus.lppConjoint) }]
+          : []),
+        { label: referenceDossier.famille.aConjoint ? "Autres revenus P1" : "Autres revenus", value: formatMontantCHF(referenceDossier.revenus.autresRevenus) },
+        ...(referenceDossier.famille.aConjoint
+          ? [{ label: "Autres revenus P2", value: formatMontantCHF(referenceDossier.revenus.autresRevenusConjoint) }]
+          : []),
         { label: "Total revenus", value: formatMontantCHF(referenceTotalRevenusCalcule) },
       ],
       fortune: [
@@ -7253,6 +7750,96 @@ export default function App() {
     );
   }
 
+  // Passer à true pour afficher les blocs debug / techniques en développement.
+  const SHOW_TECHNICAL_DEBUG_BLOCKS = false;
+
+  // Valeur temporaire UI, à remplacer par le référentiel légal/plafond dynamique.
+  const TEMP_IFD_3A_MAX_WITH_LPP_PER_PERSON = 7258;
+  // Estimation temporaire UI. La version suivante pourra utiliser un taux marginal calculé via TaxWare.
+  const TEMP_MARGINAL_TAX_RATE = 0.30;
+
+  // À raccorder aux champs 3a définitifs du dossier si nécessaire.
+  const threePillarCurrentLeading = dossier.fiscalite.troisiemePilierSimule || 0;
+
+  const threePillarData = calculateThreePillarOptimization({
+    personLeading: {
+      label: "Personne principale",
+      currentContribution: threePillarCurrentLeading,
+      maxContribution: TEMP_IFD_3A_MAX_WITH_LPP_PER_PERSON,
+    },
+    ...(dossier.famille.aConjoint
+      ? {
+          personSecond: {
+            label: "Conjoint",
+            // Conjoint à raccorder explicitement lors de l'étape suivante si nécessaire.
+            currentContribution: 0,
+            maxContribution: TEMP_IFD_3A_MAX_WITH_LPP_PER_PERSON,
+          },
+        }
+      : {}),
+    marginalTaxRate: TEMP_MARGINAL_TAX_RATE,
+  });
+
+  // Hypothèse temporaire UI, à rendre paramétrable.
+  const TEMP_3A_PROJECTION_YEARS = 10;
+  const TEMP_3A_ANNUAL_RETURN_RATE = 0.02;
+  // L'impôt de sortie est estimé ici. Une version future pourra utiliser l'endpoint TaxWare prestations en capital.
+  const TEMP_3A_EXIT_TAX_RATE = 0.08;
+
+  const threePillarProjectionData =
+    threePillarData.totalRemainingContribution > 0
+      ? simulateThreePillarProjection({
+          annualContribution: threePillarData.totalRemainingContribution,
+          years: TEMP_3A_PROJECTION_YEARS,
+          annualReturnRate: TEMP_3A_ANNUAL_RETURN_RATE,
+          marginalTaxRate: TEMP_MARGINAL_TAX_RATE,
+          exitTaxRate: TEMP_3A_EXIT_TAX_RATE,
+        })
+      : undefined;
+
+  // À raccorder aux champs définitifs rachat LPP / fortune liquide si nécessaire.
+  const lppBuybackData = simulateLPPBuybackOptimization({
+    buybackAmount: dossier.fiscalite.rachatLpp || 0,
+    marginalTaxRate: TEMP_MARGINAL_TAX_RATE,
+    availableLiquidWealth: dossier.fortune.liquidites || undefined,
+  });
+
+  // À raccorder aux champs cantonaux définitifs.
+  const cantonalCode = taxResult?.normalized?.canton as SwissCanton | undefined;
+  const cantonalIncomeTaxware =
+    typeof taxResult?.normalized?.taxableIncomeCantonal === "number"
+      ? taxResult.normalized.taxableIncomeCantonal
+      : undefined;
+  const cantonalWealthTaxware =
+    typeof taxResult?.normalized?.taxableAssets === "number"
+      ? taxResult.normalized.taxableAssets
+      : undefined;
+
+  // Valeur fiscale estimée des participations privées / entreprises non cotées.
+  // Source : dossier.fortune.valeurFiscaleEntrepriseParticipation (Phase 5.6).
+  // Non injectée dans TaxWare dans cette phase.
+  const rawCompanyValue = dossier.fortune?.valeurFiscaleEntrepriseParticipation;
+  const cantonalPrivateCompanyTaxValue =
+    typeof rawCompanyValue === "number" && isFinite(rawCompanyValue) && rawCompanyValue > 0
+      ? rawCompanyValue
+      : 0;
+
+  const cantonalSummaryData =
+    cantonalCode &&
+    (cantonalIncomeTaxware !== undefined || cantonalWealthTaxware !== undefined)
+      ? applyCantonalRules({
+          canton: cantonalCode,
+          taxableIncomeCanton: cantonalIncomeTaxware ?? 0,
+          taxableWealthCanton: cantonalWealthTaxware,
+          userAdjustments: {
+            privateCompanyTaxValue:
+              cantonalPrivateCompanyTaxValue > 0
+                ? cantonalPrivateCompanyTaxValue
+                : undefined,
+          },
+        })
+      : undefined;
+
   if (isMobile) {
     return (
       <>
@@ -7370,10 +7957,38 @@ export default function App() {
                 onOpenSection={(calculatorId, sectionId) =>
                   handleDesktopCalculatorOpen(calculatorId as DesktopCalculatorId, sectionId)
                 }
+                onOpenPremium={() => {
+                  setShowDesktopPremiumDomicile(true);
+                  setActiveDesktopCalculator("changement-domicile");
+                }}
               />
             </div>
           </div>
         </section>
+
+        {showDesktopPremiumDomicile ? (
+          <DesktopPremiumDomicilePanel
+            initialDossier={{
+              prenom: activeClientDossier.identite.prenom || "",
+              nom: activeClientDossier.identite.nom || "",
+              zip: activeClientDossier.identite.npa || "",
+              locality:
+                activeClientDossier.identite.communeFiscale ||
+                activeClientDossier.identite.commune ||
+                "",
+              etatCivil: activeClientDossier.identite.etatCivil || "",
+              enfants: activeClientDossier.famille.nombreEnfants || 0,
+              revenuImposableIfd: activeClientDossier.fiscalite.revenuImposableIfd || 0,
+              revenuImposableIcc: activeClientDossier.fiscalite.revenuImposable || 0,
+              fortuneImposable:
+                activeClientDossier.fiscalite.fortuneImposableActuelleSaisie || 0,
+              troisiemePilier: 0,
+              rachatLpp: 0,
+            }}
+            onRun={runPremiumDomicile}
+            onClose={() => setShowDesktopPremiumDomicile(false)}
+          />
+        ) : null}
 
         <details className="desktop-advanced-panel">
           <summary className="desktop-advanced-panel__summary">
@@ -9134,6 +9749,251 @@ export default function App() {
             </div>
 
             <div style={fortuneFieldCardStyle}>
+              <label style={labelStyle}>Participation / entreprise privée</label>
+              <StableNumberInput
+                value={dossier.fortune.valeurFiscaleEntrepriseParticipation ?? 0}
+                onValueChange={(value) =>
+                  setDossier({
+                    ...dossier,
+                    fortune: {
+                      ...dossier.fortune,
+                      valeurFiscaleEntrepriseParticipation: value,
+                    },
+                  })
+                }
+                normalizeValue={(value) => Math.max(0, value)}
+                commitMode="change"
+                debugName="fortune.valeurFiscaleEntrepriseParticipation"
+                style={inputStyle}
+              />
+              <span style={helperStyle}>
+                Valeur fiscale estimée (fortune cantonale indicative, non injectée dans TaxWare)
+              </span>
+            </div>
+
+            {/* Phase 6.3 — Simulateur valorisation entreprise indicative */}
+            <div
+              style={{
+                gridColumn: "1 / -1",
+                border: "1px solid #e2e8f0",
+                borderLeft: "4px solid #6b7280",
+                borderRadius: "8px",
+                padding: "16px 20px",
+                background: "#f9fafb",
+                marginTop: "4px",
+              }}
+            >
+              <p
+                style={{
+                  margin: "0 0 12px 0",
+                  fontSize: "0.775rem",
+                  fontWeight: 700,
+                  color: "#6b7280",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Simulateur valorisation entreprise / participation
+              </p>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: "12px",
+                  marginBottom: "14px",
+                }}
+              >
+                {[
+                  { label: "Bénéfice an 1 (CHF)", value: companyValuationProfitYear1, setter: setCompanyValuationProfitYear1 },
+                  { label: "Bénéfice an 2 (CHF)", value: companyValuationProfitYear2, setter: setCompanyValuationProfitYear2 },
+                  { label: "Bénéfice an 3 (CHF)", value: companyValuationProfitYear3, setter: setCompanyValuationProfitYear3 },
+                  { label: "Valeur intrinsèque / FP (CHF)", value: companyValuationIntrinsicValue, setter: setCompanyValuationIntrinsicValue },
+                ].map(({ label, value, setter }) => (
+                  <div key={label}>
+                    <label style={{ ...labelStyle, fontSize: "0.8rem" }}>{label}</label>
+                    <StableNumberInput
+                      value={value}
+                      onValueChange={(v) => setter(Math.max(0, v))}
+                      normalizeValue={(v) => Math.max(0, v)}
+                      commitMode="change"
+                      debugName={`companyValuation_${label}`}
+                      style={{ ...inputStyle, fontSize: "0.875rem" }}
+                    />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ ...labelStyle, fontSize: "0.8rem" }}>Taux capitalisation (%)</label>
+                  <StableNumberInput
+                    value={Math.round(companyValuationCapitalizationRate * 100)}
+                    onValueChange={(v) =>
+                      setCompanyValuationCapitalizationRate(
+                        Math.min(100, Math.max(1, v)) / 100
+                      )
+                    }
+                    normalizeValue={(v) => Math.min(100, Math.max(1, v))}
+                    commitMode="change"
+                    debugName="companyValuation_capitalizationRate"
+                    style={{ ...inputStyle, fontSize: "0.875rem" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: "0.8rem" }}>Part détenue (%)</label>
+                  <StableNumberInput
+                    value={Math.round(companyValuationOwnershipPercentage * 100)}
+                    onValueChange={(v) =>
+                      setCompanyValuationOwnershipPercentage(
+                        Math.min(100, Math.max(0, v)) / 100
+                      )
+                    }
+                    normalizeValue={(v) => Math.min(100, Math.max(0, v))}
+                    commitMode="change"
+                    debugName="companyValuation_ownershipPercentage"
+                    style={{ ...inputStyle, fontSize: "0.875rem" }}
+                  />
+                </div>
+              </div>
+
+              {/* Résultats */}
+              <div
+                style={{
+                  borderTop: "1px solid #e2e8f0",
+                  paddingTop: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "5px",
+                }}
+              >
+                {[
+                  { label: "Bénéfice moyen", value: companyValuationResult.averageProfit },
+                  { label: "Valeur de rendement", value: companyValuationResult.earningsValue },
+                  { label: "Valeur intrinsèque retenue", value: companyValuationResult.intrinsicValue },
+                  { label: "Valeur fiscale entreprise", value: companyValuationResult.fullCompanyValue },
+                  { label: `Part détenue (${Math.round(companyValuationResult.ownershipPercentage * 100)} %)`, value: companyValuationResult.ownedCompanyValue },
+                ].map(({ label, value }) => (
+                  <div
+                    key={label}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                  >
+                    <span style={{ fontSize: "0.825rem", color: "#6b7280" }}>{label}</span>
+                    <span
+                      style={{
+                        fontSize: "0.825rem",
+                        fontWeight: label.startsWith("Part") ? 700 : 600,
+                        color: label.startsWith("Part") ? "#1e293b" : "#374151",
+                      }}
+                    >
+                      {new Intl.NumberFormat("fr-CH", { maximumFractionDigits: 0 }).format(
+                        Math.round(value)
+                      )}{" "}
+                      CHF
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Warnings */}
+              {companyValuationResult.warnings
+                .filter((w) => w.code !== "indicative_valuation")
+                .map((w) => (
+                  <p
+                    key={w.code}
+                    style={{
+                      margin: "8px 0 0 0",
+                      fontSize: "0.775rem",
+                      color: "#b45309",
+                      fontWeight: 500,
+                    }}
+                  >
+                    ⚠ {w.message}
+                  </p>
+                ))}
+
+              <p
+                style={{
+                  margin: "10px 0 8px 0",
+                  fontSize: "0.72rem",
+                  fontStyle: "italic",
+                  color: "#9ca3af",
+                }}
+              >
+                Valorisation indicative. À valider selon la pratique fiscale cantonale et les données comptables.
+              </p>
+
+              {(() => {
+                const safeOwnedCompanyValue = (() => {
+                  const v = companyValuationResult?.ownedCompanyValue;
+                  if (typeof v !== "number" || !isFinite(v) || v <= 0) return 0;
+                  return Math.round(v);
+                })();
+                const isActive = safeOwnedCompanyValue > 0;
+
+                return (
+                  <>
+                    <button
+                      type="button"
+                      disabled={!isActive}
+                      title={
+                        isActive
+                          ? "Reprendre la valeur détenue calculée dans la fortune cantonale indicative."
+                          : "Saisissez des données de valorisation pour activer l'utilisation dans la fortune."
+                      }
+                      onClick={() => {
+                        // Injection locale uniquement : non transmise à TaxWare dans cette phase.
+                        setDossier({
+                          ...dossier,
+                          fortune: {
+                            ...dossier.fortune,
+                            valeurFiscaleEntrepriseParticipation: safeOwnedCompanyValue,
+                          },
+                        });
+                        setCompanyValuationInjectConfirmed(true);
+                      }}
+                      style={{
+                        padding: "6px 14px",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        color: isActive ? "#ffffff" : "#9ca3af",
+                        background: isActive ? "#1d4ed8" : "#f1f5f9",
+                        border: isActive ? "1px solid #1d4ed8" : "1px solid #e2e8f0",
+                        borderRadius: "6px",
+                        cursor: isActive ? "pointer" : "not-allowed",
+                        opacity: isActive ? 1 : 0.6,
+                      }}
+                    >
+                      Utiliser cette valeur dans la fortune
+                    </button>
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: "4px",
+                        fontSize: "0.72rem",
+                        color: isActive ? "#6b7280" : "#9ca3af",
+                      }}
+                    >
+                      {isActive
+                        ? "La valeur calculée sera reprise dans Participation / entreprise privée."
+                        : "Saisissez des données de valorisation pour activer l'utilisation dans la fortune."}
+                    </span>
+                    {companyValuationInjectConfirmed && (
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: "6px",
+                          fontSize: "0.72rem",
+                          color: "#16a34a",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Valeur reprise dans la fortune cantonale indicative.
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            <div style={fortuneFieldCardStyle}>
               <label style={labelStyle}>Fortune brute</label>
               <input
                 type="text"
@@ -9328,7 +10188,7 @@ export default function App() {
         </GuidedSection>
         )}
 
-        {import.meta.env.DEV && (
+        {import.meta.env.VITE_SHOW_TAXWARE_DEBUG === "true" && (
         <div className="technical-annex">
           <div className="technical-annex__label">Annexe technique</div>
           <div className="technical-annex__text">
@@ -9504,12 +10364,14 @@ export default function App() {
                       </div>
 
                       <div>
-                        <label style={labelStyle}>Revenu avant déductions envoyé à TaxWare</label>
+                        <label style={labelStyle}>Revenu avant déductions envoyé à TaxWare (foyer)</label>
                         <input
                           type="text"
                           value={formatMontantCHF(
                             Number(taxwarePayloadControle.PersonLeading?.NetWages || 0) +
                             Number(taxwarePayloadControle.PersonLeading?.PensionIncome || 0) +
+                            Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.NetWages || 0) +
+                            Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.PensionIncome || 0) +
                             Number(taxwarePayloadControle.AssetIncome || 0) +
                             Number(taxwarePayloadControle.MiscIncome || 0) +
                             revenusImmobiliersTaxware
@@ -9523,6 +10385,29 @@ export default function App() {
                       </div>
 
                       <div style={{ display: "grid", gap: "6px", color: "#475569", fontSize: "14px" }}>
+                        <div><strong>Détail par personne :</strong></div>
+                        <div>
+                          PersonLeading.NetWages (P1) :{" "}
+                          {formatMontantCHF(Number(taxwarePayloadControle.PersonLeading?.NetWages || 0))}
+                        </div>
+                        <div>
+                          PersonLeading.PensionIncome (P1) :{" "}
+                          {formatMontantCHF(Number(taxwarePayloadControle.PersonLeading?.PensionIncome || 0))}
+                        </div>
+                        {(taxwarePayloadControle as Record<string, any>).PersonSecond ? (
+                          <>
+                            <div>
+                              PersonSecond.NetWages (P2) :{" "}
+                              {formatMontantCHF(Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.NetWages || 0))}
+                            </div>
+                            <div>
+                              PersonSecond.PensionIncome (P2) :{" "}
+                              {formatMontantCHF(Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.PensionIncome || 0))}
+                            </div>
+                          </>
+                        ) : (
+                          <div>PersonSecond : absent (célibataire)</div>
+                        )}
                         <div>3e pilier déduit du revenu imposable : oui</div>
                         <div>Rachat LPP déduit du revenu imposable : oui</div>
                         <div>
@@ -9569,10 +10454,12 @@ export default function App() {
                     </div>
 
                     <div>
-                      <strong>Revenu avant deductions :</strong>{" "}
+                      <strong>Revenu avant deductions (foyer) :</strong>{" "}
                       {formatMontantCHF(
                         Number(taxwarePayloadControle.PersonLeading?.NetWages || 0) +
                         Number(taxwarePayloadControle.PersonLeading?.PensionIncome || 0) +
+                        Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.NetWages || 0) +
+                        Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.PensionIncome || 0) +
                         Number(taxwarePayloadControle.AssetIncome || 0) +
                         Number(taxwarePayloadControle.MiscIncome || 0) +
                         revenusImmobiliersTaxware
@@ -9580,7 +10467,19 @@ export default function App() {
                     </div>
 
                     <div>
-                      <strong>Rentes transmises :</strong>{" "}
+                      <strong>P1 — NetWages :</strong>{" "}
+                      {formatMontantCHF(Number(taxwarePayloadControle.PersonLeading?.NetWages || 0))}
+                    </div>
+
+                    {(taxwarePayloadControle as Record<string, any>).PersonSecond ? (
+                      <div>
+                        <strong>P2 — NetWages :</strong>{" "}
+                        {formatMontantCHF(Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.NetWages || 0))}
+                      </div>
+                    ) : null}
+
+                    <div>
+                      <strong>Rentes transmises (P1) :</strong>{" "}
                       {formatMontantCHF(
                         Number(taxwarePayloadControle.PersonLeading?.PensionIncome || 0)
                       )}
@@ -9604,6 +10503,22 @@ export default function App() {
                         Number(taxwarePayloadControle.PersonLeading?.LobContributions || 0)
                       )}
                     </div>
+
+                    <div>
+                      <strong>HasLobContributions P1 :</strong>{" "}
+                      {taxwarePayloadControle.PersonLeading?.HasLobContributions
+                        ? "✓ ligne «avec 2e pilier» (IFD max 3 700 + N×700)"
+                        : "✗ ligne «sans 2e pilier» (IFD max 5 550 + N×700)"}
+                    </div>
+
+                    {(taxwarePayloadControle as Record<string, any>).PersonSecond ? (
+                      <div>
+                        <strong>HasLobContributions P2 :</strong>{" "}
+                        {(taxwarePayloadControle as Record<string, any>).PersonSecond?.HasLobContributions
+                          ? "✓ ligne «avec 2e pilier» (IFD max 3 700 + N×700)"
+                          : "✗ ligne «sans 2e pilier» (IFD max 5 550 + N×700)"}
+                      </div>
+                    ) : null}
 
                     <div>
                       <strong>Assets transmis :</strong>{" "}
@@ -9638,25 +10553,39 @@ export default function App() {
                 </div>
               )}
 
+              {SHOW_TECHNICAL_DEBUG_BLOCKS && (<>
               <div style={subCardStyle}>
                 <h3 style={{ marginTop: 0, marginBottom: "14px", color: "#1e293b" }}>
                   Mapping UI → TaxWare
                 </h3>
 
                 <div style={{ display: "grid", gap: "10px", color: "#334155", fontSize: "14px" }}>
+                  <div><strong>Personne 1</strong></div>
+                  <div>Salaire Personne 1 → `PersonLeading.NetWages`</div>
+                  <div>AVS + LPP Personne 1 → `PersonLeading.PensionIncome`</div>
+                  <div>Autres revenus Personne 1 → `PersonLeading.OtherIncome`</div>
+                  <div>3e pilier Personne 1 → `PersonLeading.ThirdPillarContribution`</div>
+                  <div>Rachat LPP Personne 1 → `PersonLeading.LobContributions`</div>
+                  <div style={{ marginTop: "6px" }}><strong>Personne 2 (si conjoint présent)</strong></div>
+                  <div>Salaire Personne 2 → `PersonSecond.NetWages`</div>
+                  <div>AVS + LPP Personne 2 → `PersonSecond.PensionIncome`</div>
+                  <div>Autres revenus Personne 2 → `PersonSecond.OtherIncome`</div>
+                  <div>3e pilier Personne 2 → `PersonSecond.ThirdPillarContribution`</div>
+                  <div>Rachat LPP Personne 2 → `PersonSecond.LobContributions`</div>
+                  <div style={{ marginTop: "6px" }}><strong>Ménage</strong></div>
                   <div>Fortune fiscale → `Assets`</div>
                   <div>Dettes → `Debts`</div>
-                  <div>Salaire → `PersonLeading.NetWages`</div>
-                  <div>AVS + LPP → `PersonLeading.PensionIncome`</div>
-                  <div>Autres revenus patrimoniaux → `AssetIncome`</div>
+                  <div>Revenus de fortune / autres revenus patrimoniaux → `AssetIncome`</div>
                   <div>Habitation propre / rendement → `RealEstates[].RentalIncome`</div>
                   <div>Frais d’entretien immobiliers → `RealEstates[].EffectiveExpenses`</div>
-                  <div>3e pilier simulé → `PersonLeading.ThirdPillarContribution`</div>
-                  <div>Rachat LPP → `PersonLeading.LobContributions`</div>
                   <div>Intérêts hypothécaires immobiliers et logement qualifié → `DebtInterests`</div>
                   <div>Autres charges qualifiées et frais divers → `MiscExpenses`</div>
                   <div>Ville fiscale → `City`</div>
                   <div>NPA fiscal → `Zip`</div>
+                  <div style={{ marginTop: "6px", fontStyle: "italic", color: "#64748b" }}>
+                    Valeur fiscale entreprise FIPLA indicative : volontairement NON transmise à TaxWare
+                    dans cette phase (lecture cantonale indicative uniquement).
+                  </div>
                 </div>
               </div>
 
@@ -9702,6 +10631,7 @@ export default function App() {
                   </div>
                 </div>
               </div>
+              </>)}
             </div>
         </div>
         </div>
@@ -10062,6 +10992,28 @@ export default function App() {
                 />
               </div>
             </div>
+
+            <div style={{ marginTop: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
+              <button
+                onClick={handleRecalculerBaseDepuisTaxware}
+                disabled={isRecalculatingBase}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: isRecalculatingBase ? "#94a3b8" : "#2563eb",
+                  color: "#ffffff",
+                  fontWeight: "600",
+                  fontSize: "14px",
+                  cursor: isRecalculatingBase ? "not-allowed" : "pointer",
+                }}
+              >
+                {isRecalculatingBase ? "Calcul en cours…" : "Recalculer la base depuis TaxWare"}
+              </button>
+              <span style={{ fontSize: "12px", color: "#64748b" }}>
+                Utilise les données économiques saisies (revenus, fortune) pour calculer les bases imposables IFD et ICC directement via TaxWare.
+              </span>
+            </div>
           </div>
 
           <div
@@ -10168,39 +11120,141 @@ export default function App() {
               }}
             >
               <div>
-                <label style={labelStyle}>3e pilier simulé</label>
+                <label style={labelStyle}>
+                  {dossier.famille.aConjoint ? "3e pilier Personne 1" : "3e pilier simulé"}
+                </label>
                 <input
                   type="number"
-                  value={dossier.fiscalite.troisiemePilierSimule || 0}
-                  onChange={(e) =>
+                  value={
+                    dossier.fiscalite.troisiemePilierPersonne1 ??
+                    dossier.fiscalite.troisiemePilierSimule ??
+                    0
+                  }
+                  onChange={(e) => {
+                    const newP1 = Math.max(0, numberValue(e.target.value));
                     setDossier({
                       ...dossier,
                       fiscalite: {
                         ...dossier.fiscalite,
-                        troisiemePilierSimule: Math.max(0, numberValue(e.target.value)),
+                        troisiemePilierPersonne1: newP1,
+                        troisiemePilierSimule: newP1,
                       },
-                    })
-                  }
+                    });
+                  }}
                   style={inputStyle}
                 />
               </div>
+              {dossier.famille.aConjoint && (
+                <div>
+                  <label style={labelStyle}>3e pilier Personne 2</label>
+                  <input
+                    type="number"
+                    value={dossier.fiscalite.troisiemePilierPersonne2 ?? 0}
+                    onChange={(e) =>
+                      setDossier({
+                        ...dossier,
+                        fiscalite: {
+                          ...dossier.fiscalite,
+                          troisiemePilierPersonne2: Math.max(0, numberValue(e.target.value)),
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+              )}
               <div>
-                <label style={labelStyle}>Rachat LPP</label>
+                <label style={labelStyle}>
+                  {dossier.famille.aConjoint ? "2e pilier (LPP) Personne 1" : "A un 2e pilier (LPP)"}
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={
+                      dossier.fiscalite.aLppActifPersonne1 !== undefined
+                        ? dossier.fiscalite.aLppActifPersonne1
+                        : (dossier.revenus.salaire || 0) > 0 || (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) > 0
+                    }
+                    onChange={(e) =>
+                      setDossier({
+                        ...dossier,
+                        fiscalite: { ...dossier.fiscalite, aLppActifPersonne1: e.target.checked },
+                      })
+                    }
+                  />
+                  <span style={{ fontSize: "13px", color: "#475569" }}>
+                    Affilié(e) au LPP (déduction assurance ligne «avec 2e pilier»)
+                  </span>
+                </label>
+              </div>
+              {dossier.famille.aConjoint && (
+                <div>
+                  <label style={labelStyle}>2e pilier (LPP) Personne 2</label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        dossier.fiscalite.aLppActifPersonne2 !== undefined
+                          ? dossier.fiscalite.aLppActifPersonne2
+                          : (dossier.revenus.salaireConjoint || 0) > 0 || (dossier.fiscalite.rachatLppPersonne2 ?? 0) > 0
+                      }
+                      onChange={(e) =>
+                        setDossier({
+                          ...dossier,
+                          fiscalite: { ...dossier.fiscalite, aLppActifPersonne2: e.target.checked },
+                        })
+                      }
+                    />
+                    <span style={{ fontSize: "13px", color: "#475569" }}>
+                      Affilié(e) au LPP (déduction assurance ligne «avec 2e pilier»)
+                    </span>
+                  </label>
+                </div>
+              )}
+              <div>
+                <label style={labelStyle}>
+                  {dossier.famille.aConjoint ? "Rachat LPP Personne 1" : "Rachat LPP"}
+                </label>
                 <input
                   type="number"
-                  value={dossier.fiscalite.rachatLpp || 0}
-                  onChange={(e) =>
+                  value={
+                    dossier.fiscalite.rachatLppPersonne1 ??
+                    dossier.fiscalite.rachatLpp ??
+                    0
+                  }
+                  onChange={(e) => {
+                    const newP1 = Math.max(0, numberValue(e.target.value));
                     setDossier({
                       ...dossier,
                       fiscalite: {
                         ...dossier.fiscalite,
-                        rachatLpp: Math.max(0, numberValue(e.target.value)),
+                        rachatLppPersonne1: newP1,
+                        rachatLpp: newP1,
                       },
-                    })
-                  }
+                    });
+                  }}
                   style={inputStyle}
                 />
               </div>
+              {dossier.famille.aConjoint && (
+                <div>
+                  <label style={labelStyle}>Rachat LPP Personne 2</label>
+                  <input
+                    type="number"
+                    value={dossier.fiscalite.rachatLppPersonne2 ?? 0}
+                    onChange={(e) =>
+                      setDossier({
+                        ...dossier,
+                        fiscalite: {
+                          ...dossier.fiscalite,
+                          rachatLppPersonne2: Math.max(0, numberValue(e.target.value)),
+                        },
+                      })
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+              )}
             </div>
             <div
               style={{
@@ -10231,6 +11285,7 @@ export default function App() {
             </div>
           </div>
 
+          {SHOW_TECHNICAL_DEBUG_BLOCKS && (<>
           <div
             style={{
               marginBottom: "16px",
@@ -10274,6 +11329,7 @@ export default function App() {
               <div><code>[TAXWARE] RÉPONSE BRUTE =</code> → montre le TaxableIncomeCanton retourné</div>
             </div>
           </div>
+          </>)}
 
           <div
             style={{
@@ -12094,10 +13150,22 @@ export default function App() {
                 {
                   titre: "Revenus",
                   lignes: [
-                    ["Salaire", formatMontantCHF(dossier.revenus.salaire)],
-                    ["AVS", formatMontantCHF(dossier.revenus.avs)],
-                    ["LPP", formatMontantCHF(dossier.revenus.lpp)],
-                    ["Autres revenus", formatMontantCHF(dossier.revenus.autresRevenus)],
+                    [dossier.famille.aConjoint ? "Salaire P1" : "Salaire", formatMontantCHF(dossier.revenus.salaire)],
+                    ...(dossier.famille.aConjoint
+                      ? [["Salaire P2", formatMontantCHF(dossier.revenus.salaireConjoint)] as [string, string]]
+                      : []),
+                    [dossier.famille.aConjoint ? "AVS P1" : "AVS", formatMontantCHF(dossier.revenus.avs)],
+                    ...(dossier.famille.aConjoint
+                      ? [["AVS P2", formatMontantCHF(dossier.revenus.avsConjoint)] as [string, string]]
+                      : []),
+                    [dossier.famille.aConjoint ? "LPP P1" : "LPP", formatMontantCHF(dossier.revenus.lpp)],
+                    ...(dossier.famille.aConjoint
+                      ? [["LPP P2", formatMontantCHF(dossier.revenus.lppConjoint)] as [string, string]]
+                      : []),
+                    [dossier.famille.aConjoint ? "Autres revenus P1" : "Autres revenus", formatMontantCHF(dossier.revenus.autresRevenus)],
+                    ...(dossier.famille.aConjoint
+                      ? [["Autres revenus P2", formatMontantCHF(dossier.revenus.autresRevenusConjoint)] as [string, string]]
+                      : []),
                     ["Total revenus", formatMontantCHF(totalRevenusCalcule)],
                   ],
                 },
@@ -12395,6 +13463,31 @@ export default function App() {
           <div style={{ marginTop: "24px" }}>
             <ClaudeAdvisorPanel context={advisoryContext} />
           </div>
+          <OptimizationsPanel
+            threePillarOptimization={threePillarData}
+            threePillarProjection={threePillarProjectionData}
+            lppBuybackOptimization={lppBuybackData}
+            standardTaxSummary={
+              // À raccorder au total TaxWare standard fiable.
+              typeof taxResult?.normalized?.totalTax === "number"
+                ? { taxwareStandardTax: taxResult.normalized.totalTax }
+                : undefined
+            }
+            cantonalOptimizationSummary={
+              cantonalSummaryData
+                ? {
+                    canton: cantonalSummaryData.canton,
+                    baseIncomeCanton: cantonalSummaryData.baseIncomeCanton,
+                    totalIncomeAdjustments: cantonalSummaryData.totalIncomeAdjustments,
+                    adjustedIncomeCanton: cantonalSummaryData.adjustedIncomeCanton,
+                    baseWealthCanton: cantonalSummaryData.baseWealthCanton,
+                    totalWealthAdjustments: cantonalSummaryData.totalWealthAdjustments,
+                    adjustedWealthCanton: cantonalSummaryData.adjustedWealthCanton,
+                    warnings: cantonalSummaryData.warnings,
+                  }
+                : undefined
+            }
+          />
         </GuidedSection>
         )}
         </div>

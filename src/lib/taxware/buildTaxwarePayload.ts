@@ -27,6 +27,8 @@ type BuildPayloadParams = {
   spouseOtherIncome?: number;
   spouseThirdPillar?: number;
   spouseLppBuyback?: number;
+  hasLobP1?: boolean;
+  hasLobP2?: boolean;
 
   assets: number;
   debts: number;
@@ -56,6 +58,8 @@ export function buildTaxwarePayload(params: BuildPayloadParams) {
     spouseOtherIncome,
     spouseThirdPillar,
     spouseLppBuyback,
+    hasLobP1,
+    hasLobP2,
     assets,
     debts,
   } = params;
@@ -92,7 +96,9 @@ export function buildTaxwarePayload(params: BuildPayloadParams) {
       HasOasiPensions: Boolean(hasOasiPensions),
       OtherIncome: Number(otherIncome || 0),
       ThirdPillarContribution: Number(thirdPillar || 0),
-      HasLobContributions: Number(lppBuyback || 0) > 0,
+      HasLobContributions: hasLobP1 !== undefined
+        ? hasLobP1
+        : Number(netWages || 0) > 0 || Number(lppBuyback || 0) > 0,
       LobContributions: Number(lppBuyback || 0),
     },
 
@@ -104,7 +110,9 @@ export function buildTaxwarePayload(params: BuildPayloadParams) {
             HasOasiPensions: Boolean(spouseHasOasiPensions),
             OtherIncome: Number(spouseOtherIncome || 0),
             ThirdPillarContribution: Number(spouseThirdPillar || 0),
-            HasLobContributions: Number(spouseLppBuyback || 0) > 0,
+            HasLobContributions: hasLobP2 !== undefined
+              ? hasLobP2
+              : Number(spouseNetWages || 0) > 0 || Number(spouseLppBuyback || 0) > 0,
             LobContributions: Number(spouseLppBuyback || 0),
           },
         }
