@@ -11,7 +11,9 @@ export type ComparisonScenario = {
   key: ComparisonScenarioKey;
   label: string;
   thirdPillar: number;
+  spouseThirdPillar: number;
   lppBuyback: number;
+  spouseLppBuyback: number;
   manualAdjustment: number;
 };
 
@@ -67,8 +69,10 @@ function getBestScenarioByMetric(
 }
 
 export function getComparisonScenarios(dossier: DossierClient): ComparisonScenario[] {
-  const thirdPillar = dossier.fiscalite.troisiemePilierSimule || 0;
-  const lppBuyback = dossier.fiscalite.rachatLpp || 0;
+  const thirdPillar = dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0;
+  const spouseThirdPillar = dossier.fiscalite.troisiemePilierPersonne2 ?? 0;
+  const lppBuyback = dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0;
+  const spouseLppBuyback = dossier.fiscalite.rachatLppPersonne2 ?? 0;
   const manualAdjustment = dossier.fiscalite.ajustementManuelRevenu || 0;
 
   return [
@@ -76,53 +80,65 @@ export function getComparisonScenarios(dossier: DossierClient): ComparisonScenar
       key: "reference",
       label: "Variante 1 - Reference",
       thirdPillar: 0,
+      spouseThirdPillar: 0,
       lppBuyback: 0,
+      spouseLppBuyback: 0,
       manualAdjustment: 0,
     },
     {
       key: "third-pillar",
       label: "Variante 2 - 3e pilier",
       thirdPillar,
+      spouseThirdPillar,
       lppBuyback: 0,
+      spouseLppBuyback: 0,
       manualAdjustment: 0,
     },
     {
       key: "lpp-buyback",
       label: "Variante 3 - Rachat LPP",
       thirdPillar: 0,
+      spouseThirdPillar: 0,
       lppBuyback,
+      spouseLppBuyback,
       manualAdjustment: 0,
     },
     {
       key: "mixed",
       label: "Variante 4 - Mixte",
       thirdPillar,
+      spouseThirdPillar,
       lppBuyback,
+      spouseLppBuyback,
       manualAdjustment: 0,
     },
     {
       key: "manual-adjustment",
       label: "Variante 5 - Ajustement manuel",
       thirdPillar,
+      spouseThirdPillar,
       lppBuyback,
+      spouseLppBuyback,
       manualAdjustment,
     },
   ];
 }
 
 export function getScenarioNetWealth(dossier: DossierClient, scenario: ComparisonScenario) {
+  const totalThirdPillar = scenario.thirdPillar + scenario.spouseThirdPillar;
+  const totalLppBuyback = scenario.lppBuyback + scenario.spouseLppBuyback;
   const liquiditesAjustees =
     (dossier.fortune.liquidites || 0) -
-    scenario.thirdPillar -
-    scenario.lppBuyback +
+    totalThirdPillar -
+    totalLppBuyback +
     scenario.manualAdjustment;
   const fortuneBrute =
     liquiditesAjustees +
     (dossier.fortune.titres || 0) +
     (dossier.fortune.troisiemePilier || 0) +
-    scenario.thirdPillar +
+    totalThirdPillar +
     (dossier.fortune.fortuneLppActuelle || 0) +
-    scenario.lppBuyback +
+    totalLppBuyback +
     (dossier.fortune.immobilier || 0);
 
   const totalDettes =

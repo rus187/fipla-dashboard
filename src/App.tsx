@@ -833,16 +833,22 @@ function getVariantTaxTotal(variant: ScenarioVariant) {
 }
 
 function getVariantPatrimoineBreakdown(variant: ScenarioVariant) {
+  const d = variant.dossier;
+  const totalThirdPillar =
+    (d.fiscalite.troisiemePilierPersonne1 ?? d.fiscalite.troisiemePilierSimule ?? 0) +
+    (d.fiscalite.troisiemePilierPersonne2 ?? 0);
+  const totalLppBuyback =
+    (d.fiscalite.rachatLppPersonne1 ?? d.fiscalite.rachatLpp ?? 0) +
+    (d.fiscalite.rachatLppPersonne2 ?? 0);
   const liquiditesAjustees =
-    (variant.dossier.fortune.liquidites || 0) -
-    (variant.dossier.fiscalite.troisiemePilierSimule || 0) -
-    (variant.dossier.fiscalite.rachatLpp || 0) +
-    (variant.dossier.fiscalite.ajustementManuelRevenu || 0);
+    (d.fortune.liquidites || 0) -
+    totalThirdPillar -
+    totalLppBuyback +
+    (d.fiscalite.ajustementManuelRevenu || 0);
   const troisiemePilier =
-    (variant.dossier.fortune.troisiemePilier || 0) +
-    (variant.dossier.fiscalite.troisiemePilierSimule || 0);
+    (d.fortune.troisiemePilier || 0) + totalThirdPillar;
   const fortuneLpp =
-    (variant.dossier.fortune.fortuneLppActuelle || 0) + (variant.dossier.fiscalite.rachatLpp || 0);
+    (d.fortune.fortuneLppActuelle || 0) + totalLppBuyback;
 
   return [
     { label: "Liquidités", montant: Math.max(0, liquiditesAjustees) },
@@ -881,9 +887,16 @@ function getVariantComparisonMetrics(variant: ScenarioVariant) {
   const interetsHypothecairesImmobiliersBudgetaires =
     interetsHabitationBudgetaires + interetsBiensRendementBudgetaires;
 
+  const totalThirdPillarVariant =
+    (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+    (dossier.fiscalite.troisiemePilierPersonne2 ?? 0);
+  const totalLppBuybackVariant =
+    (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) +
+    (dossier.fiscalite.rachatLppPersonne2 ?? 0);
+
   const effortLiquidite =
-    (dossier.fiscalite.troisiemePilierSimule || 0) +
-    (dossier.fiscalite.rachatLpp || 0) +
+    totalThirdPillarVariant +
+    totalLppBuybackVariant +
     Math.max(0, -(dossier.fiscalite.ajustementManuelRevenu || 0));
 
   const totalCharges =
@@ -891,21 +904,21 @@ function getVariantComparisonMetrics(variant: ScenarioVariant) {
     interetsHypothecairesImmobiliersBudgetaires +
     (dossier.charges.primesMaladie || 0) +
     impotTotal +
-    (dossier.fiscalite.troisiemePilierSimule || 0) +
+    totalThirdPillarVariant +
     (dossier.charges.fraisVie || 0) +
     (dossier.charges.autresCharges || 0);
 
   const liquiditesAjustees =
     (dossier.fortune.liquidites || 0) -
-    (dossier.fiscalite.troisiemePilierSimule || 0) -
-    (dossier.fiscalite.rachatLpp || 0) +
+    totalThirdPillarVariant -
+    totalLppBuybackVariant +
     (dossier.fiscalite.ajustementManuelRevenu || 0);
 
   const troisiemePilierPatrimonial =
-    (dossier.fortune.troisiemePilier || 0) + (dossier.fiscalite.troisiemePilierSimule || 0);
+    (dossier.fortune.troisiemePilier || 0) + totalThirdPillarVariant;
 
   const fortuneLppPatrimoniale =
-    (dossier.fortune.fortuneLppActuelle || 0) + (dossier.fiscalite.rachatLpp || 0);
+    (dossier.fortune.fortuneLppActuelle || 0) + totalLppBuybackVariant;
 
   const fortuneBrute =
     liquiditesAjustees +
@@ -1732,11 +1745,13 @@ export default function App() {
 
   const troisiemePilierPatrimonialCalcule =
     (dossier.fortune.troisiemePilier || 0) +
-    (dossier.fiscalite.troisiemePilierSimule || 0);
+    (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+    (dossier.fiscalite.troisiemePilierPersonne2 ?? 0);
 
   const fortuneLppPatrimonialeCalcule =
     (dossier.fortune.fortuneLppActuelle || 0) +
-    (dossier.fiscalite.rachatLpp || 0);
+    (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) +
+    (dossier.fiscalite.rachatLppPersonne2 ?? 0);
 
   const fortuneBruteCalcule =
     liquiditesAjusteesCalcule +
@@ -1792,7 +1807,10 @@ export default function App() {
   const utiliseFortuneLocaleSimulee = hasLocalSimulatedTaxableAssetsInputs(dossier);
 
   const ajustementPrevoyanceSimulation =
-    -(dossier.fiscalite.troisiemePilierSimule || 0) - (dossier.fiscalite.rachatLpp || 0);
+    -(dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) -
+    (dossier.fiscalite.troisiemePilierPersonne2 ?? 0) -
+    (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) -
+    (dossier.fiscalite.rachatLppPersonne2 ?? 0);
   const ajustementManuelSimulation = dossier.fiscalite.ajustementManuelRevenu || 0;
   const totalAjustementsSimulationIfd =
     totalAjustementsImmobiliersSimulation +
@@ -2203,7 +2221,8 @@ export default function App() {
     interetsHypothecairesImmobiliersBudgetaires +
     (dossier.charges.primesMaladie || 0) +
     impotRevenuFortuneCharge +
-    (dossier.fiscalite.troisiemePilierSimule || 0) +
+    (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+    (dossier.fiscalite.troisiemePilierPersonne2 ?? 0) +
     (dossier.charges.fraisVie || 0) +
     (dossier.charges.autresCharges || 0);
 
@@ -2495,16 +2514,21 @@ export default function App() {
     typeof referenceVariantTotalTaxRaw === "number" && typeof bestVariant?.totalTax === "number"
       ? referenceVariantTotalTaxRaw - bestVariant.totalTax
       : null;
+  const refTotalThirdPillar =
+    (referenceDossier.fiscalite.troisiemePilierPersonne1 ?? referenceDossier.fiscalite.troisiemePilierSimule ?? 0) +
+    (referenceDossier.fiscalite.troisiemePilierPersonne2 ?? 0);
+  const refTotalLppBuyback =
+    (referenceDossier.fiscalite.rachatLppPersonne1 ?? referenceDossier.fiscalite.rachatLpp ?? 0) +
+    (referenceDossier.fiscalite.rachatLppPersonne2 ?? 0);
   const referenceLiquiditesAjusteesCalcule =
     (referenceDossier.fortune.liquidites || 0) -
-    (referenceDossier.fiscalite.troisiemePilierSimule || 0) -
-    (referenceDossier.fiscalite.rachatLpp || 0) +
+    refTotalThirdPillar -
+    refTotalLppBuyback +
     (referenceDossier.fiscalite.ajustementManuelRevenu || 0);
   const referenceTroisiemePilierPatrimonialCalcule =
-    (referenceDossier.fortune.troisiemePilier || 0) +
-    (referenceDossier.fiscalite.troisiemePilierSimule || 0);
+    (referenceDossier.fortune.troisiemePilier || 0) + refTotalThirdPillar;
   const referenceFortuneLppPatrimonialeCalcule =
-    (referenceDossier.fortune.fortuneLppActuelle || 0) + (referenceDossier.fiscalite.rachatLpp || 0);
+    (referenceDossier.fortune.fortuneLppActuelle || 0) + refTotalLppBuyback;
   const referenceFortuneBruteCalcule =
     referenceLiquiditesAjusteesCalcule +
     (referenceDossier.fortune.titres || 0) +
@@ -3143,7 +3167,9 @@ export default function App() {
           0,
           (dossierForSimulation.fiscalite.revenuImposableIfd || 0) -
             scenario.thirdPillar -
-            scenario.lppBuyback +
+            scenario.spouseThirdPillar -
+            scenario.lppBuyback -
+            scenario.spouseLppBuyback +
             scenario.manualAdjustment +
             immobilierDelta +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleIfd || 0)
@@ -3152,7 +3178,9 @@ export default function App() {
           0,
           (dossierForSimulation.fiscalite.revenuImposable || 0) -
             scenario.thirdPillar -
-            scenario.lppBuyback +
+            scenario.spouseThirdPillar -
+            scenario.lppBuyback -
+            scenario.spouseLppBuyback +
             scenario.manualAdjustment +
             immobilierDelta +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleCanton || 0)
@@ -3161,7 +3189,9 @@ export default function App() {
         const buildVariantRequest = (params: { miscIncome: number; assets: number }) => ({
           ...buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, params),
           thirdPillar: scenario.thirdPillar,
+          spouseThirdPillar: scenario.spouseThirdPillar,
           lppBuyback: scenario.lppBuyback,
+          spouseLppBuyback: scenario.spouseLppBuyback,
         });
 
         if (isBernBielVariantDebug) {
@@ -3186,9 +3216,17 @@ export default function App() {
             }),
         });
 
+        // Use TaxWare's actual IFD from the canton calibration as the IFD target.
+        // The formula taxableIncomeFederal may diverge from TaxWare when IFD and canton
+        // apply different deductibility rules (e.g. LPP buybacks). At the canton-calibrated
+        // miscIncome, TaxWare already computed the correct IFD — use that as the target.
+        const effectiveTaxableIncomeFederal =
+          typeof baseResult?.normalized?.taxableIncomeFederal === "number"
+            ? baseResult.normalized.taxableIncomeFederal
+            : taxableIncomeFederal;
         const ifdResult = await resolveTaxwareTarget({
           label: `${variant.id}-${scenario.key}-ifd`,
-          targetValue: taxableIncomeFederal,
+          targetValue: effectiveTaxableIncomeFederal,
           metric: (result) => result?.normalized?.taxableIncomeFederal,
           buildRequest: (miscIncome) =>
             buildVariantRequest({
@@ -6297,16 +6335,21 @@ export default function App() {
     },
   ].filter((item) => item.value > 0);
   const proposedDossier = bestVariantState.dossier;
+  const propTotalThirdPillar =
+    (proposedDossier.fiscalite.troisiemePilierPersonne1 ?? proposedDossier.fiscalite.troisiemePilierSimule ?? 0) +
+    (proposedDossier.fiscalite.troisiemePilierPersonne2 ?? 0);
+  const propTotalLppBuyback =
+    (proposedDossier.fiscalite.rachatLppPersonne1 ?? proposedDossier.fiscalite.rachatLpp ?? 0) +
+    (proposedDossier.fiscalite.rachatLppPersonne2 ?? 0);
   const proposedLiquiditesAjusteesCalcule =
     (proposedDossier.fortune.liquidites || 0) -
-    (proposedDossier.fiscalite.troisiemePilierSimule || 0) -
-    (proposedDossier.fiscalite.rachatLpp || 0) +
+    propTotalThirdPillar -
+    propTotalLppBuyback +
     (proposedDossier.fiscalite.ajustementManuelRevenu || 0);
   const proposedTroisiemePilierPatrimonialCalcule =
-    (proposedDossier.fortune.troisiemePilier || 0) +
-    (proposedDossier.fiscalite.troisiemePilierSimule || 0);
+    (proposedDossier.fortune.troisiemePilier || 0) + propTotalThirdPillar;
   const proposedFortuneLppPatrimonialeCalcule =
-    (proposedDossier.fortune.fortuneLppActuelle || 0) + (proposedDossier.fiscalite.rachatLpp || 0);
+    (proposedDossier.fortune.fortuneLppActuelle || 0) + propTotalLppBuyback;
   const patrimonyStructureChartData = [
     {
       label: "Liquidités",
@@ -6458,10 +6501,19 @@ export default function App() {
       chargesAnnuelles: formatMontantCHF(pdfChargesAnnuelles),
       liquiditesFin: formatMontantCHF(pdfLiquiditesFin),
       delta: formatMontantCHFSigne(pdfDeltaLiquidites),
-      troisiemePilierA: formatMontantCHF(dossier.fiscalite.troisiemePilierSimule || 0),
-      rachatLpp: formatMontantCHF(dossier.fiscalite.rachatLpp || 0),
+      troisiemePilierA: formatMontantCHF(
+        (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+        (dossier.fiscalite.troisiemePilierPersonne2 ?? 0)
+      ),
+      rachatLpp: formatMontantCHF(
+        (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) +
+        (dossier.fiscalite.rachatLppPersonne2 ?? 0)
+      ),
       totalEpargneRetraite: formatMontantCHF(
-        (dossier.fiscalite.troisiemePilierSimule || 0) + (dossier.fiscalite.rachatLpp || 0)
+        (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+        (dossier.fiscalite.troisiemePilierPersonne2 ?? 0) +
+        (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) +
+        (dossier.fiscalite.rachatLppPersonne2 ?? 0)
       ),
     },
     variants: variants.map((variant) => {
@@ -10330,7 +10382,10 @@ export default function App() {
                         <label style={labelStyle}>3e pilier</label>
                         <input
                           type="text"
-                          value={formatMontantCHF(dossier.fiscalite.troisiemePilierSimule)}
+                          value={formatMontantCHF(
+                            (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+                            (dossier.fiscalite.troisiemePilierPersonne2 ?? 0)
+                          )}
                           readOnly
                           style={inputReadOnlyStyle}
                         />
@@ -10340,7 +10395,10 @@ export default function App() {
                         <label style={labelStyle}>Rachat LPP</label>
                         <input
                           type="text"
-                          value={formatMontantCHF(dossier.fiscalite.rachatLpp)}
+                          value={formatMontantCHF(
+                            (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) +
+                            (dossier.fiscalite.rachatLppPersonne2 ?? 0)
+                          )}
                           readOnly
                           style={inputReadOnlyStyle}
                         />
@@ -10504,14 +10562,16 @@ export default function App() {
                     <div>
                       <strong>3e pilier transmis :</strong>{" "}
                       {formatMontantCHF(
-                        Number(taxwarePayloadControle.PersonLeading?.ThirdPillarContribution || 0)
+                        Number(taxwarePayloadControle.PersonLeading?.ThirdPillarContribution || 0) +
+                        Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.ThirdPillarContribution || 0)
                       )}
                     </div>
 
                     <div>
                       <strong>Rachat LPP transmis :</strong>{" "}
                       {formatMontantCHF(
-                        Number(taxwarePayloadControle.PersonLeading?.LobContributions || 0)
+                        Number(taxwarePayloadControle.PersonLeading?.LobContributions || 0) +
+                        Number((taxwarePayloadControle as Record<string, any>).PersonSecond?.LobContributions || 0)
                       )}
                     </div>
 
@@ -11369,7 +11429,7 @@ export default function App() {
                 <label style={labelStyle}>Revenu imposable IFD simulé</label>
                 <input
                   type="text"
-                  value={formatMontantCHFArrondi(revenuImposableIfdSimule)}
+                  value={formatMontantCHFArrondi(revenuImposableIfdApresSimulationCalcule)}
                   readOnly
                   style={inputReadOnlyStyle}
                 />
@@ -12914,7 +12974,10 @@ export default function App() {
                     <label style={labelStyle}>Cotisation 3e pilier</label>
                     <input
                       type="text"
-                      value={formatMontantCHF(dossier.fiscalite.troisiemePilierSimule)}
+                      value={formatMontantCHF(
+                        (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+                        (dossier.fiscalite.troisiemePilierPersonne2 ?? 0)
+                      )}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -12924,7 +12987,10 @@ export default function App() {
                     <label style={labelStyle}>Rachat LPP</label>
                     <input
                       type="text"
-                      value={formatMontantCHF(dossier.fiscalite.rachatLpp)}
+                      value={formatMontantCHF(
+                        (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) +
+                        (dossier.fiscalite.rachatLppPersonne2 ?? 0)
+                      )}
                       readOnly
                       style={inputReadOnlyStyle}
                     />
@@ -12946,8 +13012,10 @@ export default function App() {
                       type="text"
                       value={formatMontantCHF(
                         -(
-                          (dossier.fiscalite.troisiemePilierSimule || 0) +
-                          (dossier.fiscalite.rachatLpp || 0)
+                          (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+                          (dossier.fiscalite.troisiemePilierPersonne2 ?? 0) +
+                          (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) +
+                          (dossier.fiscalite.rachatLppPersonne2 ?? 0)
                         )
                       )}
                       readOnly
@@ -13254,7 +13322,10 @@ export default function App() {
                     ],
                     ["Primes maladie", formatMontantCHF(dossier.charges.primesMaladie)],
                     ["Impôts revenu et fortune", formatMontantCHF(impotRevenuFortuneCharge)],
-                    ["3e pilier simulé", formatMontantCHF(dossier.fiscalite.troisiemePilierSimule)],
+                    ["3e pilier simulé", formatMontantCHF(
+                      (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+                      (dossier.fiscalite.troisiemePilierPersonne2 ?? 0)
+                    )],
                     ["Frais de vie", formatMontantCHF(dossier.charges.fraisVie)],
                     ["Autres charges", formatMontantCHF(dossier.charges.autresCharges)],
                     ["Total charges", formatMontantCHF(totalChargesCalcule)],
@@ -13276,8 +13347,14 @@ export default function App() {
                       "Fortune imposable actuelle saisie",
                       formatMontantCHF(fortuneImposableCorrige),
                     ],
-                    ["3e pilier simulé", formatMontantCHF(dossier.fiscalite.troisiemePilierSimule)],
-                    ["Rachat LPP", formatMontantCHF(dossier.fiscalite.rachatLpp)],
+                    ["3e pilier simulé", formatMontantCHF(
+                      (dossier.fiscalite.troisiemePilierPersonne1 ?? dossier.fiscalite.troisiemePilierSimule ?? 0) +
+                      (dossier.fiscalite.troisiemePilierPersonne2 ?? 0)
+                    )],
+                    ["Rachat LPP", formatMontantCHF(
+                      (dossier.fiscalite.rachatLppPersonne1 ?? dossier.fiscalite.rachatLpp ?? 0) +
+                      (dossier.fiscalite.rachatLppPersonne2 ?? 0)
+                    )],
                     ["Ajustement manuel", formatMontantCHF(dossier.fiscalite.ajustementManuelRevenu)],
                     ["IFD", formatMontantCHFArrondi(impotFederalDirect)],
                     [
