@@ -1800,7 +1800,9 @@ export default function App() {
     0,
     dossier.fiscalite.fortuneImposableActuelleSaisie || 0
   );
-  const ajustementBienRendementSimulation = getLocalRentalPropertyTaxBase(dossier);
+  const ajustementBienRendementSimulation = dossier.fiscalite.baseActuelleInclusBienRendement
+    ? 0
+    : getLocalRentalPropertyTaxBase(dossier);
   const ajustementFortuneBiensRendementSimulation =
     getRentalPropertyNetTaxableAssetsAdjustment(dossier);
   const fortuneImposableLocaleSimulee = getLocalSimulatedTaxableAssets(dossier);
@@ -2795,10 +2797,21 @@ export default function App() {
   const handleRecalculerBaseDepuisTaxware = async () => {
     setIsRecalculatingBase(true);
     try {
+      // Strip TaxableValue from RealEstates: property value is already in Assets.
+      // RentalIncome + EffectiveExpenses stay so TaxWare sees the full income picture.
+      // The baseActuelleInclusBienRendement flag tells the simulation layer not to add
+      // ajustementBienRendementSimulation on top (it is already baked into the stored base).
+      const payloadToSend = {
+        ...taxwarePayloadControle,
+        RealEstates: (taxwarePayloadControle.RealEstates || []).map(
+          ({ TaxableValue: _ignored, ...rest }) => rest
+        ),
+      };
+
       const response = await fetch("/api/taxware/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taxwarePayloadControle),
+        body: JSON.stringify(payloadToSend),
       });
       const text = await response.text();
       const data = text ? JSON.parse(text) : null;
@@ -2816,6 +2829,7 @@ export default function App() {
             ...dossier.fiscalite,
             revenuImposableIfd: Math.round(normalized.taxableIncomeFederal),
             revenuImposable: Math.round(normalized.taxableIncomeCantonal),
+            baseActuelleInclusBienRendement: true,
             ...(typeof normalized.taxableAssets === "number"
               ? { fortuneImposableActuelleSaisie: Math.round(normalized.taxableAssets) }
               : {}),
@@ -3125,8 +3139,9 @@ export default function App() {
       includeValeurLocative: variant.taxRegime === "valeur_locative_reform",
     });
     const immobilierSimulationDelta = reformProfile.taxableIncomeDelta;
-    const ajustementBienRendementSimulation =
-      getLocalRentalPropertyTaxBase(dossierForSimulation);
+    const ajustementBienRendementSimulation = dossierForSimulation.fiscalite.baseActuelleInclusBienRendement
+      ? 0
+      : getLocalRentalPropertyTaxBase(dossierForSimulation);
     const ajustementFortuneBiensRendementSimulation =
       getRentalPropertyNetTaxableAssetsAdjustment(dossierForSimulation);
     const taxableAssets = hasLocalSimulatedTaxableAssetsInputs(dossierForSimulation)
@@ -4901,10 +4916,9 @@ export default function App() {
     };
   };
 
-  // ── PREMIUM DOMICILE — branche enrichie indépendante ──────────────────────
-  // Utilise les données économiques brutes (salaires, immeuble, fortune) pour
-  // que TaxWare calcule les bases imposables canton-spécifiques.
-  // Ne touche pas à runMobileDomicile ni à MobileDomicileFlow.
+  // ── PREMIUM DOMICILE — utilise le dossier principal complet ───────────────
+  // Les salaires/immobilier du formulaire surchargent le dossier, tout le reste vient du dossier.
+  // Cela garantit que TaxWare calcule avec toutes les données du dossier principal.
   const runPremiumDomicile = async (
     payload: PremiumDomicilePayload
   ): Promise<MobileDomicileResult> => {
@@ -4912,20 +4926,34 @@ export default function App() {
       throw new Error("Vous avez utilisé vos 2 simulations gratuites.");
     }
 
-    const mapPartnership = (etatCivil: string): "Single" | "Marriage" =>
-      /mari[eé]/i.test(etatCivil) ? "Marriage" : "Single";
+    // When user provides rental property via form, exclude dossier's rental property to avoid double-counting
+    // Create a clean dossier without dossier's rental property when form has one
+    const dossierForSimulation = payload.estProprietaire
+      ? {
+          ...activeClientDossier,
+          immobilier: {
+            ...activeClientDossier.immobilier,
+            loyersBiensRendement: 0,
+            valeurFiscaleBiensRendement: 0,
+            interetsHypothecairesBiensRendement: 0,
+            possedeBienRendement: false,
+          },
+        }
+      : activeClientDossier;
 
-    const partnership = mapPartnership(payload.etatCivil);
-    const isMarried = partnership === "Marriage";
+    const baseRequest = buildDomicileComparisonProbeRequest(dossierForSimulation, {
+      miscIncome: 0,
+      assets: Math.max(0, Math.round(payload.fortuneMobiliere)),
+    });
+
+    const isMarried = baseRequest.partnership === "Marriage";
 
     const commonParams = {
-      partnership,
-      childrenCount: payload.enfants,
+      ...baseRequest,
       netWages: Math.max(0, Math.round(payload.salaireNetContribuable)),
       spouseNetWages: isMarried ? Math.max(0, Math.round(payload.salaireNetConjoint)) : undefined,
       thirdPillar: Math.max(0, Math.round(payload.troisiemePilier)),
       lppBuyback: Math.max(0, Math.round(payload.rachatLpp)),
-      assets: Math.max(0, Math.round(payload.fortuneMobiliere)),
       debts: Math.max(0, Math.round(payload.dettes)),
       debtInterests: payload.interetsHypothecaires > 0
         ? Math.max(0, Math.round(payload.interetsHypothecaires))
@@ -4996,14 +5024,14 @@ export default function App() {
       current: {
         label: "Domicile actuel",
         value: currentName,
-        helper: "TaxWare — bases calculées depuis données économiques réelles.",
+        helper: "TaxWare — bases calculées depuis dossier complet.",
         metrics: buildMetrics(cN),
         verdict: getDomicileCardVerdict(makeWrapper(cN), makeWrapper(nN)),
       },
       next: {
         label: "Nouveau domicile",
         value: nextName,
-        helper: "TaxWare — bases calculées depuis données économiques réelles.",
+        helper: "TaxWare — bases calculées depuis dossier complet.",
         metrics: buildMetrics(nN),
         verdict: getDomicileCardVerdict(makeWrapper(nN), makeWrapper(cN)),
       },

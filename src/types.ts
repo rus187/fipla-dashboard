@@ -102,6 +102,7 @@ export type ClientFiscalite = {
   rachatLppPersonne2?: number;
   aLppActifPersonne1?: boolean;
   aLppActifPersonne2?: boolean;
+  baseActuelleInclusBienRendement?: boolean;
   ajustementManuelRevenu: number;
   correctionFiscaleManuelleIfd: number;
   correctionFiscaleManuelleCanton: number;
