@@ -673,17 +673,7 @@ function applyVariantTaxRegime(variant: ScenarioVariant, nextTaxRegime: VariantT
   };
 }
 
-function getLocalRentalPropertyTaxBase(dossier: DossierClient) {
-  if (!dossier.immobilier.possedeBienRendement) {
-    return 0;
-  }
 
-  const loyers = dossier.immobilier.loyersBiensRendement || 0;
-  const interets = dossier.immobilier.interetsHypothecairesBiensRendement || 0;
-  const frais = dossier.immobilier.fraisEntretienBiensRendement || 0;
-
-  return loyers - interets - frais;
-}
 
 function getRentalPropertyTaxableValue(dossier: DossierClient) {
   if (!dossier.immobilier.possedeBienRendement) {
@@ -715,9 +705,7 @@ function getRentalPropertyNetTaxableAssetsAdjustment(dossier: DossierClient) {
 
 function getLocalSimulatedTaxableAssets(dossier: DossierClient) {
   const liquiditesAjustees =
-    (dossier.fortune.liquidites || 0) -
-    (dossier.fiscalite.troisiemePilierSimule || 0) -
-    (dossier.fiscalite.rachatLpp || 0) +
+    (dossier.fortune.liquidites || 0) +
     (dossier.fiscalite.ajustementManuelRevenu || 0);
   const fortuneFiscale =
     liquiditesAjustees + (dossier.fortune.titres || 0) + getTotalRealEstateFiscalValue(dossier);
@@ -1739,9 +1727,7 @@ export default function App() {
   const hypothequesTotalesCalculees = getTotalMortgageDebt(dossier);
 
   const liquiditesAjusteesCalcule =
-    (dossier.fortune.liquidites || 0) -
-    (dossier.fiscalite.troisiemePilierSimule || 0) -
-    (dossier.fiscalite.rachatLpp || 0) +
+    (dossier.fortune.liquidites || 0) +
     (dossier.fiscalite.ajustementManuelRevenu || 0);
 
   const troisiemePilierPatrimonialCalcule =
@@ -1800,9 +1786,6 @@ export default function App() {
     0,
     dossier.fiscalite.fortuneImposableActuelleSaisie || 0
   );
-  const ajustementBienRendementSimulation = dossier.fiscalite.baseActuelleInclusBienRendement
-    ? 0
-    : getLocalRentalPropertyTaxBase(dossier);
   const ajustementFortuneBiensRendementSimulation =
     getRentalPropertyNetTaxableAssetsAdjustment(dossier);
   const fortuneImposableLocaleSimulee = getLocalSimulatedTaxableAssets(dossier);
@@ -1813,13 +1796,11 @@ export default function App() {
   const ajustementManuelSimulation = dossier.fiscalite.ajustementManuelRevenu || 0;
   const totalAjustementsSimulationIfd =
     totalAjustementsImmobiliersSimulation +
-    ajustementBienRendementSimulation +
     ajustementPrevoyanceSimulation +
     ajustementManuelSimulation +
     (dossier.fiscalite.correctionFiscaleManuelleIfd || 0);
   const totalAjustementsSimulationCanton =
     totalAjustementsImmobiliersSimulation +
-    ajustementBienRendementSimulation +
     ajustementPrevoyanceSimulation +
     ajustementManuelSimulation +
     (dossier.fiscalite.correctionFiscaleManuelleCanton || 0);
@@ -2797,12 +2778,16 @@ export default function App() {
   const handleRecalculerBaseDepuisTaxware = async () => {
     setIsRecalculatingBase(true);
     try {
-      // Strip TaxableValue from RealEstates: property value is already in Assets.
-      // RentalIncome + EffectiveExpenses stay so TaxWare sees the full income picture.
-      // The baseActuelleInclusBienRendement flag tells the simulation layer not to add
-      // ajustementBienRendementSimulation on top (it is already baked into the stored base).
+      // The base actuelle must be PRE-optimization (no 3e pilier, no LPP buyback).
+      // Scenario "mixed" then deducts these once. If Recalculer included them, the scenario
+      // would double-deduct, pushing the target below TaxWare's floor (miscIncome ≥ 0).
+      // Also strip TaxableValue from RealEstates (property value already in Assets).
+      const zeroPersonPrevoyance = (person: Record<string, unknown> | undefined) =>
+        person ? { ...person, ThirdPillarContribution: 0, LobContributions: 0 } : person;
       const payloadToSend = {
         ...taxwarePayloadControle,
+        PersonLeading: zeroPersonPrevoyance(taxwarePayloadControle.PersonLeading),
+        PersonSecond: zeroPersonPrevoyance(taxwarePayloadControle.PersonSecond),
         RealEstates: (taxwarePayloadControle.RealEstates || []).map(
           ({ TaxableValue: _ignored, ...rest }) => rest
         ),
@@ -3139,9 +3124,6 @@ export default function App() {
       includeValeurLocative: variant.taxRegime === "valeur_locative_reform",
     });
     const immobilierSimulationDelta = reformProfile.taxableIncomeDelta;
-    const ajustementBienRendementSimulation = dossierForSimulation.fiscalite.baseActuelleInclusBienRendement
-      ? 0
-      : getLocalRentalPropertyTaxBase(dossierForSimulation);
     const ajustementFortuneBiensRendementSimulation =
       getRentalPropertyNetTaxableAssetsAdjustment(dossierForSimulation);
     const taxableAssets = hasLocalSimulatedTaxableAssetsInputs(dossierForSimulation)
@@ -3163,7 +3145,6 @@ export default function App() {
             scenario.thirdPillar -
             scenario.lppBuyback +
             scenario.manualAdjustment +
-            ajustementBienRendementSimulation +
             immobilierDelta +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleIfd || 0)
         );
@@ -3173,13 +3154,15 @@ export default function App() {
             scenario.thirdPillar -
             scenario.lppBuyback +
             scenario.manualAdjustment +
-            ajustementBienRendementSimulation +
             immobilierDelta +
             (dossierForSimulation.fiscalite.correctionFiscaleManuelleCanton || 0)
         );
 
-        const buildVariantRequest = (params: { miscIncome: number; assets: number }) =>
-          buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, params);
+        const buildVariantRequest = (params: { miscIncome: number; assets: number }) => ({
+          ...buildDirectBaseTaxwareRequestForDossier(dossierForSimulation, params),
+          thirdPillar: scenario.thirdPillar,
+          lppBuyback: scenario.lppBuyback,
+        });
 
         if (isBernBielVariantDebug) {
           console.info("[BE AssetIncome][variant-scenario-source]", {
